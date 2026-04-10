@@ -1,0 +1,178 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "Rencana Anggaran Biaya project",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Nama proyek" },
+        "description": { "type": "string", "description": "Deskripsi proyek" },
+        "ownerId": { "type": "string", "description": "UID pemilik proyek" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Waktu pembuatan" },
+        "totalBudget": { "type": "number", "description": "Total anggaran proyek" }
+      },
+      "required": ["name", "ownerId", "createdAt"]
+    },
+    "BudgetCategory": {
+      "title": "BudgetCategory",
+      "description": "Kategori anggaran dalam proyek",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "description": "ID proyek terkait" },
+        "name": { "type": "string", "description": "Nama kategori" },
+        "order": { "type": "number", "description": "Urutan tampilan" }
+      },
+      "required": ["projectId", "name", "order"]
+    },
+    "BudgetItem": {
+      "title": "BudgetItem",
+      "description": "Item anggaran dalam kategori",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "description": "ID proyek terkait" },
+        "categoryId": { "type": "string", "description": "ID kategori terkait" },
+        "name": { "type": "string", "description": "Nama item" },
+        "description": { "type": "string", "description": "Deskripsi item" },
+        "quantity": { "type": "number", "description": "Jumlah" },
+        "unit": { "type": "string", "description": "Satuan (m2, kg, dll)" },
+        "pricePerUnit": { "type": "number", "description": "Harga satuan" },
+        "totalPrice": { "type": "number", "description": "Total harga" }
+      },
+      "required": ["projectId", "categoryId", "name", "quantity", "unit", "pricePerUnit", "totalPrice"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Profil pengguna",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user", "pm"] },
+        "tier": { "type": "string", "enum": ["prospect", "survey", "deal"] },
+        "location": { "type": "string" },
+        "lastPaymentStatus": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "displayName"]
+    },
+    "WorkItemMaster": {
+      "title": "WorkItemMaster",
+      "description": "Master database item pekerjaan (AHSP)",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "category": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "unit": { "type": "string" },
+        "price": { "type": "number" },
+        "status": { "type": "string", "enum": ["visible", "hidden"] },
+        "soldCount": { "type": "number" },
+        "revenue": { "type": "number" }
+      },
+      "required": ["code", "category", "name", "unit", "price"]
+    },
+    "Workforce": {
+      "title": "Workforce",
+      "description": "Database tenaga kerja (tukang/mandor)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "ktp": { "type": "string" },
+        "role": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "lastSeen": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "ktp", "role"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Log absensi tenaga kerja dan PM",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "checkIn": { "type": "string", "format": "date-time" },
+        "checkOut": { "type": "string", "format": "date-time" },
+        "location": { "type": "object" },
+        "status": { "type": "string" }
+      },
+      "required": ["userId", "userName", "checkIn"]
+    },
+    "MaterialRequest": {
+      "title": "MaterialRequest",
+      "description": "Permintaan material dari lapangan",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "requesterId": { "type": "string" },
+        "requesterName": { "type": "string" },
+        "itemName": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "note": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "log": { "type": "array" }
+      },
+      "required": ["projectId", "itemName", "quantity", "unit", "status"]
+    },
+    "Property": {
+      "title": "Property",
+      "description": "Listing properti TBJ Jual Beli Sewa",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "type": { "type": "string", "enum": ["sale", "rent"] },
+        "location": { "type": "string" },
+        "images": { "type": "array" },
+        "status": { "type": "string" }
+      },
+      "required": ["title", "price", "type"]
+    }
+  },
+  "firestore": {
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Koleksi proyek RAB"
+    },
+    "/projects/{projectId}/categories/{categoryId}": {
+      "schema": "BudgetCategory",
+      "description": "Kategori dalam proyek"
+    },
+    "/projects/{projectId}/items/{itemId}": {
+      "schema": "BudgetItem",
+      "description": "Item anggaran dalam proyek"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Data profil pengguna"
+    },
+    "/master_data/{itemId}": {
+      "schema": "WorkItemMaster",
+      "description": "Master database AHSP"
+    },
+    "/workforce/{workerId}": {
+      "schema": "Workforce",
+      "description": "Database tenaga kerja"
+    },
+    "/attendance/{logId}": {
+      "schema": "Attendance",
+      "description": "Log absensi"
+    },
+    "/material_requests/{requestId}": {
+      "schema": "MaterialRequest",
+      "description": "Permintaan material"
+    },
+    "/properties/{propertyId}": {
+      "schema": "Property",
+      "description": "Listing properti"
+    }
+  }
+}
