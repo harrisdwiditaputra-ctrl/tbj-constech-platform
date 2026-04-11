@@ -12,7 +12,7 @@ service cloud.firestore {
     //   - email: string (required)
     //   - displayName: string (required)
     //   - photoURL: string (optional)
-    //   - role: string (required, ['admin', 'user'])
+    //   - role: string (required, ['admin', 'user', 'pm'])
     //   - tier: string (required, ['prospect', 'survey', 'deal'])
     //   - whatsapp: string (optional)
     //
@@ -22,28 +22,10 @@ service cloud.firestore {
     //   - name: string (required, 1-100 chars)
     //   - description: string (optional, 0-500 chars)
     //   - ownerId: string (required, immutable)
+    //   - pmId: string (optional, PM assigned to project)
     //   - createdAt: string (required, ISO8601, immutable)
     //   - totalBudget: number (required, >= 0)
     //   - status: string (required, ['draft', 'survey', 'active', 'completed'])
-    //
-    // Collection: projects/{projectId}/categories
-    // Document ID: {categoryId}
-    // Fields:
-    //   - projectId: string (required, matches parent)
-    //   - name: string (required, 1-50 chars)
-    //   - order: number (required)
-    //
-    // Collection: projects/{projectId}/items
-    // Document ID: {itemId}
-    // Fields:
-    //   - projectId: string (required)
-    //   - categoryId: string (required)
-    //   - name: string (required, 1-100 chars)
-    //   - description: string (optional)
-    //   - quantity: number (required, > 0)
-    //   - unit: string (required)
-    //   - pricePerUnit: number (required, >= 0)
-    //   - totalPrice: number (required, quantity * pricePerUnit)
     //
     // ===============================================================
 
@@ -59,21 +41,31 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
     function isAdmin() {
       return isAuthenticated() &&
         ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+          getUserData().role == 'admin') ||
          (request.auth.token.email == "harrisdwiditaputra@gmail.com" && request.auth.token.email_verified == true));
     }
 
     function isPM() {
       return isAuthenticated() &&
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'pm');
+         (getUserData().role == 'pm' || getUserData().role == 'admin'));
     }
 
     function isStaff() {
-      return isAdmin() || isPM();
+      return isPM() || isAdmin();
+    }
+
+    function isTier3() {
+      return isAuthenticated() && 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         (getUserData().tier == 'deal' || isStaff()));
     }
 
     function isValidEmail(email) {
@@ -93,8 +85,7 @@ service cloud.firestore {
              data.email is string && isValidEmail(data.email) &&
              data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
              data.role in ['admin', 'user', 'pm'] &&
-             data.tier in ['prospect', 'survey', 'deal'] &&
-             (!('whatsapp' in data) || (data.whatsapp is string && data.whatsapp.size() < 20));
+             data.tier in ['prospect', 'survey', 'deal'];
     }
 
     function isValidProject(data) {
@@ -106,38 +97,6 @@ service cloud.firestore {
              data.status in ['draft', 'survey', 'active', 'completed'];
     }
 
-    function isValidMasterItem(data) {
-      return data.keys().hasAll(['code', 'name', 'category', 'unit', 'price']) &&
-             data.code is string && data.name is string && data.category is string && 
-             data.unit is string && data.price is number && data.price >= 0;
-    }
-
-    function isValidWorkforce(data) {
-      return data.keys().hasAll(['name', 'ktp', 'role', 'status']) &&
-             data.name is string && data.ktp is string && data.role is string &&
-             data.status in ['active', 'inactive'];
-    }
-
-    function isValidAttendance(data) {
-      return data.keys().hasAll(['userId', 'userName', 'checkIn', 'status']) &&
-             data.userId == request.auth.uid &&
-             isValidDateString(data.checkIn) &&
-             (!('checkOut' in data) || isValidDateString(data.checkOut));
-    }
-
-    function isValidMaterialRequest(data) {
-      return data.keys().hasAll(['projectId', 'projectName', 'requesterId', 'itemName', 'quantity', 'unit', 'status']) &&
-             data.projectId is string && data.itemName is string && 
-             data.quantity is number && data.quantity > 0 &&
-             data.status in ['pending', 'approved', 'rejected'];
-    }
-
-    function isValidProperty(data) {
-      return data.keys().hasAll(['title', 'price', 'type']) &&
-             data.title is string && data.price is number && data.price >= 0 &&
-             data.type in ['sale', 'rent'];
-    }
-
     // ===============================================================
     // Rules
     // ===============================================================
@@ -146,75 +105,65 @@ service cloud.firestore {
       allow read: if isOwner(userId) || isStaff();
       allow create: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == 'user';
       allow update: if (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role) || isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /projects/{projectId} {
       allow read: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isStaff());
       allow create: if isAuthenticated() && isValidProject(request.resource.data);
       allow update: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isStaff()) && 
-                    isValidProject(request.resource.data) &&
-                    request.resource.data.ownerId == resource.data.ownerId &&
-                    request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isStaff();
+                    isValidProject(request.resource.data);
+      allow delete: if isAdmin();
 
       match /categories/{categoryId} {
-        allow read: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
-        allow create: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
-        allow update: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
-        allow delete: if isStaff();
+        allow read, write: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
       }
-
       match /items/{itemId} {
-        allow read: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
-        allow create: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
-        allow update: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
-        allow delete: if isStaff();
+        allow read, write: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
       }
     }
 
     match /master_data/{itemId} {
       allow read: if isAuthenticated();
-      allow create: if isStaff() && isValidMasterItem(request.resource.data);
-      allow update: if isStaff() && isValidMasterItem(request.resource.data);
-      allow delete: if isStaff();
+      allow write: if isAdmin();
     }
 
     match /workforce/{workerId} {
-      allow read: if isStaff();
-      allow create: if isStaff() && isValidWorkforce(request.resource.data);
-      allow update: if isStaff() && isValidWorkforce(request.resource.data);
-      allow delete: if isStaff();
+      allow read: if isTier3();
+      allow write: if isStaff();
     }
 
     match /attendance/{logId} {
       allow read: if isStaff();
-      allow create: if isAuthenticated() && isValidAttendance(request.resource.data);
-      allow update: if isAuthenticated() && isValidAttendance(request.resource.data) && 
-                    request.resource.data.userId == resource.data.userId;
+      allow create: if isAuthenticated();
+      allow update: if isStaff();
     }
 
     match /material_requests/{requestId} {
-      allow read: if isStaff();
-      allow create: if isStaff() && isValidMaterialRequest(request.resource.data);
-      allow update: if isStaff() && isValidMaterialRequest(request.resource.data);
-      allow delete: if isStaff();
+      allow read: if isAuthenticated() && (resource.data.requesterId == request.auth.uid || isStaff());
+      allow create: if isAuthenticated();
+      allow update: if isStaff();
+      allow delete: if isAdmin();
     }
 
     match /properties/{itemId} {
       allow read: if true;
-      allow create: if isStaff() && isValidProperty(request.resource.data);
-      allow update: if isStaff() && isValidProperty(request.resource.data);
-      allow delete: if isStaff();
+      allow write: if isAdmin();
     }
 
     match /gallery/{itemId} {
       allow read: if true;
-      allow write: if isStaff();
+      allow write: if isAdmin();
     }
 
     match /status_updates/{itemId} {
       allow read: if true;
       allow write: if isStaff();
+    }
+    
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

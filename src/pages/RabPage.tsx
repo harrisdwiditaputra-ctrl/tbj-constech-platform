@@ -38,11 +38,22 @@ const RabPage = ({ user }: { user: any }) => {
 
   // Access Control
   useEffect(() => {
-    const allowedTiers: UserTier[] = ["deal", "admin"];
-    if (!user || !allowedTiers.includes(user.tier)) {
-      navigate("/");
-    }
+    // Admin and PM can always access
+    if (user?.role === 'admin' || user?.role === 'pm') return;
+    
+    // Tier 2 and Tier 3 clients can view
+    if (user?.tier === 'survey' || user?.tier === 'deal') return;
+
+    // Otherwise redirect
+    if (!user) navigate("/");
   }, [user, navigate]);
+
+  const canEdit = user?.role === 'admin' || user?.role === 'pm';
+
+  const shareToWhatsApp = () => {
+    const message = `Halo, berikut adalah draf RAB Proyek ${projectInfo.projectName} dari TBJ Constech. Total Estimasi: Rp ${grandTotal.toLocaleString('id-ID')}. Silakan cek detailnya di platform kami.`;
+    window.open(`https://wa.me/${projectInfo.contact}?text=${encodeURIComponent(message)}`, '_blank');
+  };
 
   const filteredMaster = useMemo(() => {
     if (!searchQuery) return [];
@@ -143,205 +154,202 @@ const RabPage = ({ user }: { user: any }) => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 py-8 px-4">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-black text-white p-8 rounded-3xl shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl" />
-        <div className="space-y-2 relative z-10">
-          <div className="flex items-center gap-2">
-            <Badge className="bg-white/20 text-white border-none rounded-md uppercase text-[10px] font-bold">Professional Tier</Badge>
-            <Badge className="bg-green-500 text-white border-none rounded-md uppercase text-[10px] font-bold">Verified Estimator</Badge>
+    <div className="max-w-7xl mx-auto space-y-8 py-12 px-6 bg-white min-h-screen">
+      {/* Sleek Header Section */}
+      <div className="flex flex-col md:flex-row justify-between items-end gap-8 pb-12 border-b border-neutral-100">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-black text-lg">TBJ</div>
+            <div className="h-8 w-[1px] bg-neutral-200" />
+            <Badge variant="outline" className="border-neutral-200 text-neutral-400 uppercase-soft text-[9px] h-6">Master RAB Engine v2.0</Badge>
           </div>
-          <h1 className="text-4xl font-black tracking-tighter uppercase leading-none">Rencana Anggaran Biaya</h1>
-          <p className="text-white/60 uppercase-soft text-xs tracking-widest">TBJ Digital Ecosystem • Project Analysis Tool</p>
+          <div className="space-y-1">
+            <h1 className="text-5xl font-black tracking-tighter uppercase leading-none text-neutral-900">Rencana Anggaran Biaya</h1>
+            <p className="text-neutral-400 uppercase-soft text-[10px] tracking-[0.2em] font-bold">Build with Intelligence • Design with Soul</p>
+          </div>
         </div>
-        <div className="flex gap-3 relative z-10">
-          <Button variant="outline" className="border-white/20 text-white hover:bg-white hover:text-black rounded-xl gap-2 h-12 px-6" onClick={exportToPDF}>
+        
+        <div className="flex gap-3">
+          <Button variant="outline" className="border-neutral-200 text-neutral-600 hover:bg-neutral-50 rounded-full gap-2 h-12 px-8 uppercase-soft text-[10px] font-black" onClick={exportToPDF}>
             <Download className="w-4 h-4" /> Export PDF
           </Button>
-          <Button className="bg-white text-black hover:bg-neutral-200 rounded-xl gap-2 h-12 px-6">
-            <Save className="w-4 h-4" /> Simpan Draft
+          <Button variant="outline" className="border-green-200 text-green-600 hover:bg-green-50 rounded-full gap-2 h-12 px-8 uppercase-soft text-[10px] font-black" onClick={shareToWhatsApp}>
+            <Phone className="w-4 h-4" /> Share WA
           </Button>
+          {canEdit && (
+            <Button className="bg-black text-white hover:bg-neutral-800 rounded-full gap-2 h-12 px-8 uppercase-soft text-[10px] font-black shadow-xl shadow-black/10">
+              <Save className="w-4 h-4" /> Save Master
+            </Button>
+          )}
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* Project Info Card */}
-        <Card className="border-2 border-black rounded-3xl shadow-[10px_10px_0px_0px_rgba(0,0,0,0.05)]">
-          <CardHeader>
-            <CardTitle className="uppercase tracking-tighter font-black flex items-center gap-2">
-              <Building2 className="w-5 h-5" /> Data Proyek
-            </CardTitle>
-            <CardDescription className="uppercase-soft text-[10px]">Informasi Dasar Penawaran</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-bold text-neutral-400">Nama Klien</Label>
-              <Input value={projectInfo.clientName} onChange={e => setProjectInfo({...projectInfo, clientName: e.target.value})} className="rounded-xl border-black/10" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-bold text-neutral-400">Nama Proyek</Label>
-              <Input value={projectInfo.projectName} onChange={e => setProjectInfo({...projectInfo, projectName: e.target.value})} className="rounded-xl border-black/10" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-bold text-neutral-400">Alamat / Lokasi</Label>
-              <Input value={projectInfo.address} onChange={e => setProjectInfo({...projectInfo, address: e.target.value})} className="rounded-xl border-black/10" />
-            </div>
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-black/5">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase">
-                <Instagram className="w-4 h-4" /> @tbj.bisnis
+      <div className="grid lg:grid-cols-4 gap-12">
+        {/* Project Info - Thinner Design */}
+        <div className="lg:col-span-1 space-y-8">
+          <div className="space-y-6">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 border-b border-neutral-100 pb-2">Project Dossier</h3>
+            <div className="space-y-6">
+              <div className="space-y-1.5">
+                <Label className="text-[9px] uppercase font-black text-neutral-300">Client Name</Label>
+                <Input 
+                  disabled={!canEdit}
+                  value={projectInfo.clientName} 
+                  onChange={e => setProjectInfo({...projectInfo, clientName: e.target.value})} 
+                  className="rounded-none border-0 border-b border-neutral-100 focus-visible:ring-0 focus-visible:border-black px-0 h-8 text-sm font-bold uppercase" 
+                />
               </div>
-              <div className="flex items-center gap-2 text-xs font-bold uppercase">
-                <Phone className="w-4 h-4" /> +62 821..
+              <div className="space-y-1.5">
+                <Label className="text-[9px] uppercase font-black text-neutral-300">Project Title</Label>
+                <Input 
+                  disabled={!canEdit}
+                  value={projectInfo.projectName} 
+                  onChange={e => setProjectInfo({...projectInfo, projectName: e.target.value})} 
+                  className="rounded-none border-0 border-b border-neutral-100 focus-visible:ring-0 focus-visible:border-black px-0 h-8 text-sm font-bold uppercase" 
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[9px] uppercase font-black text-neutral-300">Site Location</Label>
+                <Input 
+                  disabled={!canEdit}
+                  value={projectInfo.address} 
+                  onChange={e => setProjectInfo({...projectInfo, address: e.target.value})} 
+                  className="rounded-none border-0 border-b border-neutral-100 focus-visible:ring-0 focus-visible:border-black px-0 h-8 text-sm font-bold uppercase" 
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[9px] uppercase font-black text-neutral-300">WA Contact</Label>
+                <Input 
+                  disabled={!canEdit}
+                  value={projectInfo.contact} 
+                  onChange={e => setProjectInfo({...projectInfo, contact: e.target.value})} 
+                  className="rounded-none border-0 border-b border-neutral-100 focus-visible:ring-0 focus-visible:border-black px-0 h-8 text-sm font-bold uppercase" 
+                />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Main RAB Table */}
-        <Card className="lg:col-span-2 border-2 border-black rounded-3xl shadow-[10px_10px_0px_0px_rgba(0,0,0,0.05)] overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between border-b-2 border-black/5 pb-6">
-            <div>
-              <CardTitle className="uppercase tracking-tighter font-black flex items-center gap-2">
-                <Calculator className="w-5 h-5" /> Rincian Pekerjaan
-              </CardTitle>
-              <CardDescription className="uppercase-soft text-[10px]">Master Data & Custom Analysis</CardDescription>
+          <div className="p-6 bg-neutral-50 rounded-2xl space-y-4">
+            <p className="text-[9px] font-black uppercase tracking-widest text-neutral-400">Financial Summary</p>
+            <div className="space-y-1">
+              <p className="text-3xl font-black tracking-tighter">Rp {grandTotal.toLocaleString('id-ID')}</p>
+              <p className="text-[10px] font-bold text-neutral-400 uppercase">Total Estimated Budget</p>
             </div>
-            <Dialog open={isAddingItem} onOpenChange={setIsAddingItem}>
-              <DialogTrigger render={<Button className="rounded-xl gap-2 bg-black text-white hover:bg-neutral-800" />}>
-                <Plus className="w-4 h-4" /> Tambah Item
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl rounded-3xl border-2 border-black">
-                <DialogHeader>
-                  <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Cari Master Data</DialogTitle>
-                </DialogHeader>
-                <div className="py-6 space-y-6">
-                  <div className="relative">
-                    <Search className="absolute left-4 top-3.5 h-5 w-5 text-neutral-400" />
-                    <Input 
-                      placeholder="Cari pekerjaan (misal: galian, cat, marmer)..." 
-                      className="pl-12 h-12 rounded-2xl border-2 border-black/10 focus:border-black transition-all"
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                    {filteredMaster.map(item => (
-                      <div 
-                        key={item.id} 
-                        className="p-4 border-2 border-black/5 hover:border-black rounded-2xl cursor-pointer transition-all group flex justify-between items-center"
-                        onClick={() => addItemToRab(item)}
-                      >
-                        <div>
-                          <p className="font-bold text-sm uppercase tracking-tight group-hover:text-black">{item.name}</p>
-                          <div className="flex gap-2 mt-1">
-                            <Badge variant="outline" className="text-[9px] uppercase font-bold rounded-md">{item.category}</Badge>
-                            <span className="text-[10px] text-neutral-400 font-bold uppercase">{item.unit}</span>
+          </div>
+        </div>
+
+        {/* Main RAB Table - Sleek & Light */}
+        <div className="lg:col-span-3 space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Work Items Breakdown</h3>
+            {canEdit && (
+              <Dialog open={isAddingItem} onOpenChange={setIsAddingItem}>
+                <DialogTrigger render={
+                  <Button variant="ghost" className="text-[10px] font-black uppercase gap-2 hover:bg-neutral-50">
+                    <Plus className="w-3 h-3" /> Add Item
+                  </Button>
+                } />
+                <DialogContent className="max-w-2xl rounded-3xl border border-neutral-100 shadow-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Search Master AHSP</DialogTitle>
+                  </DialogHeader>
+                  <div className="py-6 space-y-6">
+                    <div className="relative">
+                      <Search className="absolute left-4 top-3.5 h-5 w-5 text-neutral-400" />
+                      <Input 
+                        placeholder="Search work items..." 
+                        className="pl-12 h-12 rounded-2xl border-neutral-100 focus:border-black transition-all"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                      {filteredMaster.map(item => (
+                        <div 
+                          key={item.id} 
+                          className="p-4 border border-neutral-100 hover:border-black rounded-2xl cursor-pointer transition-all group flex justify-between items-center"
+                          onClick={() => addItemToRab(item)}
+                        >
+                          <div>
+                            <p className="font-bold text-sm uppercase tracking-tight group-hover:text-black">{item.name}</p>
+                            <div className="flex gap-2 mt-1">
+                              <Badge variant="outline" className="text-[8px] uppercase font-bold rounded-md border-neutral-100">{item.category}</Badge>
+                              <span className="text-[9px] text-neutral-400 font-bold uppercase">{item.unit}</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-black text-sm">Rp {item.price.toLocaleString('id-ID')}</p>
+                            <p className="text-[8px] text-neutral-400 uppercase font-bold">Unit Price</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-black text-sm">Rp {item.price.toLocaleString('id-ID')}</p>
-                          <p className="text-[9px] text-neutral-400 uppercase font-bold">Harga Satuan</p>
-                        </div>
-                      </div>
-                    ))}
-                    {searchQuery && filteredMaster.length === 0 && (
-                      <div className="text-center py-12 text-neutral-400 uppercase-soft">Pekerjaan tidak ditemukan</div>
-                    )}
-                    {!searchQuery && (
-                      <div className="text-center py-12 text-neutral-400 uppercase-soft">Ketik untuk mencari di {WORK_ITEMS_MASTER.length} master data</div>
-                    )}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-neutral-50">
-                  <TableRow className="border-b-2 border-black/5">
-                    <TableHead className="w-[80px] text-[10px] font-black uppercase">Kode</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase">Uraian Pekerjaan</TableHead>
-                    <TableHead className="w-[100px] text-center text-[10px] font-black uppercase">Volume</TableHead>
-                    <TableHead className="w-[80px] text-center text-[10px] font-black uppercase">Satuan</TableHead>
-                    <TableHead className="w-[150px] text-right text-[10px] font-black uppercase">Harga</TableHead>
-                    <TableHead className="w-[150px] text-right text-[10px] font-black uppercase">Total</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rabItems.map((item, index) => (
-                    <TableRow key={index} className="group hover:bg-neutral-50 transition-colors">
-                      <TableCell className="font-mono text-[10px] text-neutral-400">{item.code}</TableCell>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+
+          <div className="border border-neutral-100 rounded-3xl overflow-hidden shadow-sm">
+            <Table>
+              <TableHeader className="bg-neutral-50/50">
+                <TableRow className="border-b border-neutral-100 hover:bg-transparent">
+                  <TableHead className="w-[80px] text-[9px] font-black uppercase text-neutral-400 px-6">Code</TableHead>
+                  <TableHead className="text-[9px] font-black uppercase text-neutral-400">Description</TableHead>
+                  <TableHead className="w-[100px] text-center text-[9px] font-black uppercase text-neutral-400">Volume</TableHead>
+                  <TableHead className="w-[80px] text-center text-[9px] font-black uppercase text-neutral-400">Unit</TableHead>
+                  <TableHead className="w-[150px] text-right text-[9px] font-black uppercase text-neutral-400">Price</TableHead>
+                  <TableHead className="w-[150px] text-right text-[9px] font-black uppercase text-neutral-400 px-6">Total</TableHead>
+                  {canEdit && <TableHead className="w-[50px]"></TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rabItems.map((item, index) => (
+                  <TableRow key={index} className="border-b border-neutral-50 hover:bg-neutral-50/30 transition-colors">
+                    <TableCell className="font-mono text-[9px] text-neutral-300 px-6">{item.code}</TableCell>
+                    <TableCell>
+                      <p className="font-bold text-xs uppercase tracking-tight text-neutral-800">{item.name}</p>
+                      <p className="text-[8px] text-neutral-400 uppercase font-bold">{item.category}</p>
+                    </TableCell>
+                    <TableCell>
+                      <Input 
+                        disabled={!canEdit}
+                        type="number" 
+                        value={item.volume || 0} 
+                        onChange={e => updateItem(index, { volume: Math.max(0, Number(e.target.value)) })}
+                        className="h-7 text-center border-neutral-100 rounded-lg font-bold text-xs bg-transparent focus-visible:ring-black"
+                      />
+                    </TableCell>
+                    <TableCell className="text-center font-bold text-[10px] uppercase text-neutral-400">{item.unit}</TableCell>
+                    <TableCell className="text-right font-bold text-[10px] text-neutral-600">
+                      Rp {item.price.toLocaleString('id-ID')}
+                    </TableCell>
+                    <TableCell className="text-right font-black text-xs tracking-tighter px-6">
+                      Rp {item.total.toLocaleString('id-ID')}
+                    </TableCell>
+                    {canEdit && (
                       <TableCell>
-                        <Input 
-                          value={item.name} 
-                          onChange={e => updateItem(index, { name: e.target.value })}
-                          className="h-8 border-none bg-transparent focus-visible:ring-0 p-0 font-bold text-sm uppercase tracking-tight"
-                        />
-                        <p className="text-[9px] text-neutral-400 uppercase font-bold">{item.category}</p>
-                      </TableCell>
-                      <TableCell>
-                        <Input 
-                          type="number" 
-                          value={item.volume} 
-                          onChange={e => updateItem(index, { volume: Number(e.target.value) })}
-                          className="h-8 text-center border-black/10 rounded-md font-bold"
-                        />
-                      </TableCell>
-                      <TableCell className="text-center font-bold text-xs uppercase text-neutral-500">{item.unit}</TableCell>
-                      <TableCell>
-                        <Input 
-                          type="number" 
-                          value={item.price} 
-                          onChange={e => updateItem(index, { price: Number(e.target.value) })}
-                          className="h-8 text-right border-black/10 rounded-md font-mono text-xs"
-                        />
-                      </TableCell>
-                      <TableCell className="text-right font-black text-sm tracking-tighter">
-                        Rp {item.total.toLocaleString('id-ID')}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-300 hover:text-red-500" onClick={() => removeItem(index)}>
-                          <Trash2 className="w-4 h-4" />
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-neutral-200 hover:text-red-500" onClick={() => removeItem(index)}>
+                          <Trash2 className="w-3 h-3" />
                         </Button>
                       </TableCell>
-                    </TableRow>
-                  ))}
-                  {rabItems.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="h-64 text-center">
-                        <div className="flex flex-col items-center gap-2 text-neutral-300">
-                          <FileText className="w-12 h-12" />
-                          <p className="uppercase-soft text-xs">Belum ada item pekerjaan</p>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-            
-            {/* Summary Footer */}
-            <div className="p-8 bg-neutral-900 text-white flex flex-col md:flex-row justify-between items-center gap-6">
-              <div className="flex gap-8">
-                <div>
-                  <p className="text-[9px] uppercase font-bold text-white/40">Total Item</p>
-                  <p className="text-2xl font-black">{rabItems.length}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] uppercase font-bold text-white/40">PPN (0%)</p>
-                  <p className="text-2xl font-black">Rp 0</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Grand Total Estimasi</p>
-                <p className="text-5xl font-black tracking-tighter text-yellow-400">Rp {grandTotal.toLocaleString('id-ID')}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                    )}
+                  </TableRow>
+                ))}
+                {rabItems.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={canEdit ? 7 : 6} className="h-64 text-center">
+                      <div className="flex flex-col items-center gap-2 text-neutral-200">
+                        <FileText className="w-10 h-10" />
+                        <p className="uppercase-soft text-[9px] font-black">No items added to this RAB</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       </div>
 
       {/* Footer Branding */}
