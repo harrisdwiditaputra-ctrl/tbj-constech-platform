@@ -1,30 +1,46 @@
 import { useState, useMemo } from "react";
-import { useProjects, useAuth, useUsers, useAttendance, useMaterialRequests, useWorkforce } from "@/lib/hooks";
+import { useProjects, useAuth, useUsers, useAttendance, useMaterialRequests, useWorkforce, useFinance, useWorkerWages, useProjectDetails } from "@/lib/hooks";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
+import { useNavigate } from "react-router-dom";
 import { 
   Loader2, Calendar, CheckCircle2, Clock, MapPin, User, MessageSquare, 
   Phone, HardHat, Package, Camera, BarChart3, ChevronRight, Plus, 
-  AlertCircle, LayoutDashboard, History, Send, CameraOff, Briefcase, ShieldCheck
+  AlertCircle, LayoutDashboard, History, Send, CameraOff, Briefcase, ShieldCheck,
+  Zap, Settings, Image as ImageIcon, Trash2, DollarSign, TrendingUp, Brain
 } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Project, MaterialRequest, Attendance, Workforce } from "@/types";
 
 export default function PMDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { projects, loading: projectsLoading, updateProject } = useProjects(undefined, user?.role);
   const { users } = useUsers(user?.role);
   const { attendance, checkIn, checkOut } = useAttendance(user?.role);
   const { requests, addRequest, updateRequestStatus } = useMaterialRequests(user?.role);
   const { workforce } = useWorkforce(user?.role);
 
-  const [activeTab, setActiveTab] = useState<"overview" | "projects" | "materials" | "attendance" | "cctv" | "timeline" | "safety">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "projects" | "materials" | "attendance" | "cctv" | "timeline" | "safety" | "rab" | "pm-ai">("overview");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const { project: projectDetails, releaseMilestone } = useProjectDetails(selectedProject?.id);
+  const { transactions, addTransaction } = useFinance(selectedProject?.id);
+  const { wages, addWage, updateWageStatus } = useWorkerWages(selectedProject?.id);
   const [isScheduling, setIsScheduling] = useState<string | null>(null);
+  const [showMilestoneForm, setShowMilestoneForm] = useState(false);
+  const [newMilestone, setNewMilestone] = useState({
+    title: "",
+    date: new Date().toISOString().split('T')[0],
+    dueDate: "",
+    status: "pending" as "pending" | "ongoing" | "completed"
+  });
 
   // Material Request Form
   const [showRequestForm, setShowRequestForm] = useState(false);
@@ -43,6 +59,7 @@ export default function PMDashboard() {
     const isCheckedIn = attendance.find(a => a.userId === user?.uid && !a.checkOut);
     if (isCheckedIn) {
       await checkOut(isCheckedIn.id, { lat: -6.2, lng: 106.8 });
+      toast.success("Check-out berhasil. Data kehadiran telah direport ke sistem.");
     } else {
       await checkIn({
         userId: user?.uid || "",
@@ -51,6 +68,7 @@ export default function PMDashboard() {
         location: { lat: -6.2, lng: 106.8 },
         status: "present"
       });
+      toast.success("Check-in berhasil. Lokasi Anda telah tercatat.");
     }
   };
 
@@ -71,6 +89,18 @@ export default function PMDashboard() {
     setNewRequest({ itemName: "", quantity: 0, unit: "pcs", note: "" });
   };
 
+  const handleAddMilestone = async () => {
+    if (!selectedProject || !newMilestone.title) return;
+    const updatedTimeline = [
+      ...(selectedProject.timeline || []),
+      { ...newMilestone, id: Math.random().toString(36).substr(2, 9) }
+    ];
+    await updateProject(selectedProject.id, { timeline: updatedTimeline });
+    setShowMilestoneForm(false);
+    setNewMilestone({ title: "", date: new Date().toISOString().split('T')[0], dueDate: "", status: "pending" });
+    toast.success("Milestone added to project timeline");
+  };
+
   if (projectsLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
 
   return (
@@ -81,7 +111,15 @@ export default function PMDashboard() {
           <h1 className="text-5xl font-black uppercase tracking-tighter">PM Dashboard</h1>
           <p className="uppercase-soft text-neutral-500">Autonomous Project Management & Site Monitoring.</p>
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            onClick={() => navigate("/assistant")}
+            className="h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] border-2 border-black"
+          >
+            <Zap className="w-4 h-4 mr-2 text-accent" />
+            AI Estimator
+          </Button>
           <Button 
             onClick={handleAttendance}
             className={cn(
@@ -109,8 +147,10 @@ export default function PMDashboard() {
           { id: "materials", label: "Materials", icon: Package },
           { id: "attendance", label: "Attendance", icon: Clock },
           { id: "cctv", label: "Live CCTV", icon: Camera },
-          { id: "timeline", label: "Timeline", icon: BarChart3 },
+          { id: "timeline", label: "S-Curve", icon: BarChart3 },
+          { id: "rab", label: "Project RAB", icon: Briefcase },
           { id: "safety", label: "Safety & HSE", icon: ShieldCheck },
+          { id: "pm-ai", label: "PM AI Assistant", icon: Brain },
         ].map(tab => (
           <button
             key={tab.id}
@@ -386,13 +426,20 @@ export default function PMDashboard() {
 
       {activeTab === "cctv" && (
         <div className="space-y-8">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-black uppercase tracking-tighter">Live Site Monitoring</h2>
+            <div className="flex gap-2">
+              <Button variant="outline" className="border-2 border-black rounded-xl h-10 text-[10px] font-black uppercase">
+                <Settings className="w-4 h-4 mr-2" /> Config CCTV
+              </Button>
+            </div>
+          </div>
+          
           <div className="grid md:grid-cols-2 gap-8">
-            {[
+            {(selectedProject?.cctvUrls || [
               { id: 1, name: "Main Construction Area", url: "https://www.youtube.com/embed/1EiC9bvVGnk" },
               { id: 2, name: "Material Storage", url: "https://www.youtube.com/embed/5_XSYlAfJZM" },
-              { id: 3, name: "Site Entrance", url: "https://www.youtube.com/embed/hS5CfP8n_js" },
-              { id: 4, name: "Worker Rest Area", url: "https://www.youtube.com/embed/dQw4w9WgXcQ" }
-            ].map(site => (
+            ]).map((site: any) => (
               <Card key={site.id} className="border-2 border-black rounded-2xl overflow-hidden shadow-sm">
                 <div className="aspect-video bg-neutral-900 relative group">
                   <iframe 
@@ -413,6 +460,12 @@ export default function PMDashboard() {
                 </CardHeader>
               </Card>
             ))}
+            {!selectedProject && (
+              <div className="col-span-2 py-20 text-center border-2 border-dashed border-black/10 rounded-3xl">
+                <CameraOff className="w-12 h-12 mx-auto mb-4 text-neutral-200" />
+                <p className="uppercase-soft text-neutral-400">Pilih proyek untuk melihat feed CCTV khusus proyek tersebut.</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -421,7 +474,8 @@ export default function PMDashboard() {
         <div className="space-y-8">
           <Card className="border-2 border-black rounded-2xl overflow-hidden shadow-sm">
             <CardHeader className="bg-neutral-50 border-b-2 border-black">
-              <CardTitle className="text-xl font-black uppercase tracking-tighter">Project Timeline & S-Curve</CardTitle>
+              <CardTitle className="text-xl font-black uppercase tracking-tighter">Project S-Curve Analysis</CardTitle>
+              <CardDescription className="uppercase-soft">Real-time progress vs planned schedule.</CardDescription>
             </CardHeader>
             <CardContent className="p-8 space-y-8">
               <div className="grid md:grid-cols-3 gap-8">
@@ -439,56 +493,436 @@ export default function PMDashboard() {
                 </div>
               </div>
 
-              <div className="h-96 bg-neutral-50 rounded-2xl border-2 border-dashed border-black/10 flex items-center justify-center">
-                <div className="text-center">
-                  <BarChart3 className="w-16 h-16 text-neutral-200 mx-auto mb-4" />
-                  <p className="uppercase-soft text-neutral-400">Interactive Gantt Chart & S-Curve Visualization</p>
-                </div>
+              <div className="h-[400px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={[
+                      { week: 'W1', planned: 5, actual: 4 },
+                      { week: 'W2', planned: 12, actual: 10 },
+                      { week: 'W3', planned: 22, actual: 18 },
+                      { week: 'W4', planned: 35, actual: 30 },
+                      { week: 'W5', planned: 48, actual: 45 },
+                      { week: 'W6', planned: 60, actual: null },
+                      { week: 'W7', planned: 75, actual: null },
+                      { week: 'W8', planned: 90, actual: null },
+                      { week: 'W9', planned: 100, actual: null },
+                    ]}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                    <XAxis dataKey="week" stroke="#000" fontSize={10} fontWeight="bold" />
+                    <YAxis stroke="#000" fontSize={10} fontWeight="bold" unit="%" />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#000', border: 'none', borderRadius: '12px', color: '#fff' }}
+                      itemStyle={{ color: '#fff', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase' }}
+                    />
+                    <Legend verticalAlign="top" height={36} />
+                    <Line type="monotone" dataKey="planned" stroke="#3b82f6" strokeWidth={4} dot={{ r: 4 }} activeDot={{ r: 8 }} name="PLANNED" />
+                    <Line type="monotone" dataKey="actual" stroke="#ef4444" strokeWidth={4} dot={{ r: 4 }} activeDot={{ r: 8 }} name="ACTUAL" />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
         </div>
       )}
 
-      {activeTab === "safety" && (
+      {activeTab === "rab" && (
         <div className="space-y-8">
-          <div className="grid md:grid-cols-2 gap-8">
-            <Card className="border-2 border-black rounded-2xl overflow-hidden shadow-sm">
-              <CardHeader className="bg-neutral-50 border-b-2 border-black">
-                <CardTitle className="text-xl font-black uppercase tracking-tighter">Safety Checklist (HSE)</CardTitle>
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-black uppercase tracking-tighter">Project RAB & Timeline</h2>
+            <div className="flex gap-2">
+              <Button variant="outline" className="border-2 border-black rounded-xl h-10 text-[10px] font-black uppercase">
+                <History className="w-4 h-4 mr-2" /> View Revision History
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            <Card className="md:col-span-2 border-2 border-black rounded-2xl overflow-hidden shadow-sm">
+              <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-row justify-between items-center">
+                <CardTitle className="text-xl font-black uppercase tracking-tighter">Budget Items & Progress</CardTitle>
+                <Button size="sm" className="btn-sleek h-8 rounded-lg text-[10px]">
+                  <Plus className="w-3 h-3 mr-1" /> Add Item
+                </Button>
               </CardHeader>
-              <CardContent className="p-8 space-y-4">
-                {[
-                  "Penggunaan APD Lengkap (Helm, Rompi, Sepatu)",
-                  "Area Kerja Bersih & Teratur",
-                  "Peralatan Listrik Aman & Terverifikasi",
-                  "Scaffolding Terpasang Sesuai Standar",
-                  "Papan Peringatan Terpasang di Area Berisiko",
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center justify-between p-4 border-2 border-black rounded-xl">
-                    <span className="text-xs font-bold uppercase tracking-widest">{item}</span>
-                    <div className="w-6 h-6 border-2 border-black rounded-md flex items-center justify-center bg-green-500">
-                      <CheckCircle2 className="w-4 h-4 text-white" />
-                    </div>
-                  </div>
-                ))}
-                <Button className="w-full btn-sleek h-12 rounded-xl mt-4">Submit Safety Report</Button>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="uppercase-soft">Work Item</TableHead>
+                      <TableHead className="uppercase-soft">Progress</TableHead>
+                      <TableHead className="uppercase-soft">Photos</TableHead>
+                      <TableHead className="uppercase-soft text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[
+                      { name: "Pekerjaan Tanah & Galian", progress: 100, photos: 3 },
+                      { name: "Pondasi & Struktur", progress: 65, photos: 5 },
+                      { name: "Dinding & Plesteran", progress: 20, photos: 2 },
+                    ].map((item, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="text-[10px] font-black uppercase tracking-widest">{item.name}</TableCell>
+                        <TableCell className="w-48">
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[8px] font-black">
+                              <span>{item.progress}%</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden border border-black/5">
+                              <div className="h-full bg-green-500 transition-all" style={{ width: `${item.progress}%` }} />
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex -space-x-2">
+                            {[...Array(item.photos)].map((_, j) => (
+                              <div key={j} className="w-6 h-6 rounded-full border-2 border-white bg-neutral-200 overflow-hidden">
+                                <img src={`https://picsum.photos/seed/${item.name}${j}/50/50`} className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full bg-neutral-100 border-2 border-white">
+                              <Plus className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Camera className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
 
-            <Card className="border-2 border-black rounded-2xl overflow-hidden shadow-sm bg-red-50">
-              <CardHeader className="bg-red-100 border-b-2 border-black">
-                <CardTitle className="text-xl font-black uppercase tracking-tighter text-red-900">Incident Log</CardTitle>
+            <Card className="border-2 border-black rounded-2xl overflow-hidden shadow-sm">
+              <CardHeader className="bg-neutral-50 border-b-2 border-black">
+                <CardTitle className="text-xl font-black uppercase tracking-tighter">Project Timeline</CardTitle>
               </CardHeader>
-              <CardContent className="p-8 space-y-4">
-                <div className="flex items-center justify-center h-48 text-red-300">
-                  <AlertCircle className="w-12 h-12" />
-                  <span className="uppercase-soft ml-2">No Incidents Reported</span>
-                </div>
-                <Button variant="destructive" className="w-full h-12 rounded-xl uppercase font-black text-[10px]">Report New Incident</Button>
+              <CardContent className="p-6 space-y-6">
+                {(selectedProject?.timeline || [
+                  { title: "Site Clearing", date: "10 Mar 2026", dueDate: "12 Mar 2026", status: "completed" },
+                  { title: "Excavation", date: "25 Mar 2026", dueDate: "30 Mar 2026", status: "completed" },
+                  { title: "Foundation", date: "15 Apr 2026", dueDate: "25 Apr 2026", status: "ongoing" },
+                  { title: "Wall Structure", date: "05 May 2026", dueDate: "20 May 2026", status: "pending" },
+                ]).map((event, i) => (
+                  <div key={i} className="flex gap-4 relative">
+                    {i < (selectedProject?.timeline?.length || 3) && <div className="absolute left-2 top-6 bottom-0 w-0.5 bg-neutral-200" />}
+                    <div className={cn(
+                      "w-4 h-4 rounded-full border-2 border-black z-10",
+                      event.status === 'completed' ? "bg-green-500" : 
+                      event.status === 'ongoing' ? "bg-accent animate-pulse" : "bg-white"
+                    )} />
+                    <div className="space-y-1 flex-grow">
+                      <div className="flex justify-between items-start">
+                        <p className="text-[10px] font-black uppercase tracking-widest">{event.title}</p>
+                        <Badge variant="outline" className="text-[8px] uppercase border-black/10">{event.status}</Badge>
+                      </div>
+                      <div className="flex gap-4">
+                        <p className="text-[9px] text-neutral-400 font-bold">Start: {event.date}</p>
+                        {event.dueDate && <p className="text-[9px] text-red-400 font-bold">Due: {event.dueDate}</p>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <Button className="w-full btn-sleek h-10 rounded-xl mt-4" onClick={() => setShowMilestoneForm(true)}>
+                  <Plus className="w-4 h-4 mr-2" /> Add Milestone
+                </Button>
               </CardContent>
             </Card>
           </div>
+        </div>
+      )}
+
+      {activeTab === "pm-ai" && (
+        <div className="space-y-8">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-black uppercase tracking-tighter">PM AI Strategic Assistant</h2>
+            <div className="flex gap-4">
+              <select 
+                className="h-10 rounded-xl border-2 border-black/10 px-3 text-sm"
+                value={selectedProject?.id || ""}
+                onChange={e => setSelectedProject(myProjects.find(p => p.id === e.target.value) || null)}
+              >
+                <option value="">Select Project for Analysis...</option>
+                {myProjects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {!selectedProject ? (
+            <div className="flex flex-col items-center justify-center py-20 bg-neutral-50 rounded-3xl border-2 border-dashed border-black/10">
+              <Brain className="w-12 h-12 text-neutral-300 mb-4" />
+              <p className="text-sm font-black uppercase tracking-widest text-neutral-400">Pilih proyek untuk mendapatkan saran AI</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-3 gap-8">
+              <Card className="md:col-span-2 border-2 border-black rounded-3xl overflow-hidden bg-black text-white relative">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                  <Brain className="w-48 h-48" />
+                </div>
+                <CardHeader className="border-b border-white/10 relative z-10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center">
+                      <Zap className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-2xl font-black uppercase tracking-tighter">PM AI Strategic Assistant</CardTitle>
+                      <CardDescription className="text-white/60 uppercase-soft">Real-time Site Optimization & Goal Setting</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-8 space-y-8 relative z-10">
+                  <div className="space-y-6">
+                    <div className="p-6 bg-white/5 rounded-2xl border border-white/10 space-y-4">
+                      <h4 className="text-sm font-black uppercase tracking-widest text-accent flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4" /> Analisis Bobot Hari Ini
+                      </h4>
+                      <p className="text-sm leading-relaxed text-white/80">
+                        Berdasarkan data absensi {workforce.length} tukang dan laporan material, bobot pekerjaan hari ini diprediksi mencapai <span className="text-white font-black">1.2%</span>. 
+                        Fokus utama pada pengerjaan dinding lantai 2 menunjukkan efisiensi tinggi.
+                      </p>
+                    </div>
+
+                    <div className="p-6 bg-white/5 rounded-2xl border border-white/10 space-y-4">
+                      <h4 className="text-sm font-black uppercase tracking-widest text-blue-400 flex items-center gap-2">
+                        <Calendar className="w-4 h-4" /> Target & Tujuan Besok
+                      </h4>
+                      <ul className="space-y-3">
+                        {[
+                          "Selesaikan pengecoran kolom praktis zona B",
+                          "Persiapan bekisting plat lantai 3",
+                          "Verifikasi kedatangan material besi D13"
+                        ].map((goal, i) => (
+                          <li key={i} className="flex items-start gap-3 text-sm text-white/80">
+                            <div className="w-5 h-5 rounded-full bg-blue-400/20 flex items-center justify-center mt-0.5">
+                              <span className="text-[10px] font-black text-blue-400">{i+1}</span>
+                            </div>
+                            {goal}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="p-6 bg-accent/10 rounded-2xl border border-accent/20 space-y-4">
+                      <h4 className="text-sm font-black uppercase tracking-widest text-accent flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" /> AI Warning & Reminder
+                      </h4>
+                      <p className="text-sm leading-relaxed text-white/80 italic">
+                        "Prediksi hujan besok sore mencapai 80%. AI menyarankan percepatan pengecoran sebelum jam 12 siang atau penundaan hingga lusa untuk menjaga kualitas beton."
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="space-y-8">
+                <Card className="border-2 border-black rounded-3xl p-6 bg-accent text-white">
+                  <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Site Performance</h3>
+                  <div className="space-y-4">
+                    <div className="p-4 bg-white/10 rounded-xl border border-white/20">
+                      <p className="text-[10px] uppercase-soft text-white/60">Worker Efficiency</p>
+                      <p className="text-3xl font-black">94%</p>
+                    </div>
+                    <div className="p-4 bg-white/10 rounded-xl border border-white/20">
+                      <p className="text-[10px] uppercase-soft text-white/60">Material Waste Ratio</p>
+                      <p className="text-3xl font-black">2.4%</p>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="border-2 border-black rounded-3xl p-6">
+                  <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Daily Report Summary</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase">Progress Weight</span>
+                      <span className="text-xs font-bold text-green-600">+1.2%</span>
+                    </div>
+                    <Progress value={75} className="h-2" />
+                    <p className="text-[10px] text-neutral-400 italic mt-2">Generated by TBJ Constech OS AI</p>
+                  </div>
+                </Card>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "safety" && (
+        <div className="space-y-8">
+          <div className="grid md:grid-cols-3 gap-8">
+            <Card className="md:col-span-2 border-2 border-black rounded-2xl overflow-hidden shadow-sm">
+              <CardHeader className="bg-neutral-50 border-b-2 border-black">
+                <CardTitle className="text-xl font-black uppercase tracking-tighter">Safety Checklist (HSE)</CardTitle>
+                <CardDescription className="uppercase-soft">Daily site safety verification protocol.</CardDescription>
+              </CardHeader>
+              <CardContent className="p-8 space-y-4">
+                {[
+                  { item: "Penggunaan APD Lengkap (Helm, Rompi, Sepatu)", status: "ok", category: "Personal Protection" },
+                  { item: "Area Kerja Bersih & Teratur", status: "ok", category: "Housekeeping" },
+                  { item: "Peralatan Listrik Aman & Terverifikasi", status: "ok", category: "Electrical" },
+                  { item: "Scaffolding Terpasang Sesuai Standar", status: "ok", category: "Working at Height" },
+                  { item: "Papan Peringatan Terpasang di Area Berisiko", status: "ok", category: "Signage" },
+                  { item: "Penyediaan Kotak P3K & APAR di Lokasi", status: "warning", category: "Emergency" },
+                  { item: "Verifikasi Izin Kerja (Work Permit) Berisiko Tinggi", status: "ok", category: "Administrative" },
+                ].map((check, i) => (
+                  <div key={i} className="flex items-center justify-between p-4 border-2 border-black rounded-xl bg-white hover:bg-neutral-50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-2 h-2 rounded-full",
+                        check.status === "ok" ? "bg-green-500" : "bg-yellow-500 animate-pulse"
+                      )} />
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-black uppercase tracking-widest block">{check.item}</span>
+                        <span className="text-[9px] uppercase-soft text-neutral-400">{check.category}</span>
+                      </div>
+                    </div>
+                    <div className={cn(
+                      "w-6 h-6 border-2 border-black rounded-md flex items-center justify-center cursor-pointer",
+                      check.status === "ok" ? "bg-green-500" : "bg-white"
+                    )}>
+                      {check.status === "ok" ? <CheckCircle2 className="w-4 h-4 text-white" /> : <AlertCircle className="w-4 h-4 text-yellow-500" />}
+                    </div>
+                  </div>
+                ))}
+                
+                <div className="grid grid-cols-2 gap-4 pt-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Incident Type</label>
+                    <select className="w-full h-12 border-2 border-black rounded-xl px-4 text-xs font-bold uppercase">
+                      <option>None / Safe</option>
+                      <option>Near Miss</option>
+                      <option>Minor Injury</option>
+                      <option>Major Injury</option>
+                      <option>Property Damage</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Weather Condition</label>
+                    <select className="w-full h-12 border-2 border-black rounded-xl px-4 text-xs font-bold uppercase">
+                      <option>Sunny / Clear</option>
+                      <option>Cloudy</option>
+                      <option>Rainy</option>
+                      <option>Heavy Rain / Storm</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <label className="text-[10px] font-black uppercase tracking-widest mb-2 block">Catatan HSE Tambahan</label>
+                  <Textarea placeholder="Input catatan kondisi lapangan, temuan bahaya, atau tindakan korektif..." className="mb-4 border-2 border-black rounded-xl min-h-[100px]" />
+                  <Button className="w-full btn-orange h-14 rounded-xl font-black uppercase tracking-widest">Submit Daily HSE Report</Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="space-y-8">
+              <Card className="border-2 border-black rounded-2xl p-6 bg-red-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.3)]">
+                <div className="flex justify-between items-start mb-6">
+                  <ShieldCheck className="w-10 h-10" />
+                  <Badge className="bg-white text-red-600 border-none font-black">LIVE STATS</Badge>
+                </div>
+                <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Safety Performance</h3>
+                <div className="space-y-4">
+                  <div className="p-4 bg-white/10 rounded-xl border border-white/20">
+                    <p className="text-[10px] uppercase-soft text-white/60">Days Without Incident</p>
+                    <p className="text-3xl font-black">142 DAYS</p>
+                  </div>
+                  <div className="p-4 bg-white/10 rounded-xl border border-white/20">
+                    <p className="text-[10px] uppercase-soft text-white/60">Safety Score</p>
+                    <p className="text-3xl font-black">98.5 / 100</p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="border-2 border-black rounded-2xl p-6 bg-white">
+                <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Safety Equipment</h3>
+                <div className="space-y-3">
+                  {[
+                    { name: "Helmets", stock: 45, min: 40 },
+                    { name: "Vests", stock: 38, min: 40 },
+                    { name: "Safety Shoes", stock: 12, min: 10 },
+                    { name: "First Aid Kits", stock: 4, min: 5 },
+                  ].map((eq, i) => (
+                    <div key={i} className="flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase tracking-widest">{eq.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "text-xs font-bold",
+                          eq.stock < eq.min ? "text-red-500" : "text-green-600"
+                        )}>{eq.stock}</span>
+                        <Progress value={(eq.stock / 50) * 100} className="w-16 h-1.5" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button variant="outline" className="w-full mt-6 border-2 border-black h-10 text-[10px] font-black uppercase">Request PPE Restock</Button>
+              </Card>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Milestone Modal */}
+      {showMilestoneForm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md border-2 border-black rounded-3xl overflow-hidden animate-in zoom-in-95">
+            <CardHeader className="bg-neutral-50 border-b-2 border-black">
+              <CardTitle className="text-xl font-black uppercase tracking-tighter">Add Project Milestone</CardTitle>
+              <CardDescription className="uppercase-soft">Schedule a new task for {selectedProject?.name}.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest">Milestone Title</label>
+                <Input 
+                  placeholder="e.g. Pemasangan Atap" 
+                  value={newMilestone.title}
+                  onChange={e => setNewMilestone({...newMilestone, title: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest">Start Date</label>
+                  <Input 
+                    type="date"
+                    value={newMilestone.date}
+                    onChange={e => setNewMilestone({...newMilestone, date: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest">Due Date</label>
+                  <Input 
+                    type="date"
+                    value={newMilestone.dueDate}
+                    onChange={e => setNewMilestone({...newMilestone, dueDate: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest">Initial Status</label>
+                <select 
+                  className="w-full h-10 rounded-md border border-black/10 px-3 text-sm"
+                  value={newMilestone.status}
+                  onChange={e => setNewMilestone({...newMilestone, status: e.target.value as any})}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="ongoing">Ongoing</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
+              <div className="flex gap-4 pt-4">
+                <Button variant="ghost" className="flex-grow" onClick={() => setShowMilestoneForm(false)}>Cancel</Button>
+                <Button className="flex-grow btn-orange h-12" onClick={handleAddMilestone}>
+                  Save Milestone
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 

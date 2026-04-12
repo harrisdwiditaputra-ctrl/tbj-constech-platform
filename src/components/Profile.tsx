@@ -1,20 +1,25 @@
 import { useState } from "react";
-import { useProjects, useAuth, useWorkforce } from "@/lib/hooks";
+import { useProjects, useAuth, useWorkforce, useUser } from "@/lib/hooks";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, LayoutDashboard, FileText, Clock, CheckCircle2, TrendingUp, Calendar, MapPin, Plus, Camera, CreditCard, ShieldCheck, AlertCircle, ChevronRight, Check, MessageSquare, User, Zap, Lock, Users, Phone, Briefcase } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Loader2, LayoutDashboard, FileText, Clock, CheckCircle2, TrendingUp, Calendar, MapPin, Plus, Camera, CreditCard, ShieldCheck, AlertCircle, ChevronRight, Check, MessageSquare, User, Zap, Lock, Users, Phone, Briefcase, ArrowLeft } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 
 export default function Profile() {
-  const { user } = useAuth();
-  const { projects, loading } = useProjects(user?.uid);
-  const { workforce } = useWorkforce(user?.role, user?.tier);
+  const { user: currentUser } = useAuth();
+  const { id } = useParams();
+  const { user: profileUser, loading: userLoading } = useUser(id);
+  const user = id ? profileUser : currentUser;
+  const { projects, loading: projectsLoading } = useProjects(user?.uid);
+  const { workforce } = useWorkforce(currentUser?.role, currentUser?.tier);
   const navigate = useNavigate();
+
+  const loading = userLoading || projectsLoading;
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
 
@@ -55,10 +60,17 @@ export default function Profile() {
 
   return (
     <div className="space-y-12 py-8">
+      {id && (
+        <Button variant="ghost" className="uppercase-soft text-[10px] font-black gap-2" onClick={() => navigate(-1)}>
+          <ArrowLeft className="w-4 h-4" /> Back to Admin Panel
+        </Button>
+      )}
       <div className="flex justify-between items-end border-b-2 border-black pb-8">
         <div className="space-y-2">
-          <h1 className="text-5xl font-black uppercase tracking-tighter">Client Dashboard</h1>
-          <p className="uppercase-soft text-neutral-500">Selamat datang, {user?.displayName}. Pantau progres proyek Anda secara real-time.</p>
+          <h1 className="text-5xl font-black uppercase tracking-tighter">{id ? "Client View" : "Client Dashboard"}</h1>
+          <p className="uppercase-soft text-neutral-500">
+            {id ? `Viewing dashboard for ${user?.displayName}` : `Selamat datang, ${user?.displayName}. Pantau progres proyek Anda secara real-time.`}
+          </p>
         </div>
         <div className="text-right">
           <Badge className="bg-accent text-white rounded-md px-4 py-1 uppercase-soft">Tier {(user?.tier as string) === 'prospect' ? '1' : user?.tier === 'survey' ? '2' : '3'}</Badge>

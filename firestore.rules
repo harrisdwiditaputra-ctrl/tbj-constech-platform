@@ -25,7 +25,17 @@ service cloud.firestore {
     //   - pmId: string (optional, PM assigned to project)
     //   - createdAt: string (required, ISO8601, immutable)
     //   - totalBudget: number (required, >= 0)
-    //   - status: string (required, ['draft', 'survey', 'active', 'completed'])
+    //   - status: string (required, ['draft', 'assessment', 'active', 'completed'])
+    //
+    // Collection: vendors
+    // Document ID: {vendorId}
+    // Fields:
+    //   - name: string (required)
+    //   - category: string (required)
+    //   - contactName: string (required)
+    //   - whatsapp: string (required)
+    //   - email: string (optional)
+    //   - address: string (optional)
     //
     // ===============================================================
 
@@ -65,7 +75,7 @@ service cloud.firestore {
     function isTier3() {
       return isAuthenticated() && 
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         (getUserData().tier == 'deal' || isStaff()));
+         (getUserData().tier == 'deal' || getUserData().tier == 'assessment' || isStaff()));
     }
 
     function isValidEmail(email) {
@@ -94,7 +104,7 @@ service cloud.firestore {
              data.ownerId is string &&
              isValidDateString(data.createdAt) &&
              data.totalBudget is number && data.totalBudget >= 0 &&
-             data.status in ['draft', 'survey', 'active', 'completed'];
+             data.status in ['draft', 'assessment', 'active', 'completed'];
     }
 
     // ===============================================================
@@ -121,6 +131,11 @@ service cloud.firestore {
       match /items/{itemId} {
         allow read, write: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
       }
+    }
+
+    match /master_items/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     match /master_data/{itemId} {
@@ -151,6 +166,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /vendors/{vendorId} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
     match /gallery/{itemId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -159,6 +179,21 @@ service cloud.firestore {
     match /status_updates/{itemId} {
       allow read: if true;
       allow write: if isStaff();
+    }
+
+    match /content_management/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /system_settings/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /campaigns/{campaignId} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
     }
     
     // Default Deny

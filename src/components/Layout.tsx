@@ -1,11 +1,11 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileText, Settings, LogOut, Menu, X, Calculator, ExternalLink, Image as ImageIcon, User, Shield, Zap, Terminal } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, LogOut, Menu, X, Calculator, ExternalLink, Image as ImageIcon, User, Shield, Zap, Terminal, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Ticker from "./Ticker";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuGroup } from "@/components/ui/dropdown-menu";
+import { TBJ_LOGO } from "@/constants";
 
 interface LayoutProps {
   children: ReactNode;
@@ -23,9 +23,12 @@ export default function Layout({ children, user, onLogout, onLogin }: LayoutProp
   const isClient = user?.role === "user";
 
   const navigation = [
-    { name: "Gallery", href: "/gallery", icon: ImageIcon },
+    { name: "AI Agent", href: "/ai-agent", icon: MessageSquare },
     ...(isAdmin || isPM || user?.tier === "deal" ? [
       { name: "RAB Master", href: "/rab", icon: Calculator },
+    ] : []),
+    ...(isAdmin || isPM ? [
+      { name: "AI Estimator", href: "/assistant", icon: Zap },
     ] : []),
     ...(isAdmin ? [
       { name: "Admin Panel", href: "/admin", icon: Shield },
@@ -50,11 +53,11 @@ export default function Layout({ children, user, onLogout, onLogin }: LayoutProp
           <div className="flex justify-between h-20">
             <div className="flex items-center">
               <Link to="/" className="flex-shrink-0 flex items-center gap-3 group">
-                <div className="w-12 h-12 bg-black flex items-center justify-center transition-transform group-hover:rotate-6 rounded-xl shadow-xl overflow-hidden">
+                <div className="w-12 h-12 flex items-center justify-center transition-transform group-hover:rotate-6 rounded-xl overflow-hidden">
                   <img 
-                    src="https://picsum.photos/seed/tbj-logo/200/200" 
+                    src={TBJ_LOGO} 
                     alt="TBJ Logo" 
-                    className="w-full h-full object-cover opacity-90"
+                    className="w-full h-full object-contain"
                     referrerPolicy="no-referrer"
                   />
                 </div>
@@ -158,15 +161,15 @@ export default function Layout({ children, user, onLogout, onLogin }: LayoutProp
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex flex-col items-center md:items-start gap-2">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-black flex items-center justify-center rounded-lg overflow-hidden">
+              <div className="w-10 h-10 flex items-center justify-center rounded-lg overflow-hidden">
                 <img 
-                  src="https://picsum.photos/seed/tbj-logo/100/100" 
+                  src={TBJ_LOGO} 
                   alt="TBJ Logo" 
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <span className="font-black text-lg tracking-tighter uppercase">TBJ Constech</span>
+              <span className="font-black text-lg tracking-tighter uppercase">Tukang Bangunan Jakarta</span>
             </div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
               Tech-Driven Construction Solutions
@@ -175,7 +178,7 @@ export default function Layout({ children, user, onLogout, onLogin }: LayoutProp
           
           <div className="flex flex-wrap justify-center gap-x-8 gap-y-4 items-center">
             <a href="https://www.instagram.com/tukang.bangunan.jakarta/" target="_blank" rel="noopener noreferrer" className="text-neutral-400 hover:text-accent transition-colors flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest">Instagram</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest">@tukang.bangunan.jakarta</span>
               <ExternalLink className="w-3 h-3" />
             </a>
             <a href="https://www.google.com/search?q=Tukang+Bangunan+Jakarta&stick=H4sIAAAAAAAA_-NgU1I1qDBKNbO0SDG3NEkxSU5NtjC0MqgwSTZKTLWwsDA0MTY2MrMwWsQqHlKanZiXruAEJErzEvMUvBKzE4tKEgG7l7KGQwAAAA&hl=id&mat=CSWC37g7HepEElYBTVDHnh8QGuKxe3fzpQOfm7m6YZnN684KAHiUCBz7clraMqVOeYDtCGZPtAJcSYUe0My46hcpQMmvYQI0gnUOMvKh5vid8Y5oy-5fNkrFU5rQcO5stw&authuser=0" target="_blank" rel="noopener noreferrer" className="text-neutral-400 hover:text-accent transition-colors flex items-center gap-2">

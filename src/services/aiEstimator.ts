@@ -12,27 +12,40 @@ const getApiKey = () => {
 
 const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
-export async function getAIEstimation(userProblem: string, category: string): Promise<AIEstimateResponse> {
-  const masterDataString = WORK_ITEMS_MASTER.map(item => 
-    `- ${item.name} (${item.unit}): Rp ${item.price.toLocaleString('id-ID')}`
+export async function getAIEstimation(userProblem: string, category: string, masterData?: any[]): Promise<AIEstimateResponse> {
+  const dataToUse = masterData && masterData.length > 0 ? masterData : WORK_ITEMS_MASTER;
+  
+  const masterDataString = dataToUse.map(item => 
+    `- [${item.code || 'N/A'}] ${item.name} (${item.unit}): Rp ${item.price.toLocaleString('id-ID')}`
   ).join('\n');
 
   const prompt = `
-    Anda adalah seorang AI Estimator profesional untuk perusahaan kontraktor TBJ.
-    Tugas Anda adalah menganalisa permasalahan konstruksi klien dan memberikan estimasi pekerjaan serta biaya.
+    Anda adalah "TBJ Constech OS", Chief Estimator AI eksklusif untuk platform TBJ Constech.
+    Tugas Anda: Menganalisa permasalahan konstruksi/renovasi klien dan memberikan estimasi RAB (Rencana Anggaran Biaya) yang akurat.
 
     Kategori Proyek: ${category}
-    Permasalahan Klien: "${userProblem}"
+    Deskripsi Permasalahan/Kebutuhan Klien: "${userProblem}"
 
-    Gunakan data harga satuan berikut sebagai referensi utama (jika tidak ada yang cocok, gunakan estimasi pasar yang wajar):
+    DATA MASTER HARGA (Gunakan item ini jika relevan):
     ${masterDataString}
 
-    Berikan analisa singkat tentang apa yang perlu dilakukan, daftar item pekerjaan (uraian, volume, satuan, harga satuan), dan total biaya.
+    ATURAN ESTIMASI:
+    1. Analisa harus profesional, solutif, dan teknis.
+    2. Pilih item dari DATA MASTER yang paling mendekati kebutuhan.
+    3. Jika item tidak ada di DATA MASTER, buatlah item baru dengan harga pasar yang wajar (markup 20% dari modal).
+    4. Volume harus logis berdasarkan deskripsi permasalahan.
+    5. Gunakan unit standar konstruksi: m2 (meter persegi), m3 (meter kubik), m' (meter lari), kg, sak, ls (lumpsum), titik, unit, bh (buah).
+    6. JANGAN gunakan unit yang tidak standar atau singkatan yang membingungkan.
+    7. Total Biaya adalah akumulasi dari (Volume x Harga Satuan).
+    8. Semua harga dalam Rupiah (Rp).
+    9. Berikan alasan (reasoning) teknis untuk setiap item yang dipilih.
+
+    Format Output: JSON.
     Bahasa: Indonesia.
   `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-1.5-flash",
     contents: prompt,
     config: {
       responseMimeType: "application/json",

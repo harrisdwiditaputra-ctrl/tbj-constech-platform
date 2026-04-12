@@ -1,5 +1,7 @@
 import { WorkItemMaster } from "./types";
 
+export const TBJ_LOGO = "https://drive.google.com/uc?export=view&id=1kiigvLWdSslkfMZPT_u4RpxMKyOLtutM";
+
 export const WORK_ITEMS_MASTER: WorkItemMaster[] = [
   // ==========================================
   // 1. PEKERJAAN PERSIAPAN, GALIAN & TANAH

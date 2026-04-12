@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { auth, db, handleFirestoreError, OperationType } from "@/lib/firebase";
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot, collection, query, where, orderBy, addDoc, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
-import { Project, BudgetCategory, BudgetItem, UserProfile, Property, WorkItemMaster, Workforce, Attendance, MaterialRequest } from "@/types";
+import { Project, BudgetCategory, BudgetItem, UserProfile, Property, WorkItemMaster, Workforce, Attendance, MaterialRequest, CMSConfig, Campaign, SystemConfig, Vendor, GalleryItem } from "@/types";
 import { WORK_ITEMS_MASTER } from "@/constants";
 import { toast } from "sonner";
 
@@ -169,6 +169,14 @@ export function useProjects(userId?: string, userRole?: string) {
         ownerId: userId,
         createdAt: new Date().toISOString(),
         totalBudget: 0,
+        escrowBalance: 0,
+        releasedAmount: 0,
+        paymentMilestones: [
+          { id: "dp", label: "DP Awal", percentage: 30, amount: 0, status: "pending", requiredProgress: 0 },
+          { id: "progress30", label: "Progress 30%", percentage: 30, amount: 0, status: "pending", requiredProgress: 30 },
+          { id: "progress60", label: "Progress 60%", percentage: 35, amount: 0, status: "pending", requiredProgress: 60 },
+          { id: "retention", label: "Retensi 5%", percentage: 5, amount: 0, status: "pending", requiredProgress: 100 }
+        ],
         status: "draft"
       };
       await addDoc(collection(db, "projects"), newProject);
@@ -329,7 +337,44 @@ export function useProjectDetails(projectId: string | undefined) {
     }
   };
 
-  return { project, categories, items, loading, addCategory, addItem, deleteCategory, deleteItem, updateProjectStatus, updateItemProgress };
+  const releaseMilestone = async (milestoneId: string) => {
+    if (!projectId || !project) return;
+    try {
+      const updatedMilestones = project.paymentMilestones.map(m => {
+        if (m.id === milestoneId) {
+          return { ...m, status: "released" as const, releaseDate: new Date().toISOString() };
+        }
+        return m;
+      });
+      
+      const milestone = project.paymentMilestones.find(m => m.id === milestoneId);
+      if (milestone && milestone.status !== "released") {
+        await updateDoc(doc(db, "projects", projectId), {
+          paymentMilestones: updatedMilestones,
+          releasedAmount: project.releasedAmount + milestone.amount,
+          escrowBalance: project.escrowBalance - milestone.amount
+        });
+        
+        // Record transaction
+        await addDoc(collection(db, "financial_transactions"), {
+          projectId,
+          projectName: project.name,
+          type: "income",
+          category: "client_payment",
+          amount: milestone.amount,
+          description: `Pencairan Milestone: ${milestone.label}`,
+          date: new Date().toISOString(),
+          status: "completed"
+        });
+        
+        toast.success(`Dana ${milestone.label} berhasil dicairkan`);
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `projects/${projectId}`);
+    }
+  };
+
+  return { project, categories, items, loading, addCategory, addItem, deleteCategory, deleteItem, updateProjectStatus, updateItemProgress, releaseMilestone };
 }
 
 export function useProperties() {
@@ -368,7 +413,100 @@ export function useProperties() {
     }
   };
 
-  return { properties, loading, addProperty, updateProperty };
+  const deleteProperty = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "properties", id));
+      toast.success("Property removed");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `properties/${id}`);
+    }
+  };
+
+  return { properties, loading, addProperty, updateProperty, deleteProperty };
+}
+
+export function useGallery() {
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, "gallery"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setGallery(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as GalleryItem[]);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "gallery");
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const addGalleryItem = async (data: Omit<GalleryItem, "id" | "createdAt">) => {
+    try {
+      await addDoc(collection(db, "gallery"), {
+        ...data,
+        createdAt: new Date().toISOString()
+      });
+      toast.success("Gallery item added");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, "gallery");
+    }
+  };
+
+  const deleteGalleryItem = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "gallery", id));
+      toast.success("Gallery item removed");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `gallery/${id}`);
+    }
+  };
+
+  return { gallery, loading, addGalleryItem, deleteGalleryItem };
+}
+
+export function useVendors() {
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, "vendors"), orderBy("name", "asc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setVendors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Vendor[]);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "vendors");
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const addVendor = async (data: Omit<Vendor, "id">) => {
+    try {
+      await addDoc(collection(db, "vendors"), data);
+      toast.success("Vendor added to database");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, "vendors");
+    }
+  };
+
+  const updateVendor = async (id: string, data: Partial<Vendor>) => {
+    try {
+      await updateDoc(doc(db, "vendors", id), data);
+      toast.success("Vendor updated");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `vendors/${id}`);
+    }
+  };
+
+  const deleteVendor = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "vendors", id));
+      toast.success("Vendor removed");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `vendors/${id}`);
+    }
+  };
+
+  return { vendors, loading, addVendor, updateVendor, deleteVendor };
 }
 
 export function useMasterData(userRole?: string) {
@@ -422,6 +560,15 @@ export function useMasterData(userRole?: string) {
     }
   };
 
+  const addMasterCategory = async (name: string) => {
+    try {
+      await addDoc(collection(db, "master_categories"), { name, createdAt: new Date().toISOString() });
+      toast.success("Category added to Master Database");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, "master_categories");
+    }
+  };
+
   const resetDatabase = async () => {
     if (!confirm("PERINGATAN: Ini akan menghapus SEMUA proyek dan data klien. Data Master tidak akan dihapus. Lanjutkan?")) return;
     
@@ -449,7 +596,25 @@ export function useMasterData(userRole?: string) {
     }
   };
 
-  return { masterData, loading, addMasterItem, updateMasterItem, deleteMasterItem, resetDatabase };
+  return { masterData, loading, addMasterItem, updateMasterItem, deleteMasterItem, addMasterCategory, resetDatabase };
+}
+
+export function useMasterCategories() {
+  const [categories, setCategories] = useState<{id: string, name: string}[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, "master_categories"), orderBy("name", "asc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "master_categories");
+    });
+    return () => unsubscribe();
+  }, []);
+
+  return { categories, loading };
 }
 
 export function useUsers(userRole?: string) {
@@ -482,6 +647,31 @@ export function useUsers(userRole?: string) {
   };
 
   return { users, loading, updateUser };
+}
+
+export function useUser(uid: string | undefined) {
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!uid || !auth.currentUser) {
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribe = onSnapshot(doc(db, "users", uid), (snapshot) => {
+      if (snapshot.exists()) {
+        setUser({ ...snapshot.data() } as UserProfile);
+      }
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `users/${uid}`);
+    });
+
+    return () => unsubscribe();
+  }, [uid]);
+
+  return { user, loading };
 }
 
 export function useWorkforce(userRole?: string, userTier?: string) {
@@ -529,7 +719,16 @@ export function useWorkforce(userRole?: string, userTier?: string) {
     }
   };
 
-  return { workforce, loading, addWorkforce, updateWorkforce };
+  const deleteWorkforce = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "workforce", id));
+      toast.success("Workforce removed");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `workforce/${id}`);
+    }
+  };
+
+  return { workforce, loading, addWorkforce, updateWorkforce, deleteWorkforce };
 }
 
 export function useAttendance(userRole?: string) {
@@ -629,5 +828,241 @@ export function useMaterialRequests(userRole?: string) {
     }
   };
 
-  return { requests, loading, addRequest, updateRequestStatus };
+  const assignVendor = async (id: string, vendorId: string, vendorName: string) => {
+    try {
+      const now = new Date().toISOString();
+      const docRef = doc(db, "material_requests", id);
+      const snap = await getDoc(docRef);
+      const currentLog = snap.data()?.log || [];
+      
+      await updateDoc(docRef, {
+        vendorId,
+        vendorName,
+        status: "approved",
+        updatedAt: now,
+        log: [...currentLog, { time: now, action: `Vendor assigned: ${vendorName}`, note: `Assigned to ${vendorName}` }]
+      });
+      toast.success(`Vendor ${vendorName} assigned to request`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `material_requests/${id}`);
+    }
+  };
+
+  return { requests, loading, addRequest, updateRequestStatus, assignVendor };
+}
+
+export function useCMSConfig() {
+  const [config, setConfig] = useState<CMSConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, "content_management", "dashboard_config"), (snapshot) => {
+      if (snapshot.exists()) {
+        setConfig(snapshot.data() as CMSConfig);
+      } else {
+        // Default values
+        setConfig({
+          heroTitle: "Membangun Masa Depan Konstruksi Indonesia",
+          heroSubtitle: "Platform All-in-One untuk Renovasi, Interior, dan Bangun Baru dengan Teknologi AI.",
+          promoText: "Promo Ramadan: Diskon 15% untuk Jasa Desain Interior!",
+          promoActive: true
+        });
+      }
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, "content_management/dashboard_config");
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const updateConfig = async (data: Partial<CMSConfig>) => {
+    try {
+      await setDoc(doc(db, "content_management", "dashboard_config"), data, { merge: true });
+      toast.success("CMS Configuration updated");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, "content_management/dashboard_config");
+    }
+  };
+
+  return { config, loading, updateConfig };
+}
+
+export function useCampaigns() {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, "campaigns"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setCampaigns(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Campaign[]);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "campaigns");
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const addCampaign = async (data: Omit<Campaign, "id" | "createdAt">) => {
+    try {
+      await addDoc(collection(db, "campaigns"), {
+        ...data,
+        createdAt: new Date().toISOString()
+      });
+      toast.success("Campaign created");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, "campaigns");
+    }
+  };
+
+  const updateCampaign = async (id: string, data: Partial<Campaign>) => {
+    try {
+      await updateDoc(doc(db, "campaigns", id), data);
+      toast.success("Campaign updated");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `campaigns/${id}`);
+    }
+  };
+
+  const deleteCampaign = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "campaigns", id));
+      toast.success("Campaign deleted");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `campaigns/${id}`);
+    }
+  };
+
+  return { campaigns, loading, addCampaign, updateCampaign, deleteCampaign };
+}
+
+export function useSystemConfig() {
+  const [config, setConfig] = useState<SystemConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, "system_settings", "global_config"), (snapshot) => {
+      if (snapshot.exists()) {
+        setConfig(snapshot.data() as SystemConfig);
+      } else {
+        // Default values
+        setConfig({
+          surveyFee: 399000,
+          aiFreeLimit: 1,
+          globalMarkup: 20,
+          autoNotificationWA: true,
+          aiAnalysisMode: true
+        });
+      }
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, "system_settings/global_config");
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const updateConfig = async (data: Partial<SystemConfig>) => {
+    try {
+      await setDoc(doc(db, "system_settings", "global_config"), data, { merge: true });
+      toast.success("System configuration updated");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, "system_settings/global_config");
+    }
+  };
+
+  return { config, loading, updateConfig };
+}
+
+export async function incrementAIUsage() {
+  const user = auth.currentUser;
+  if (!user) return;
+  
+  try {
+    const userRef = doc(db, "users", user.uid);
+    const userDoc = await getDoc(userRef);
+    if (userDoc.exists()) {
+      const currentUsage = userDoc.data().aiUsageCount || 0;
+      await updateDoc(userRef, {
+        aiUsageCount: currentUsage + 1
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+  }
+}
+
+export function useFinance(projectId?: string) {
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let q = query(collection(db, "financial_transactions"), orderBy("date", "desc"));
+    if (projectId) {
+      q = query(collection(db, "financial_transactions"), where("projectId", "==", projectId), orderBy("date", "desc"));
+    }
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "financial_transactions");
+    });
+    return () => unsubscribe();
+  }, [projectId]);
+
+  const addTransaction = async (data: any) => {
+    try {
+      await addDoc(collection(db, "financial_transactions"), {
+        ...data,
+        date: data.date || new Date().toISOString()
+      });
+      toast.success("Transaksi berhasil dicatat");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, "financial_transactions");
+    }
+  };
+
+  return { transactions, loading, addTransaction };
+}
+
+export function useWorkerWages(projectId?: string) {
+  const [wages, setWages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let q = query(collection(db, "worker_wages"), orderBy("weekEnding", "desc"));
+    if (projectId) {
+      q = query(collection(db, "worker_wages"), where("projectId", "==", projectId), orderBy("weekEnding", "desc"));
+    }
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setWages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "worker_wages");
+    });
+    return () => unsubscribe();
+  }, [projectId]);
+
+  const addWage = async (data: any) => {
+    try {
+      await addDoc(collection(db, "worker_wages"), {
+        ...data,
+        createdAt: new Date().toISOString()
+      });
+      toast.success("Gaji tukang berhasil dicatat");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, "worker_wages");
+    }
+  };
+
+  const updateWageStatus = async (id: string, status: "pending" | "paid") => {
+    try {
+      await updateDoc(doc(db, "worker_wages", id), { status });
+      toast.success("Status gaji diperbarui");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `worker_wages/${id}`);
+    }
+  };
+
+  return { wages, loading, addWage, updateWageStatus };
 }

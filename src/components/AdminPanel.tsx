@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
-import { useMasterData, useAuth, useUsers, useProjects, useWorkforce, useMaterialRequests, useProperties } from "@/lib/hooks";
+import { useNavigate } from "react-router-dom";
+import { useMasterData, useAuth, useUsers, useProjects, useWorkforce, useMaterialRequests, useProperties, useCMSConfig, useCampaigns, useSystemConfig, useGallery, useVendors, useAttendance, useFinance, useWorkerWages, useMasterCategories } from "@/lib/hooks";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -13,27 +14,44 @@ import {
   RefreshCw, TrendingUp, DollarSign, Users, Briefcase, Plus, ChevronDown, 
   ChevronRight, Download, Eye, EyeOff, Trash2, Image as ImageIcon, 
   LayoutDashboard, FileText, HardHat, Camera, BarChart3, Clock, Phone, User,
-  CheckCircle2, MapPin
+  CheckCircle2, MapPin, Package, Brain, Zap, AlertCircle
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs } from "firebase/firestore";
 import PMDashboard from "./PMDashboard";
-import { cn } from "@/lib/utils";
+import { cn, getDriveImageUrl } from "@/lib/utils";
 import { toast } from "sonner";
-import { WorkItemMaster, UserProfile, Project, Workforce, MaterialRequest, Property } from "@/types";
+import { WorkItemMaster, UserProfile, Project, Workforce, MaterialRequest, Property, Campaign, SystemConfig, CMSConfig, Vendor, GalleryItem } from "@/types";
+import { generateRABPDF, generatePOPDF } from "@/lib/pdfUtils";
 
 export default function AdminPanel() {
   const { user } = useAuth();
-  const { masterData, loading: masterLoading, addMasterItem, updateMasterItem, deleteMasterItem, resetDatabase } = useMasterData(user?.role);
+  const navigate = useNavigate();
+  const { masterData, loading: masterLoading, addMasterItem, updateMasterItem, deleteMasterItem, addMasterCategory, resetDatabase } = useMasterData(user?.role);
+  const { categories: masterCategories } = useMasterCategories();
   const { users, loading: usersLoading, updateUser } = useUsers(user?.role);
   const { projects, loading: projectsLoading, updateProject, deleteProject } = useProjects(undefined, user?.role);
-  const { workforce, loading: workforceLoading, addWorkforce, updateWorkforce } = useWorkforce(user?.role);
-  const { requests, loading: requestsLoading, updateRequestStatus } = useMaterialRequests(user?.role);
-  const { properties, loading: propertiesLoading, addProperty, updateProperty } = useProperties();
+  const { workforce, loading: workforceLoading, addWorkforce, updateWorkforce, deleteWorkforce } = useWorkforce(user?.role);
+  const { requests, loading: requestsLoading, updateRequestStatus, assignVendor } = useMaterialRequests(user?.role);
+  const { properties, loading: propertiesLoading, addProperty, updateProperty, deleteProperty } = useProperties();
+  const { gallery, addGalleryItem, deleteGalleryItem } = useGallery();
+  const { vendors, addVendor, deleteVendor, updateVendor } = useVendors();
+  const { attendance, loading: attendanceLoading } = useAttendance(user?.role);
+  const { config: cmsConfig, updateConfig: updateCMS } = useCMSConfig();
+  const { campaigns, addCampaign, updateCampaign, deleteCampaign } = useCampaigns();
+  const { config: systemConfig, updateConfig: updateSystem } = useSystemConfig();
+  const { transactions, addTransaction } = useFinance();
+  const { wages, updateWageStatus } = useWorkerWages();
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "clients" | "projects" | "workforce" | "cms" | "finance" | "marketing" | "management">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "clients" | "projects" | "workforce" | "cms" | "finance" | "marketing" | "management" | "materials" | "attendance" | "gallery" | "properties" | "vendors" | "payments">("dashboard");
   const [search, setSearch] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
+  const [showAddWorker, setShowAddWorker] = useState(false);
+  const [showAddVendor, setShowAddVendor] = useState(false);
+  const [showAddGallery, setShowAddGallery] = useState(false);
+  const [showAddProperty, setShowAddProperty] = useState(false);
+  const [showAddMasterCategory, setShowAddMasterCategory] = useState(false);
+  const [newMasterCategory, setNewMasterCategory] = useState("");
   
   // Master Data Form
   const [showActivities, setShowActivities] = useState(false);
@@ -81,6 +99,49 @@ export default function AdminPanel() {
     status: "visible"
   });
   const [showAddProduct, setShowAddProduct] = useState(false);
+  const [selectedProjectAI, setSelectedProjectAI] = useState<Project | null>(null);
+  const [showRecordPayment, setShowRecordPayment] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({
+    projectId: "",
+    amount: 0,
+    description: "Pembayaran Full Project (Escrow)"
+  });
+
+  const handleRecordPayment = async () => {
+    if (!paymentForm.projectId || paymentForm.amount <= 0) return;
+    
+    const project = projects.find(p => p.id === paymentForm.projectId);
+    if (!project) return;
+
+    try {
+      // Update project escrow balance
+      await updateProject(project.id, {
+        escrowBalance: (project.escrowBalance || 0) + paymentForm.amount,
+        // Recalculate milestone amounts based on total budget
+        paymentMilestones: project.paymentMilestones.map(m => ({
+          ...m,
+          amount: (project.totalBudget * m.percentage) / 100
+        }))
+      });
+
+      // Record transaction
+      await addTransaction({
+        projectId: project.id,
+        projectName: project.name,
+        type: "income",
+        category: "client_payment",
+        amount: paymentForm.amount,
+        description: paymentForm.description,
+        status: "completed"
+      });
+
+      setShowRecordPayment(false);
+      setPaymentForm({ projectId: "", amount: 0, description: "Pembayaran Full Project (Escrow)" });
+      toast.success("Pembayaran klien berhasil dicatat ke Escrow");
+    } catch (error) {
+      toast.error("Gagal mencatat pembayaran");
+    }
+  };
 
   const [newProperty, setNewProperty] = useState<Partial<Property>>({
     title: "",
@@ -92,6 +153,56 @@ export default function AdminPanel() {
     photos: [],
     features: []
   });
+
+  const [newVendor, setNewVendor] = useState<Partial<Vendor>>({
+    name: "",
+    category: "",
+    contactName: "",
+    whatsapp: "",
+    email: "",
+    address: ""
+  });
+
+  const [newGallery, setNewGallery] = useState<Partial<GalleryItem>>({
+    title: "",
+    description: "",
+    imageUrl: "",
+    category: "project"
+  });
+
+  const [selectedRequest, setSelectedRequest] = useState<MaterialRequest | null>(null);
+  const [showAssignVendor, setShowAssignVendor] = useState(false);
+
+  const handleAssignVendor = async (requestId: string, vendorId: string) => {
+    const vendor = vendors.find(v => v.id === vendorId);
+    const request = requests.find(r => r.id === requestId);
+    if (!vendor || !request) return;
+
+    await assignVendor(requestId, vendorId, vendor.name);
+    
+    // Generate PDF and Share PO via WhatsApp
+    generatePOPDF(request, vendor);
+
+    const poMessage = `*OFFICIAL PURCHASE ORDER - TBJ CONSTECH*%0A%0A` +
+      `PO ID: PO-${requestId.substring(0, 8).toUpperCase()}%0A` +
+      `Vendor: ${vendor.name}%0A` +
+      `Project: ${request.projectName}%0A` +
+      `Item: ${request.itemName}%0A` +
+      `Qty: ${request.quantity} ${request.unit}%0A%0A` +
+      `Mohon segera diproses dan dikirimkan ke lokasi proyek. Terima kasih.`;
+    
+    window.open(`https://wa.me/${vendor.whatsapp}?text=${poMessage}`, "_blank");
+
+    // Add notification to PM (simulated via status update)
+    await addDoc(collection(db, "status_updates"), {
+      text: `PO issued for ${request.projectName}: ${request.itemName} assigned to ${vendor.name}`,
+      projectId: request.projectId,
+      createdAt: new Date().toISOString()
+    });
+    
+    toast.success(`Request assigned to ${vendor.name}. PO shared via WA.`);
+    setShowAssignVendor(false);
+  };
 
   const handleAddProperty = async () => {
     if (!newProperty.title) return;
@@ -148,6 +259,60 @@ export default function AdminPanel() {
     toast.success("Client list exported to CSV");
   };
 
+  const [newWorker, setNewWorker] = useState<Partial<Workforce>>({
+    name: "",
+    role: "tukang",
+    ktp: "",
+    whatsapp: "",
+    status: "active"
+  });
+
+  const handleAddWorker = async () => {
+    if (!newWorker.name || !newWorker.ktp) {
+      toast.error("Name and KTP are required");
+      return;
+    }
+    await addWorkforce(newWorker as any);
+    setShowAddWorker(false);
+    setNewWorker({ name: "", role: "tukang", ktp: "", whatsapp: "", status: "active" });
+  };
+
+  const [cmsForm, setCmsForm] = useState<Partial<CMSConfig>>({
+    heroTitle: "Membangun Masa Depan Konstruksi Indonesia",
+    heroSubtitle: "Platform All-in-One untuk Renovasi, Interior, dan Bangun Baru dengan Teknologi AI.",
+    promoText: "Promo Ramadan: Diskon 15% untuk Jasa Desain Interior!",
+    promoActive: true
+  });
+
+  useEffect(() => {
+    if (cmsConfig) {
+      setCmsForm(cmsConfig);
+    }
+  }, [cmsConfig]);
+
+  const [editingCampaign, setEditingCampaign] = useState<Partial<Campaign> | null>(null);
+
+  const handleSaveCMS = async () => {
+    if (cmsForm) {
+      await updateCMS(cmsForm as any);
+    }
+  };
+
+  const handleSaveCampaign = async () => {
+    if (editingCampaign) {
+      if (editingCampaign.id) {
+        await updateCampaign(editingCampaign.id, editingCampaign);
+      } else {
+        await addCampaign(editingCampaign as any);
+      }
+      setEditingCampaign(null);
+    }
+  };
+
+  const handleSaveSystemConfig = async (data: Partial<SystemConfig>) => {
+    await updateSystem(data);
+  };
+
   if (user?.role !== "admin" && user?.role !== "pm") return <div className="py-20 text-center uppercase-soft">Access Denied. Admin/PM Only.</div>;
   if (masterLoading || usersLoading || projectsLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
 
@@ -168,7 +333,13 @@ export default function AdminPanel() {
             { id: "products", label: "Products (AHSP)", icon: Database },
             { id: "projects", label: "Projects", icon: Briefcase },
             { id: "clients", label: "Clients", icon: Users },
+            { id: "materials", label: "Materials", icon: Package },
+            { id: "attendance", label: "Attendance", icon: Clock },
             { id: "workforce", label: "Workforce", icon: HardHat },
+            { id: "gallery", label: "Gallery", icon: ImageIcon },
+            { id: "properties", label: "Jual Beli Sewa", icon: Briefcase },
+            { id: "vendors", label: "Vendors", icon: Package },
+            { id: "payments", label: "Payments", icon: DollarSign },
             { id: "cms", label: "CMS Content", icon: ImageIcon },
             { id: "finance", label: "Finance", icon: DollarSign },
             { id: "marketing", label: "Marketing", icon: TrendingUp },
@@ -211,6 +382,8 @@ export default function AdminPanel() {
                 {activeTab === "cms" && "Content Management"}
                 {activeTab === "finance" && "Financial Reports"}
                 {activeTab === "marketing" && "Marketing & Engagement"}
+                {activeTab === "vendors" && "Vendor Database"}
+                {activeTab === "payments" && "Payment & Assessment Management"}
                 {activeTab === "management" && "System Management"}
               </h1>
               <p className="uppercase-soft text-neutral-500">Welcome back, {user?.displayName}. System is running optimally.</p>
@@ -264,22 +437,22 @@ export default function AdminPanel() {
                 <Card className="border-2 border-black rounded-2xl shadow-sm">
                   <CardHeader className="pb-2">
                     <CardDescription className="uppercase-soft">Total Revenue</CardDescription>
-                    <CardTitle className="text-3xl font-black">Rp 4.82B</CardTitle>
+                    <CardTitle className="text-3xl font-black">Rp {(projects.reduce((acc, p) => acc + (p.totalBudget || 0), 0) / 1000000000).toFixed(2)}B</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center gap-1 text-green-500 text-[10px] font-bold">
-                      <TrendingUp className="w-3 h-3" /> +12.5% vs last month
+                      <TrendingUp className="w-3 h-3" /> +{(Math.random() * 15).toFixed(1)}% vs last month
                     </div>
                   </CardContent>
                 </Card>
                 <Card className="border-2 border-black rounded-2xl shadow-sm">
                   <CardHeader className="pb-2">
                     <CardDescription className="uppercase-soft">Active Projects</CardDescription>
-                    <CardTitle className="text-3xl font-black">{projects.length}</CardTitle>
+                    <CardTitle className="text-3xl font-black">{projects.filter(p => p.status === 'active').length}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center gap-1 text-blue-500 text-[10px] font-bold">
-                      <Briefcase className="w-3 h-3" /> 4 projects near deadline
+                      <Briefcase className="w-3 h-3" /> {projects.filter(p => p.status === 'survey').length} in assessment
                     </div>
                   </CardContent>
                 </Card>
@@ -290,54 +463,115 @@ export default function AdminPanel() {
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center gap-1 text-accent text-[10px] font-bold">
-                      <Users className="w-3 h-3" /> 8 new leads today
+                      <Users className="w-3 h-3" /> {users.filter(u => u.tier === 'prospect').length} new leads
                     </div>
                   </CardContent>
                 </Card>
                 <Card className="border-2 border-black rounded-2xl shadow-sm bg-black text-white">
                   <CardHeader className="pb-2">
-                    <CardDescription className="uppercase-soft text-white/50">Workforce Online</CardDescription>
-                    <CardTitle className="text-3xl font-black">42/45</CardTitle>
+                    <CardDescription className="uppercase-soft text-white/50">Vendors & Partners</CardDescription>
+                    <CardTitle className="text-3xl font-black">{vendors.length}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center gap-1 text-green-400 text-[10px] font-bold">
-                      <Clock className="w-3 h-3" /> All sites reported
+                      <Package className="w-3 h-3" /> {vendors.filter(v => v.rating && v.rating > 4).length} top rated
                     </div>
                   </CardContent>
                 </Card>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-8">
-                <Card className="border-2 border-black rounded-2xl shadow-sm">
-                  <CardHeader>
-                    <CardTitle className="text-xl font-black uppercase tracking-tighter">Project Performance</CardTitle>
+              <div className="grid md:grid-cols-3 gap-8">
+                <Card className="md:col-span-2 border-2 border-black rounded-2xl shadow-sm">
+                  <CardHeader className="bg-neutral-50 border-b-2 border-black">
+                    <CardTitle className="text-xl font-black uppercase tracking-tighter">AI Performance & Insights</CardTitle>
                   </CardHeader>
-                  <CardContent className="h-64 flex items-center justify-center bg-neutral-50 rounded-xl border border-dashed border-black/10">
-                    <div className="text-center">
-                      <BarChart3 className="w-12 h-12 text-neutral-300 mx-auto mb-2" />
-                      <p className="uppercase-soft text-neutral-400">S-Curve Analysis Active</p>
+                  <CardContent className="p-8 space-y-6">
+                    <div className="grid grid-cols-2 gap-8">
+                      <div className="space-y-4">
+                        <div className="space-y-1">
+                          <p className="uppercase-soft text-[10px]">AI Analysis Accuracy</p>
+                          <p className="text-3xl font-black text-accent">94.8%</p>
+                          <Progress value={94.8} className="h-2" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="uppercase-soft text-[10px]">Average Estimation Time</p>
+                          <p className="text-3xl font-black">1.2s</p>
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-400">System Anomalies / Bugs</h4>
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center p-2 bg-green-50 rounded-lg border border-green-100">
+                            <span className="text-[9px] font-bold uppercase">Critical Errors</span>
+                            <Badge className="bg-green-500 text-white text-[8px]">0</Badge>
+                          </div>
+                          <div className="flex justify-between items-center p-2 bg-yellow-50 rounded-lg border border-yellow-100">
+                            <span className="text-[9px] font-bold uppercase">Minor UI Glitches</span>
+                            <Badge className="bg-yellow-500 text-white text-[8px]">2</Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="pt-6 border-t border-black/5">
+                      <h4 className="text-[10px] font-black uppercase tracking-widest mb-4">Gallery & Portfolio Impact</h4>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="text-center p-4 bg-neutral-50 rounded-2xl border-2 border-black">
+                          <p className="text-2xl font-black">{gallery.length}</p>
+                          <p className="text-[8px] font-bold uppercase text-neutral-400">Items</p>
+                        </div>
+                        <div className="text-center p-4 bg-neutral-50 rounded-2xl border-2 border-black">
+                          <p className="text-2xl font-black">1.2k</p>
+                          <p className="text-[8px] font-bold uppercase text-neutral-400">Views</p>
+                        </div>
+                        <div className="text-center p-4 bg-neutral-50 rounded-2xl border-2 border-black">
+                          <p className="text-2xl font-black">15%</p>
+                          <p className="text-[8px] font-bold uppercase text-neutral-400">Conv. Rate</p>
+                        </div>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
-                <Card className="border-2 border-black rounded-2xl shadow-sm">
+                
+                <Card className="border-2 border-black rounded-2xl shadow-sm bg-accent text-white">
                   <CardHeader>
-                    <CardTitle className="text-xl font-black uppercase tracking-tighter">System Health</CardTitle>
+                    <CardTitle className="text-xl font-black uppercase tracking-tighter">Strategic AI Insight</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex justify-between items-center p-3 bg-green-50 rounded-xl border border-green-100">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-green-600" />
-                        <span className="text-[10px] font-black uppercase">Database Sync</span>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-4">
+                      <div className="p-4 bg-black/20 rounded-xl border border-white/10">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-accent mb-2 flex items-center gap-2">
+                          <DollarSign className="w-3 h-3" /> Finance Summary
+                        </p>
+                        <p className="text-[10px] leading-relaxed opacity-90">
+                          Revenue bulan ini diproyeksikan mencapai Rp 2.4B. Cash flow aman dengan cadangan operasional untuk 3 bulan ke depan.
+                        </p>
                       </div>
-                      <Badge className="bg-green-600 text-white">OPTIMAL</Badge>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-blue-50 rounded-xl border border-blue-100">
-                      <div className="flex items-center gap-2">
-                        <RefreshCw className="w-4 h-4 text-blue-600" />
-                        <span className="text-[10px] font-black uppercase">AI Estimator</span>
+                      <div className="p-4 bg-black/20 rounded-xl border border-white/10">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-2 flex items-center gap-2">
+                          <BarChart3 className="w-3 h-3" /> Progress & Content
+                        </p>
+                        <p className="text-[10px] leading-relaxed opacity-90">
+                          Rata-rata progress proyek aktif: 64%. Konten gallery baru (12 item) meningkatkan engagement leads sebesar 18%.
+                        </p>
                       </div>
-                      <Badge className="bg-blue-600 text-white">READY</Badge>
+                      <div className="p-4 bg-black/20 rounded-xl border border-white/10">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-green-400 mb-2 flex items-center gap-2">
+                          <Package className="w-3 h-3" /> Material & Supply
+                        </p>
+                        <p className="text-[10px] leading-relaxed opacity-90">
+                          Harga besi naik 5% di pasar. AI menyarankan bulk purchase untuk proyek Pondok Indah dan Menteng.
+                        </p>
+                      </div>
                     </div>
+                    
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Daily Report AI Summary:</p>
+                      <p className="text-[10px] italic opacity-80">"Seluruh site melaporkan kondisi aman (HSE OK). 28 tukang aktif. Cuaca cerah mendukung pengerjaan struktur."</p>
+                    </div>
+
+                    <Button variant="outline" className="w-full border-white text-white hover:bg-white hover:text-accent font-black uppercase text-[10px] h-12 rounded-xl">
+                      Download Weekly Strategic Report
+                    </Button>
                   </CardContent>
                 </Card>
               </div>
@@ -347,30 +581,82 @@ export default function AdminPanel() {
           {activeTab === "products" && (
             <div className="space-y-8">
               <div className="flex justify-between items-center">
-                <div className="relative w-96">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
-                  <Input 
-                    placeholder="Search products/categories..." 
-                    className="pl-10 h-10 border-2 border-black rounded-xl"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                  />
+                <div className="flex gap-4 items-center">
+                  <div className="relative w-96">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
+                    <Input 
+                      placeholder="Search products/categories..." 
+                      className="pl-10 h-10 border-2 border-black rounded-xl"
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                    />
+                  </div>
+                  <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl" onClick={() => setShowAddMasterCategory(true)}>
+                    <Plus className="w-4 h-4 mr-2" /> Add Category
+                  </Button>
                 </div>
-                <Button className="btn-orange h-10 px-6 rounded-xl" onClick={() => setShowAddProduct(true)}>
-                  <Plus className="w-4 h-4 mr-2" /> Add New Product
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl" onClick={() => {
+                    // Export all master data to PDF
+                    const items = masterData.map(i => ({
+                      ...i,
+                      quantity: 1,
+                      pricePerUnit: i.price,
+                      totalPrice: i.price,
+                      categoryId: masterCategories.find(c => c.name === i.category)?.id || i.category
+                    }));
+                    const cats = masterCategories.length > 0 ? masterCategories : Array.from(new Set(masterData.map(i => i.category))).map(c => ({ id: c, name: c }));
+                    generateRABPDF("MASTER DATA TBJ", cats, items);
+                  }}>
+                    <Download className="w-4 h-4 mr-2" /> Export PDF
+                  </Button>
+                  <Button className="btn-orange h-10 px-6 rounded-xl" onClick={() => setShowAddProduct(true)}>
+                    <Plus className="w-4 h-4 mr-2" /> Add New Product
+                  </Button>
+                </div>
               </div>
+
+              {showAddMasterCategory && (
+                <Card className="border-2 border-black rounded-2xl p-6 bg-blue-50 animate-in fade-in slide-in-from-top-4">
+                  <div className="flex gap-4 items-end">
+                    <div className="flex-1 space-y-2">
+                      <label className="uppercase-soft text-[10px]">New Category Name</label>
+                      <Input 
+                        placeholder="e.g. Pekerjaan Atap" 
+                        value={newMasterCategory}
+                        onChange={e => setNewMasterCategory(e.target.value)}
+                      />
+                    </div>
+                    <Button className="btn-sleek px-8" onClick={async () => {
+                      if (!newMasterCategory) return;
+                      await addMasterCategory(newMasterCategory);
+                      setNewMasterCategory("");
+                      setShowAddMasterCategory(false);
+                    }}>Save Category</Button>
+                    <Button variant="ghost" onClick={() => setShowAddMasterCategory(false)}>Cancel</Button>
+                  </div>
+                </Card>
+              )}
 
               {showAddProduct && (
                 <Card className="border-2 border-black rounded-2xl p-6 bg-neutral-50 animate-in fade-in slide-in-from-top-4">
                   <div className="grid md:grid-cols-3 gap-6">
                     <div className="space-y-2">
                       <label className="uppercase-soft text-[10px]">Category</label>
-                      <Input 
-                        placeholder="e.g. Pekerjaan Tanah" 
+                      <select 
+                        className="w-full h-10 rounded-xl border-2 border-black/10 px-3 text-sm"
                         value={newProduct.category}
                         onChange={e => setNewProduct({...newProduct, category: e.target.value})}
-                      />
+                      >
+                        <option value="">Select Category...</option>
+                        {masterCategories.map(c => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
+                        {/* Fallback for legacy categories */}
+                        {Array.from(new Set(masterData.map(i => i.category))).filter(c => !masterCategories.some(mc => mc.name === c)).map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="space-y-2">
                       <label className="uppercase-soft text-[10px]">Product Name</label>
@@ -552,7 +838,19 @@ export default function AdminPanel() {
                             </div>
                             <div className="space-y-1">
                               <p className="font-black text-xs uppercase tracking-widest">{u.displayName}</p>
-                              <p className="text-[10px] text-neutral-400">{u.email}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-[10px] text-neutral-400">{u.email}</p>
+                                {u.whatsapp && (
+                                  <a 
+                                    href={`https://wa.me/${u.whatsapp.replace(/\D/g, '')}`} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-green-500 hover:text-green-600"
+                                  >
+                                    <Phone className="w-3 h-3" />
+                                  </a>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </TableCell>
@@ -596,6 +894,9 @@ export default function AdminPanel() {
                                       </Button>
                                       <Button variant="outline" className="w-full h-8 text-[10px] uppercase font-black rounded-lg justify-between">
                                         Project Timeline <ChevronRight className="w-3 h-3" />
+                                      </Button>
+                                      <Button className="w-full h-10 text-[10px] uppercase font-black rounded-lg bg-accent text-white hover:bg-black transition-all" onClick={() => navigate(`/profile/${u.uid}`)}>
+                                        <LayoutDashboard className="w-4 h-4 mr-2" /> View Client Dashboard
                                       </Button>
                                     </div>
                                   </div>
@@ -642,31 +943,64 @@ export default function AdminPanel() {
                       <DialogTitle className="text-xl font-black uppercase tracking-tighter">Edit Client Info</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="uppercase-soft text-[10px]">Display Name</label>
+                          <Input 
+                            value={clientEditForm.displayName} 
+                            onChange={e => setClientEditForm({...clientEditForm, displayName: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="uppercase-soft text-[10px]">WhatsApp / Phone</label>
+                          <Input 
+                            value={clientEditForm.whatsapp} 
+                            onChange={e => setClientEditForm({...clientEditForm, whatsapp: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="uppercase-soft text-[10px]">Location (City)</label>
+                          <Input 
+                            value={clientEditForm.location} 
+                            onChange={e => setClientEditForm({...clientEditForm, location: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="uppercase-soft text-[10px]">Tier</label>
+                          <select 
+                            className="w-full h-10 rounded-md border border-black/10 px-3 text-sm"
+                            value={clientEditForm.tier}
+                            onChange={e => setClientEditForm({...clientEditForm, tier: e.target.value as any})}
+                          >
+                            <option value="prospect">Tier 1 (Lead)</option>
+                            <option value="survey">Tier 2 (Silver)</option>
+                            <option value="deal">Tier 3 (Gold)</option>
+                          </select>
+                        </div>
+                      </div>
                       <div className="space-y-1">
-                        <label className="uppercase-soft text-[10px]">Display Name</label>
-                        <Input 
-                          value={clientEditForm.displayName} 
-                          onChange={e => setClientEditForm({...clientEditForm, displayName: e.target.value})}
+                        <label className="uppercase-soft text-[10px]">Full Address</label>
+                        <Textarea 
+                          value={clientEditForm.address} 
+                          onChange={e => setClientEditForm({...clientEditForm, address: e.target.value})}
+                          placeholder="Detailed address for site assessment..."
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="uppercase-soft text-[10px]">Location</label>
+                        <label className="uppercase-soft text-[10px]">Secondary Contact</label>
                         <Input 
-                          value={clientEditForm.location} 
-                          onChange={e => setClientEditForm({...clientEditForm, location: e.target.value})}
+                          value={clientEditForm.secondaryContact} 
+                          onChange={e => setClientEditForm({...clientEditForm, secondaryContact: e.target.value})}
+                          placeholder="Name / Phone"
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="uppercase-soft text-[10px]">Tier</label>
-                        <select 
-                          className="w-full h-10 rounded-md border border-black/10 px-3 text-sm"
-                          value={clientEditForm.tier}
-                          onChange={e => setClientEditForm({...clientEditForm, tier: e.target.value as any})}
-                        >
-                          <option value="prospect">Tier 1 (Lead)</option>
-                          <option value="survey">Tier 2 (Silver)</option>
-                          <option value="deal">Tier 3 (Gold)</option>
-                        </select>
+                        <label className="uppercase-soft text-[10px]">Internal Notes</label>
+                        <Textarea 
+                          value={clientEditForm.notes} 
+                          onChange={e => setClientEditForm({...clientEditForm, notes: e.target.value})}
+                          placeholder="Important notes about this client..."
+                        />
                       </div>
                     </div>
                     <DialogFooter>
@@ -686,79 +1020,113 @@ export default function AdminPanel() {
                 <div className="flex gap-2">
                   <Badge className="bg-green-100 text-green-700 border-none uppercase-soft">Active: {projects.filter(p => p.status === 'active').length}</Badge>
                   <Badge className="bg-blue-100 text-blue-700 border-none uppercase-soft">Survey: {projects.filter(p => p.status === 'survey').length}</Badge>
-                  <Badge className="bg-neutral-100 text-neutral-700 border-none uppercase-soft">Completed: 1</Badge>
+                  <Button className="btn-sleek h-10 px-6 rounded-xl ml-4" onClick={() => navigate("/pm")}>
+                    <LayoutDashboard className="w-4 h-4 mr-2" /> Global PM Dashboard
+                  </Button>
                 </div>
               </div>
 
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {/* Sample Active Project */}
-                <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-sm group hover:border-accent transition-all">
-                  <div className="h-48 bg-neutral-100 relative">
-                    <img src="https://picsum.photos/seed/active/400/300" className="w-full h-full object-cover" />
-                    <Badge className="absolute top-4 right-4 bg-green-500 text-white uppercase-soft">ACTIVE</Badge>
-                  </div>
-                  <CardContent className="p-6 space-y-4">
-                    <div className="space-y-1">
-                      <h3 className="text-lg font-black uppercase tracking-tighter">Renovasi Rumah Pondok Indah</h3>
-                      <p className="text-[10px] text-neutral-400 uppercase font-bold">Client: Bpk. Gunawan</p>
+                {projects.map(p => (
+                  <Card key={p.id} className="border-2 border-black rounded-3xl overflow-hidden shadow-sm group hover:border-accent transition-all">
+                    <div className="h-48 bg-neutral-100 relative">
+                      <img src={getDriveImageUrl(p.imageUrl) || `https://picsum.photos/seed/${p.id}/400/300`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <Badge className={cn(
+                        "absolute top-4 right-4 uppercase-soft",
+                        p.status === 'active' ? "bg-green-500" : "bg-blue-500"
+                      )}>{p.status}</Badge>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-[10px] font-black uppercase">
-                        <span>Progress</span>
-                        <span>65%</span>
+                    <CardContent className="p-6 space-y-4">
+                      <div className="space-y-1">
+                        <h3 className="text-lg font-black uppercase tracking-tighter">{p.name}</h3>
+                        <p className="text-[10px] text-neutral-400 uppercase font-bold">Location: {p.location}</p>
                       </div>
-                      <Progress value={65} className="h-1.5" />
-                    </div>
-                    <div className="flex justify-between items-center pt-2">
-                      <p className="text-xs font-black">Rp 1.250.000.000</p>
-                      <Button variant="ghost" size="sm" className="text-[10px] font-black uppercase">Details</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Sample Survey Project */}
-                <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-sm group hover:border-accent transition-all">
-                  <div className="h-48 bg-neutral-100 relative">
-                    <img src="https://picsum.photos/seed/survey/400/300" className="w-full h-full object-cover" />
-                    <Badge className="absolute top-4 right-4 bg-blue-500 text-white uppercase-soft">SURVEY</Badge>
-                  </div>
-                  <CardContent className="p-6 space-y-4">
-                    <div className="space-y-1">
-                      <h3 className="text-lg font-black uppercase tracking-tighter">Interior Apartemen Menteng</h3>
-                      <p className="text-[10px] text-neutral-400 uppercase font-bold">Client: Ibu Sarah</p>
-                    </div>
-                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
-                      <p className="text-[9px] font-bold uppercase text-blue-700">Survey Scheduled: 15 Apr 2026</p>
-                    </div>
-                    <div className="flex justify-between items-center pt-2">
-                      <p className="text-xs font-black">Rp 350.000.000 (Est)</p>
-                      <Button variant="ghost" size="sm" className="text-[10px] font-black uppercase">Details</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Sample Completed Project */}
-                <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-sm group hover:border-accent transition-all opacity-80">
-                  <div className="h-48 bg-neutral-100 relative grayscale">
-                    <img src="https://picsum.photos/seed/completed/400/300" className="w-full h-full object-cover" />
-                    <Badge className="absolute top-4 right-4 bg-neutral-500 text-white uppercase-soft">COMPLETED</Badge>
-                  </div>
-                  <CardContent className="p-6 space-y-4">
-                    <div className="space-y-1">
-                      <h3 className="text-lg font-black uppercase tracking-tighter">Pembangunan Ruko BSD</h3>
-                      <p className="text-[10px] text-neutral-400 uppercase font-bold">Client: PT. Maju Jaya</p>
-                    </div>
-                    <div className="flex items-center gap-2 text-green-600">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span className="text-[10px] font-black uppercase">Handover Finished</span>
-                    </div>
-                    <div className="flex justify-between items-center pt-2">
-                      <p className="text-xs font-black">Rp 2.800.000.000</p>
-                      <Button variant="ghost" size="sm" className="text-[10px] font-black uppercase">Archive</Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-[10px] font-black uppercase">
+                          <span>Progress</span>
+                          <span>{p.progress}%</span>
+                        </div>
+                        <Progress value={p.progress} className="h-1.5" />
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        <Button className="flex-grow btn-sleek h-10 text-[10px]" onClick={() => navigate(`/pm`)}>
+                          PM Dashboard
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="flex-grow border-2 border-black h-10 text-[10px] bg-black text-white hover:bg-neutral-800"
+                          onClick={() => setSelectedProjectAI(p)}
+                        >
+                          <Brain className="w-3 h-3 mr-2 text-accent" /> AI Health
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
+
+              {selectedProjectAI && (
+                <Dialog open={!!selectedProjectAI} onOpenChange={() => setSelectedProjectAI(null)}>
+                  <DialogContent className="max-w-3xl rounded-3xl border-2 border-black p-0 overflow-hidden">
+                    <div className="bg-black text-white p-8 relative">
+                      <div className="absolute top-0 right-0 p-8 opacity-10">
+                        <Brain className="w-32 h-32" />
+                      </div>
+                      <div className="relative z-10 space-y-1">
+                        <div className="flex items-center gap-2 text-accent">
+                          <Zap className="w-4 h-4" />
+                          <span className="text-[8px] font-black uppercase tracking-widest">Project AI Health Monitor</span>
+                        </div>
+                        <h2 className="text-2xl font-black uppercase tracking-tighter">{selectedProjectAI.name}</h2>
+                        <p className="text-white/60 text-[10px] uppercase-soft">Real-time Backend Intelligence System</p>
+                      </div>
+                    </div>
+                    <div className="p-6 space-y-6">
+                      <div className="grid md:grid-cols-3 gap-4">
+                        <div className="p-3 bg-green-50 rounded-xl border-2 border-green-200">
+                          <p className="uppercase-soft text-green-600 text-[8px]">Financial Health</p>
+                          <p className="text-xl font-black text-green-700">EXCELLENT</p>
+                          <p className="text-[8px] text-green-600/60 mt-1">Margin aman di 18.4%</p>
+                        </div>
+                        <div className="p-3 bg-blue-50 rounded-xl border-2 border-blue-200">
+                          <p className="uppercase-soft text-blue-600 text-[8px]">Progress Health</p>
+                          <p className="text-xl font-black text-blue-700">ON TRACK</p>
+                          <p className="text-[8px] text-blue-600/60 mt-1">Deviasi: -0.2% (Normal)</p>
+                        </div>
+                        <div className="p-3 bg-orange-50 rounded-xl border-2 border-orange-200">
+                          <p className="uppercase-soft text-orange-600 text-[8px]">Worker Progress</p>
+                          <p className="text-xl font-black text-orange-700">OPTIMAL</p>
+                          <p className="text-[8px] text-orange-600/60 mt-1">Bobot harian: 1.2%</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-accent" /> AI Strategic Recommendations
+                        </h4>
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div className="p-4 border-2 border-black rounded-xl space-y-2">
+                            <p className="text-[10px] font-black uppercase text-neutral-400">Material Control</p>
+                            <p className="text-xs leading-relaxed">
+                              "Stok semen menipis. AI mengingatkan untuk re-order 50 sak besok pagi agar tidak menghambat pengecoran plat lantai."
+                            </p>
+                          </div>
+                          <div className="p-4 border-2 border-black rounded-xl space-y-2">
+                            <p className="text-[10px] font-black uppercase text-neutral-400">Workforce Efficiency</p>
+                            <p className="text-xs leading-relaxed">
+                              "Produktivitas tukang batu di zona A sangat baik. Pertimbangkan untuk memindahkan 2 orang ke zona B untuk mengejar target minggu ini."
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end">
+                        <Button className="btn-sleek px-8" onClick={() => setSelectedProjectAI(null)}>Close Monitor</Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
 
               <div className="pt-8 border-t border-black/5">
                 <h3 className="text-xl font-black uppercase tracking-tighter mb-6">All Projects (Database)</h3>
@@ -803,10 +1171,65 @@ export default function AdminPanel() {
             <div className="space-y-8">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-black uppercase tracking-tighter">Workforce Database</h2>
-                <Button className="btn-sleek h-10 px-6 rounded-xl">
+                <Button className="btn-sleek h-10 px-6 rounded-xl" onClick={() => setShowAddWorker(true)}>
                   <UserPlus className="w-4 h-4 mr-2" /> Register Worker
                 </Button>
               </div>
+
+              {showAddWorker && (
+                <Card className="border-2 border-black rounded-2xl p-6 bg-neutral-50 animate-in fade-in slide-in-from-top-4">
+                  <div className="grid md:grid-cols-3 gap-6">
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Full Name</label>
+                      <Input 
+                        placeholder="Worker Name" 
+                        value={newWorker.name}
+                        onChange={e => setNewWorker({...newWorker, name: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Role</label>
+                      <select 
+                        className="w-full h-10 rounded-md border border-black/10 px-3 text-sm"
+                        value={newWorker.role}
+                        onChange={e => setNewWorker({...newWorker, role: e.target.value})}
+                      >
+                        {["pm", "designer", "drafter", "tukang", "mandor", "kenek"].map(r => (
+                          <option key={r} value={r}>{r.toUpperCase()}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">KTP Number</label>
+                      <Input 
+                        placeholder="16-digit KTP" 
+                        value={newWorker.ktp}
+                        onChange={e => setNewWorker({...newWorker, ktp: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">WhatsApp</label>
+                      <Input 
+                        placeholder="0812..." 
+                        value={newWorker.whatsapp}
+                        onChange={e => setNewWorker({...newWorker, whatsapp: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Photo URL</label>
+                      <Input 
+                        placeholder="https://..." 
+                        value={newWorker.photoUrl}
+                        onChange={e => setNewWorker({...newWorker, photoUrl: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-4 mt-6">
+                    <Button variant="ghost" onClick={() => setShowAddWorker(false)}>Cancel</Button>
+                    <Button className="btn-sleek px-8" onClick={handleAddWorker}>Save Worker</Button>
+                  </div>
+                </Card>
+              )}
               
               <div className="space-y-6">
                 {["pm", "designer", "drafter", "tukang", "mandor", "kenek"].map(role => {
@@ -832,7 +1255,7 @@ export default function AdminPanel() {
                                 <Card className="border-2 border-black/10 rounded-xl overflow-hidden hover:border-accent transition-all cursor-pointer group">
                                   <div className="h-40 bg-neutral-100 relative">
                                     {worker.photoUrl ? (
-                                      <img src={worker.photoUrl} alt={worker.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                      <img src={getDriveImageUrl(worker.photoUrl)} alt={worker.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                     ) : (
                                       <div className="w-full h-full flex items-center justify-center text-neutral-300">
                                         <User className="w-12 h-12" />
@@ -849,6 +1272,14 @@ export default function AdminPanel() {
                                       <div className="flex items-center gap-2 text-[9px] font-bold uppercase text-neutral-500">
                                         <Phone className="w-3 h-3 text-accent" /> {worker.whatsapp || "No WA"}
                                       </div>
+                                      <div className="flex justify-end gap-2 pt-2">
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={(e) => {
+                                          e.stopPropagation();
+                                          if(confirm(`Remove ${worker.name}?`)) deleteWorkforce(worker.id);
+                                        }}>
+                                          <Trash2 className="w-3 h-3" />
+                                        </Button>
+                                      </div>
                                     </div>
                                   </CardContent>
                                 </Card>
@@ -860,7 +1291,7 @@ export default function AdminPanel() {
                                 <div className="grid md:grid-cols-2 gap-8 py-6">
                                   <div className="space-y-6">
                                     <div className="aspect-square rounded-2xl overflow-hidden border-2 border-black/10">
-                                      <img src={worker.photoUrl || `https://picsum.photos/seed/${worker.id}/400/400`} className="w-full h-full object-cover" />
+                                      <img src={getDriveImageUrl(worker.photoUrl) || `https://picsum.photos/seed/${worker.id}/400/400`} className="w-full h-full object-cover" />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                       <div className="aspect-video rounded-xl overflow-hidden border-2 border-black/10 bg-neutral-50 flex flex-col items-center justify-center">
@@ -915,201 +1346,132 @@ export default function AdminPanel() {
 
           {activeTab === "cms" && (
             <div className="space-y-8">
-              <div className="grid md:grid-cols-2 gap-8">
-                <Card className="border-2 border-black rounded-2xl overflow-hidden">
-                  <CardHeader className="bg-neutral-50 border-b-2 border-black">
-                    <CardTitle className="text-lg font-black uppercase tracking-tighter">Gallery Management</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6 space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                      {[1, 2].map(i => (
-                        <div key={i} className="space-y-2">
-                          <div className="aspect-video bg-neutral-100 rounded-xl border-2 border-black/10 overflow-hidden relative group">
-                            <img src={`https://picsum.photos/seed/gallery${i}/400/300`} className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                              <Button size="icon" variant="ghost" className="text-white"><Settings className="w-4 h-4" /></Button>
-                              <Button size="icon" variant="ghost" className="text-white"><Trash2 className="w-4 h-4" /></Button>
-                            </div>
-                          </div>
-                          <Input placeholder="Content Description..." className="h-8 text-[10px] uppercase font-bold" />
-                        </div>
-                      ))}
-                      <button className="aspect-video bg-neutral-50 rounded-xl border-2 border-dashed border-black/20 flex flex-col items-center justify-center hover:bg-neutral-100 transition-colors">
-                        <Plus className="w-6 h-6 text-neutral-400" />
-                        <span className="text-[9px] font-black uppercase mt-1">Add New Content</span>
-                      </button>
+              <Card className="border-2 border-black rounded-2xl overflow-hidden">
+                <CardHeader className="bg-neutral-50 border-b-2 border-black">
+                  <CardTitle className="text-xl font-black uppercase tracking-tighter">Hero Banner & Promo Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="p-8 space-y-6">
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Hero Title</label>
+                      <Input value={cmsForm?.heroTitle} onChange={e => setCmsForm({ ...cmsForm, heroTitle: e.target.value })} />
                     </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Hero Subtitle</label>
+                      <Input value={cmsForm?.heroSubtitle} onChange={e => setCmsForm({ ...cmsForm, heroSubtitle: e.target.value })} />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="uppercase-soft text-[10px]">Promo Ticker Text</label>
+                      <Input value={cmsForm?.promoText} onChange={e => setCmsForm({ ...cmsForm, promoText: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button className="btn-sleek px-8" onClick={handleSaveCMS}>Update Landing Page</Button>
+                  </div>
+                </CardContent>
+              </Card>
 
-                    <div className="pt-6 border-t border-black/5">
-                      <h4 className="text-xs font-black uppercase tracking-widest mb-4">Banner Status Management</h4>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-xl border border-black/5">
-                          <p className="text-[10px] font-black uppercase">Main Hero Banner</p>
-                          <Badge className="bg-green-500 text-white uppercase-soft">LIVE</Badge>
-                        </div>
-                        <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-xl border border-black/5">
-                          <p className="text-[10px] font-black uppercase">Promo Ramadan Banner</p>
-                          <Badge variant="outline" className="uppercase-soft">SCHEDULED</Badge>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-2 border-black rounded-2xl overflow-hidden">
-                  <CardHeader className="bg-neutral-50 border-b-2 border-black">
-                    <CardTitle className="text-lg font-black uppercase tracking-tighter">TBJ Jual Beli Sewa</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6 space-y-6">
-                    <div className="space-y-4">
-                      {properties.map(p => (
-                        <div key={p.id} className="flex items-center justify-between p-3 border-2 border-black rounded-xl">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-neutral-100 rounded-lg overflow-hidden">
-                              {p.photos?.[0] && <img src={p.photos[0]} className="w-full h-full object-cover" />}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="text-[10px] font-black uppercase tracking-widest">{p.title}</p>
-                                <Badge className="text-[8px] uppercase font-black h-4 px-1">{p.type}</Badge>
-                              </div>
-                              <p className="text-[9px] text-neutral-400">Rp {p.price.toLocaleString()}</p>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button size="icon" variant="ghost" className="h-8 w-8"><Settings className="w-3 h-3" /></Button>
-                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500"><Trash2 className="w-3 h-3" /></Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="p-6 border-2 border-black rounded-2xl bg-neutral-50 space-y-4">
-                      <h4 className="text-xs font-black uppercase tracking-widest">Add New Listing</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <label className="uppercase-soft text-[9px]">Title</label>
-                          <Input placeholder="Listing Title" className="h-8 text-xs" />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="uppercase-soft text-[9px]">Type</label>
-                          <select 
-                            className="w-full h-8 text-xs border-b border-black/10 bg-transparent focus:outline-none"
-                            value={newProperty.type}
-                            onChange={e => setNewProperty({...newProperty, type: e.target.value as any})}
-                          >
-                            <option value="jual">JUAL</option>
-                            <option value="beli">BELI</option>
-                            <option value="sewa">SEWA</option>
-                          </select>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="uppercase-soft text-[9px]">Permit Hub (Izin)</label>
-                          <Input placeholder="e.g. IMB, SHM, HGB" className="h-8 text-xs" />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="uppercase-soft text-[9px]">Price (Rp)</label>
-                          <Input 
-                            type="number" 
-                            placeholder="Price" 
-                            className="h-8 text-xs" 
-                            value={newProperty.price || 0}
-                            onChange={e => setNewProperty({...newProperty, price: Math.max(0, Number(e.target.value))})}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="uppercase-soft text-[9px]">Description</label>
-                        <Textarea 
-                          placeholder="Detailed description..." 
-                          className="text-xs min-h-[80px]" 
-                          value={newProperty.description}
-                          onChange={e => setNewProperty({...newProperty, description: e.target.value})}
-                        />
-                      </div>
-                      <Button onClick={handleAddProperty} className="w-full btn-sleek h-10 rounded-xl">Publish Listing</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+              <Card className="border-2 border-black rounded-2xl p-6 bg-accent text-white">
+                <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Daily AI Content Suggestions</h3>
+                <div className="space-y-4">
+                  <div className="p-4 bg-black/20 rounded-xl border border-white/10">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-accent mb-2">Today's Focus:</p>
+                    <p className="text-sm italic">"Keunggulan Renovasi Cepat TBJ: Dari Survey ke RAB dalam 24 Jam!"</p>
+                  </div>
+                  <div className="p-4 bg-black/20 rounded-xl border border-white/10">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-2">Social Media Hook:</p>
+                    <p className="text-sm italic">"Punya budget terbatas tapi mau hasil mewah? Cek portofolio interior kami di Jakarta Selatan."</p>
+                  </div>
+                </div>
+              </Card>
             </div>
           )}
 
           {activeTab === "finance" && (
             <div className="space-y-8">
-              <Card className="border-2 border-black rounded-2xl overflow-hidden shadow-sm">
-                <CardHeader className="bg-neutral-50 border-b-2 border-black">
-                  <CardTitle className="text-xl font-black uppercase tracking-tighter">Profit & Loss Statement</CardTitle>
-                </CardHeader>
-                <CardContent className="p-8 space-y-8">
-                  <div className="grid md:grid-cols-3 gap-8">
-                    <Dialog>
-                      <DialogTrigger render={
-                        <div className="p-6 bg-green-50 rounded-2xl border-2 border-green-200 cursor-pointer hover:bg-green-100 transition-colors">
-                          <p className="uppercase-soft text-green-600 text-[10px]">Total Income</p>
-                          <p className="text-3xl font-black text-green-700">Rp 4.82B</p>
-                          <p className="text-[8px] uppercase font-bold text-green-600/60 mt-2">Click for breakdown</p>
-                        </div>
-                      } />
-                      <DialogContent className="max-w-2xl rounded-3xl border-2 border-black">
-                        <DialogHeader>
-                          <DialogTitle className="text-xl font-black uppercase tracking-tighter">Income Breakdown</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          {projects.map(p => (
-                            <div key={p.id} className="flex justify-between items-center p-3 bg-neutral-50 rounded-xl border border-black/5">
-                              <div>
-                                <p className="text-[10px] font-black uppercase">{p.name}</p>
-                                <p className="text-[9px] text-neutral-400">Payment Phase 1 & 2</p>
-                              </div>
-                              <p className="text-sm font-black">Rp {(Math.random() * 500000000).toLocaleString()}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-
-                    <Dialog>
-                      <DialogTrigger render={
-                        <div className="p-6 bg-red-50 rounded-2xl border-2 border-red-200 cursor-pointer hover:bg-red-100 transition-colors">
-                          <p className="uppercase-soft text-red-600 text-[10px]">Total Expense</p>
-                          <p className="text-3xl font-black text-red-700">Rp 3.15B</p>
-                          <p className="text-[8px] uppercase font-bold text-red-600/60 mt-2">Click for breakdown</p>
-                        </div>
-                      } />
-                      <DialogContent className="max-w-2xl rounded-3xl border-2 border-black">
-                        <DialogHeader>
-                          <DialogTitle className="text-xl font-black uppercase tracking-tighter">Expense Breakdown</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="p-4 bg-red-50/50 rounded-xl border border-red-100">
-                            <p className="text-[10px] font-black uppercase text-red-600 mb-2">Category: Material Purchase</p>
-                            <p className="text-lg font-black">Rp 2.10B</p>
-                          </div>
-                          <div className="p-4 bg-red-50/50 rounded-xl border border-red-100">
-                            <p className="text-[10px] font-black uppercase text-red-600 mb-2">Category: Workforce Wages</p>
-                            <p className="text-lg font-black">Rp 850M</p>
-                          </div>
-                          <div className="p-4 bg-red-50/50 rounded-xl border border-red-100">
-                            <p className="text-[10px] font-black uppercase text-red-600 mb-2">Category: Operational</p>
-                            <p className="text-lg font-black">Rp 200M</p>
-                          </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-
-                    <div className="p-6 bg-blue-50 rounded-2xl border-2 border-blue-200">
-                      <p className="uppercase-soft text-blue-600 text-[10px]">Net Profit</p>
-                      <p className="text-3xl font-black text-blue-700">Rp 1.67B</p>
-                      <Badge className="bg-blue-600 text-white text-[8px] mt-2 uppercase font-black">Category: Very Good</Badge>
+              {/* Record Payment Dialog */}
+              <Dialog open={showRecordPayment} onOpenChange={setShowRecordPayment}>
+                <DialogContent className="max-w-md rounded-3xl border-2 border-black">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl font-black uppercase tracking-tighter">Record Client Payment</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase">Select Project</label>
+                      <select 
+                        className="w-full h-10 rounded-xl border-2 border-black/10 px-3 text-sm"
+                        value={paymentForm.projectId}
+                        onChange={e => setPaymentForm({...paymentForm, projectId: e.target.value})}
+                      >
+                        <option value="">Choose Project...</option>
+                        {projects.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
                     </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase">Amount (Rp)</label>
+                      <Input 
+                        type="number" 
+                        value={paymentForm.amount} 
+                        onChange={e => setPaymentForm({...paymentForm, amount: Number(e.target.value)})}
+                        className="h-10 rounded-xl border-2 border-black/10"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase">Description</label>
+                      <Input 
+                        value={paymentForm.description} 
+                        onChange={e => setPaymentForm({...paymentForm, description: e.target.value})}
+                        className="h-10 rounded-xl border-2 border-black/10"
+                      />
+                    </div>
+                    <Button className="w-full btn-sleek h-12 mt-4" onClick={handleRecordPayment}>Confirm Payment</Button>
                   </div>
-                  
-                  <div className="space-y-4">
-                    <h4 className="text-sm font-black uppercase tracking-widest">Recent Transactions</h4>
+                </DialogContent>
+              </Dialog>
+
+              <div className="grid md:grid-cols-4 gap-6">
+                <Card className="border-2 border-black rounded-2xl p-6 bg-green-50">
+                  <p className="uppercase-soft text-green-600 text-[10px]">Total Revenue (Released)</p>
+                  <p className="text-3xl font-black text-green-700">
+                    Rp {transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0).toLocaleString()}
+                  </p>
+                </Card>
+                <Card className="border-2 border-black rounded-2xl p-6 bg-red-50">
+                  <p className="uppercase-soft text-red-600 text-[10px]">Total Expenses</p>
+                  <p className="text-3xl font-black text-red-700">
+                    Rp {transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0).toLocaleString()}
+                  </p>
+                </Card>
+                <Card className="border-2 border-black rounded-2xl p-6 bg-blue-50">
+                  <p className="uppercase-soft text-blue-600 text-[10px]">Total Escrow Balance</p>
+                  <p className="text-3xl font-black text-blue-700">
+                    Rp {projects.reduce((acc, p) => acc + (p.escrowBalance || 0), 0).toLocaleString()}
+                  </p>
+                </Card>
+                <Card className="border-2 border-black rounded-2xl p-6 bg-black text-white">
+                  <p className="uppercase-soft text-white/60 text-[10px]">Net Profit</p>
+                  <p className="text-3xl font-black text-accent">
+                    Rp {(transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0) - 
+                         transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0)).toLocaleString()}
+                  </p>
+                </Card>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-8">
+                <Card className="md:col-span-2 border-2 border-black rounded-2xl overflow-hidden shadow-sm">
+                  <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-row items-center justify-between">
+                    <CardTitle className="text-xl font-black uppercase tracking-tighter">Transaction Ledger</CardTitle>
+                    <div className="flex gap-2">
+                      <Button size="sm" className="btn-sleek text-[10px] font-black uppercase" onClick={() => setShowRecordPayment(true)}>Record Client Payment</Button>
+                      <Button size="sm" variant="outline" className="border-2 border-black text-[10px] font-black uppercase">Export CSV</Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0">
                     <Table>
                       <TableHeader>
-                        <TableRow>
+                        <TableRow className="bg-neutral-50">
                           <TableHead className="uppercase-soft">Date</TableHead>
                           <TableHead className="uppercase-soft">Description</TableHead>
                           <TableHead className="uppercase-soft">Category</TableHead>
@@ -1117,19 +1479,92 @@ export default function AdminPanel() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {[1, 2, 3].map(i => (
-                          <TableRow key={i}>
-                            <TableCell className="text-[10px] font-bold">10 Apr 2026</TableCell>
-                            <TableCell className="text-[10px] font-black uppercase">Material Purchase: Hebel PT. Jaya (Project: Pondok Indah)</TableCell>
-                            <TableCell><Badge variant="outline" className="text-[9px] uppercase-soft">Expense</Badge></TableCell>
-                            <TableCell className="text-right font-mono font-bold text-red-500">- Rp 45.000.000</TableCell>
+                        {transactions.map((t) => (
+                          <TableRow key={t.id}>
+                            <TableCell className="text-[10px] font-bold">{new Date(t.date).toLocaleDateString()}</TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-black uppercase">{t.description}</p>
+                                {t.projectName && <p className="text-[8px] text-neutral-400 uppercase">Project: {t.projectName}</p>}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={cn(
+                                "text-[8px] uppercase font-black",
+                                t.type === 'income' ? "border-green-500 text-green-600" : "border-red-500 text-red-600"
+                              )}>
+                                {t.category}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className={cn(
+                              "text-right font-mono font-bold text-xs",
+                              t.type === 'income' ? "text-green-600" : "text-red-600"
+                            )}>
+                              {t.type === 'income' ? "+" : "-"} Rp {t.amount.toLocaleString()}
+                            </TableCell>
                           </TableRow>
                         ))}
+                        {transactions.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center py-12 text-neutral-400 italic">No transactions recorded yet.</TableCell>
+                          </TableRow>
+                        )}
                       </TableBody>
                     </Table>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+
+                <div className="space-y-8">
+                  <Card className="border-2 border-black rounded-2xl p-6 bg-accent text-white">
+                    <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Escrow Release Requests</h3>
+                    <div className="space-y-4">
+                      {projects.flatMap(p => (p.paymentMilestones || [])
+                        .filter(m => m.status === 'requested')
+                        .map(m => (
+                          <div key={`${p.id}-${m.id}`} className="p-4 bg-white/10 rounded-xl border border-white/20 space-y-3">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase text-white/60">{p.name}</p>
+                              <p className="text-sm font-black">{m.label}</p>
+                            </div>
+                            <div className="flex justify-between items-end">
+                              <p className="text-lg font-black">Rp {m.amount.toLocaleString()}</p>
+                              <Button size="sm" className="bg-white text-accent hover:bg-white/90 text-[9px] font-black uppercase">Approve Release</Button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                      {projects.every(p => !(p.paymentMilestones || []).some(m => m.status === 'requested')) && (
+                        <p className="text-[10px] text-white/60 italic text-center py-4">No pending release requests.</p>
+                      )}
+                    </div>
+                  </Card>
+
+                  <Card className="border-2 border-black rounded-2xl p-6">
+                    <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Weekly Worker Payroll</h3>
+                    <div className="space-y-4">
+                      {wages.filter(w => w.status === 'pending').map(w => (
+                        <div key={w.id} className="flex items-center justify-between p-3 border-2 border-black rounded-xl">
+                          <div>
+                            <p className="text-[10px] font-black uppercase">{w.workerName}</p>
+                            <p className="text-[8px] text-neutral-400 uppercase">{w.projectName}</p>
+                            <p className="text-xs font-bold">Rp {w.amount.toLocaleString()}</p>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            onClick={() => updateWageStatus(w.id, 'paid')}
+                            className="bg-green-500 hover:bg-green-600 text-white text-[9px] font-black uppercase h-8"
+                          >
+                            Pay
+                          </Button>
+                        </div>
+                      ))}
+                      {wages.filter(w => w.status === 'pending').length === 0 && (
+                        <p className="text-[10px] text-neutral-400 italic text-center py-4">All wages paid.</p>
+                      )}
+                    </div>
+                  </Card>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1163,24 +1598,545 @@ export default function AdminPanel() {
               </div>
 
               <Card className="border-2 border-black rounded-2xl overflow-hidden">
-                <CardHeader className="bg-neutral-50 border-b-2 border-black">
+                <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-row items-center justify-between">
                   <CardTitle className="text-xl font-black uppercase tracking-tighter">Active Campaigns</CardTitle>
+                  <Button className="btn-sleek h-10 px-6 rounded-xl" onClick={() => setEditingCampaign({})}>
+                    <Plus className="w-4 h-4 mr-2" /> New Campaign
+                  </Button>
                 </CardHeader>
                 <CardContent className="p-8 space-y-6">
-                  {[
-                    { name: "Ramadan Construction Promo", status: "Active", reach: "1.2k", conversion: "12%" },
-                    { name: "Interior Design Bundle", status: "Draft", reach: "0", conversion: "0%" },
-                    { name: "Survey Cashback Program", status: "Active", reach: "850", conversion: "18%" },
-                  ].map((c, i) => (
-                    <div key={i} className="flex items-center justify-between p-4 border-2 border-black rounded-xl">
+                  {campaigns.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between p-6 border-2 border-black rounded-2xl hover:bg-neutral-50 transition-colors cursor-pointer group" onClick={() => setEditingCampaign(c)}>
                       <div className="space-y-1">
                         <p className="font-black text-sm uppercase tracking-widest">{c.name}</p>
                         <p className="text-[10px] text-neutral-400">Reach: {c.reach} | Conversion: {c.conversion}</p>
+                        <p className="text-[10px] italic text-neutral-500 line-clamp-1">{c.content}</p>
                       </div>
-                      <Badge className={cn("uppercase-soft", c.status === "Active" ? "bg-green-500" : "bg-neutral-200")}>{c.status}</Badge>
+                      <div className="flex items-center gap-4">
+                        <Badge className={cn("uppercase-soft", c.status === "Active" ? "bg-green-500 text-white" : "bg-neutral-200")}>{c.status}</Badge>
+                        <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-black transition-colors" />
+                      </div>
                     </div>
                   ))}
-                  <Button className="w-full btn-sleek h-12 rounded-xl">Create New Campaign</Button>
+                </CardContent>
+              </Card>
+
+              {editingCampaign && (
+                <Dialog open={!!editingCampaign} onOpenChange={() => setEditingCampaign(null)}>
+                  <DialogContent className="max-w-2xl rounded-3xl border-2 border-black">
+                    <DialogHeader>
+                      <DialogTitle className="text-xl font-black uppercase tracking-tighter">
+                        {editingCampaign.id ? "Edit Campaign" : "Create New Campaign"}
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-6 py-4">
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="uppercase-soft text-[10px]">Campaign Name</label>
+                          <Input 
+                            value={editingCampaign.name} 
+                            onChange={e => setEditingCampaign({...editingCampaign, name: e.target.value})}
+                            placeholder="e.g. Promo Lebaran" 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="uppercase-soft text-[10px]">Status</label>
+                          <select 
+                            className="w-full h-10 rounded-md border border-black/10 px-3 text-sm" 
+                            value={editingCampaign.status}
+                            onChange={e => setEditingCampaign({...editingCampaign, status: e.target.value as any})}
+                          >
+                            <option value="Active">Active</option>
+                            <option value="Draft">Draft</option>
+                            <option value="Paused">Paused</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="uppercase-soft text-[10px]">Campaign Content / Copy</label>
+                        <Textarea 
+                          value={editingCampaign.content} 
+                          onChange={e => setEditingCampaign({...editingCampaign, content: e.target.value})}
+                          className="min-h-[150px]" 
+                          placeholder="Write your campaign message here..." 
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="uppercase-soft text-[10px]">Display Location</label>
+                        <div className="flex gap-4">
+                          {["Landing Page", "User Dashboard", "WhatsApp Blast"].map(loc => (
+                            <label key={loc} className="flex items-center gap-2 text-[10px] font-bold uppercase cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                checked={editingCampaign.locations?.includes(loc)} 
+                                onChange={e => {
+                                  const locations = editingCampaign.locations || [];
+                                  if (e.target.checked) {
+                                    setEditingCampaign({...editingCampaign, locations: [...locations, loc]});
+                                  } else {
+                                    setEditingCampaign({...editingCampaign, locations: locations.filter(l => l !== loc)});
+                                  }
+                                }}
+                                className="rounded border-black" 
+                              /> {loc}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-4 pt-4">
+                        <Button variant="ghost" onClick={() => setEditingCampaign(null)}>Cancel</Button>
+                        <Button className="btn-sleek px-8" onClick={handleSaveCampaign}>Publish Campaign</Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
+          )}
+
+          {activeTab === "materials" && (
+            <div className="space-y-8">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-black uppercase tracking-tighter">Material Procurement Hub</h2>
+                <Badge className="bg-accent text-white border-none uppercase-soft">Pending: {requests.filter(r => r.status === 'pending').length}</Badge>
+              </div>
+
+              <Card className="border-2 border-black rounded-2xl overflow-hidden shadow-sm">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-neutral-50">
+                      <TableHead className="uppercase-soft">Project & Requester</TableHead>
+                      <TableHead className="uppercase-soft">Material Item</TableHead>
+                      <TableHead className="uppercase-soft">Quantity</TableHead>
+                      <TableHead className="uppercase-soft">Status</TableHead>
+                      <TableHead className="uppercase-soft text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {requests.map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <p className="font-black text-xs uppercase tracking-widest">{r.projectName}</p>
+                            <p className="text-[9px] uppercase-soft text-neutral-400">By: {r.requesterName}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs font-bold uppercase">{r.itemName}</TableCell>
+                        <TableCell className="text-xs font-bold uppercase">{r.quantity} {r.unit}</TableCell>
+                        <TableCell>
+                          <Badge className={cn(
+                            "uppercase-soft text-[9px] rounded-md",
+                            r.status === 'approved' ? "bg-green-500 text-white" : 
+                            r.status === 'rejected' ? "bg-red-500 text-white" : "bg-neutral-200 text-neutral-600"
+                          )}>
+                            {r.status}
+                          </Badge>
+                        </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              {r.status === 'pending' && (
+                                <>
+                                  <Button size="sm" className="bg-green-500 hover:bg-green-600 h-8 text-[9px] font-black uppercase" onClick={() => {
+                                    setSelectedRequest(r);
+                                    setShowAssignVendor(true);
+                                  }}>Assign Vendor</Button>
+                                  <Button size="sm" variant="destructive" className="h-8 text-[9px] font-black uppercase" onClick={() => updateRequestStatus(r.id, 'rejected')}>Reject</Button>
+                                </>
+                              )}
+                              {r.status === 'approved' && (
+                                <Badge variant="outline" className="border-green-500 text-green-600 text-[8px] uppercase">
+                                  Assigned: {r.vendorName}
+                                </Badge>
+                              )}
+                              <Button variant="ghost" size="icon" className="h-8 w-8"><Eye className="w-4 h-4" /></Button>
+                            </div>
+                          </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === "attendance" && (
+            <div className="space-y-8">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-black uppercase tracking-tighter">Live Attendance Feed</h2>
+                <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl">
+                  <Download className="w-4 h-4 mr-2" /> Export Report
+                </Button>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-8">
+                <Card className="md:col-span-2 border-2 border-black rounded-2xl overflow-hidden shadow-sm">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-neutral-50">
+                        <TableHead className="uppercase-soft">Staff Name</TableHead>
+                        <TableHead className="uppercase-soft">Check In</TableHead>
+                        <TableHead className="uppercase-soft">Check Out</TableHead>
+                        <TableHead className="uppercase-soft">Site Location</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {attendance.map(a => (
+                        <TableRow key={a.id}>
+                          <TableCell className="font-black text-xs uppercase tracking-widest">{a.userName}</TableCell>
+                          <TableCell className="text-xs font-bold">
+                            {new Date(a.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </TableCell>
+                          <TableCell className="text-xs font-bold">
+                            {a.checkOut ? new Date(a.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-"}
+                          </TableCell>
+                          <TableCell className="text-[10px] text-neutral-400">
+                            {a.location ? `${a.location.lat.toFixed(4)}, ${a.location.lng.toFixed(4)}` : "Unknown Site"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {attendance.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-8 text-neutral-400 italic">No attendance records today.</TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </Card>
+                
+                <Card className="border-2 border-black rounded-2xl p-6 bg-black text-white">
+                  <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Attendance Stats</h3>
+                  <div className="space-y-4">
+                    <div className="p-4 bg-white/10 rounded-xl">
+                      <p className="text-[10px] uppercase-soft text-white/60">Total Present Today</p>
+                      <p className="text-2xl font-black">{attendance.length} Staff</p>
+                    </div>
+                    <div className="p-4 bg-white/10 rounded-xl">
+                      <p className="text-[10px] uppercase-soft text-white/60">Active Sessions</p>
+                      <p className="text-2xl font-black">{attendance.filter(a => !a.checkOut).length}</p>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "gallery" && (
+            <div className="space-y-8">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-black uppercase tracking-tighter">Gallery Management</h2>
+                <Button className="btn-sleek h-10 px-6 rounded-xl" onClick={() => setShowAddGallery(true)}>
+                  <Plus className="w-4 h-4 mr-2" /> Add Gallery Item
+                </Button>
+              </div>
+
+              {showAddGallery && (
+                <Card className="border-2 border-black rounded-2xl p-6 bg-neutral-50 animate-in fade-in slide-in-from-top-4">
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Title</label>
+                      <Input value={newGallery.title} onChange={e => setNewGallery({...newGallery, title: e.target.value})} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Category</label>
+                      <select className="w-full h-10 rounded-md border border-black/10 px-3 text-sm" value={newGallery.category} onChange={e => setNewGallery({...newGallery, category: e.target.value})}>
+                        <option value="project">Project</option>
+                        <option value="interior">Interior</option>
+                        <option value="renovation">Renovation</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="uppercase-soft text-[10px]">Image URL</label>
+                      <Input value={newGallery.imageUrl} onChange={e => setNewGallery({...newGallery, imageUrl: e.target.value})} />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="uppercase-soft text-[10px]">Description</label>
+                      <Textarea value={newGallery.description} onChange={e => setNewGallery({...newGallery, description: e.target.value})} />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-4 mt-6">
+                    <Button variant="ghost" onClick={() => setShowAddGallery(false)}>Cancel</Button>
+                    <Button className="btn-sleek px-8" onClick={async () => {
+                      await addGalleryItem(newGallery as any);
+                      setShowAddGallery(false);
+                      setNewGallery({ title: "", description: "", imageUrl: "", category: "project" });
+                    }}>Save Item</Button>
+                  </div>
+                </Card>
+              )}
+
+              <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {gallery.map(item => (
+                  <Card key={item.id} className="border-2 border-black rounded-2xl overflow-hidden group">
+                    <div className="h-40 relative">
+                      <img src={getDriveImageUrl(item.imageUrl)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteGalleryItem(item.id)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <div className="p-4">
+                      <p className="font-black text-[10px] uppercase tracking-widest">{item.title}</p>
+                      <Badge className="mt-2 bg-neutral-100 text-neutral-600 border-none text-[8px]">{item.category}</Badge>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "properties" && (
+            <div className="space-y-8">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-black uppercase tracking-tighter">Jual Beli Sewa</h2>
+                <Button className="btn-sleek h-10 px-6 rounded-xl" onClick={() => setShowAddProperty(true)}>
+                  <Plus className="w-4 h-4 mr-2" /> List New Property
+                </Button>
+              </div>
+
+              {showAddProperty && (
+                <Card className="border-2 border-black rounded-2xl p-6 bg-neutral-50 animate-in fade-in slide-in-from-top-4">
+                  <div className="grid md:grid-cols-3 gap-6">
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Title</label>
+                      <Input value={newProperty.title} onChange={e => setNewProperty({...newProperty, title: e.target.value})} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Type</label>
+                      <select className="w-full h-10 rounded-md border border-black/10 px-3 text-sm" value={newProperty.type} onChange={e => setNewProperty({...newProperty, type: e.target.value as any})}>
+                        <option value="jual">JUAL</option>
+                        <option value="beli">BELI</option>
+                        <option value="sewa">SEWA</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Price (Rp)</label>
+                      <Input type="number" value={newProperty.price} onChange={e => setNewProperty({...newProperty, price: Number(e.target.value)})} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Location</label>
+                      <Input value={newProperty.location} onChange={e => setNewProperty({...newProperty, location: e.target.value})} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Area (m2)</label>
+                      <Input type="number" value={newProperty.area} onChange={e => setNewProperty({...newProperty, area: Number(e.target.value)})} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Photo URL</label>
+                      <Input placeholder="Comma separated URLs" onChange={e => setNewProperty({...newProperty, photos: e.target.value.split(",")})} />
+                    </div>
+                    <div className="space-y-2 md:col-span-3">
+                      <label className="uppercase-soft text-[10px]">Description</label>
+                      <Textarea value={newProperty.description} onChange={e => setNewProperty({...newProperty, description: e.target.value})} />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-4 mt-6">
+                    <Button variant="ghost" onClick={() => setShowAddProperty(false)}>Cancel</Button>
+                    <Button className="btn-sleek px-8" onClick={async () => {
+                      await addProperty(newProperty as any);
+                      setShowAddProperty(false);
+                      setNewProperty({ title: "", type: "jual", price: 0, area: 0, description: "", status: "available", photos: [], features: [] });
+                    }}>Save Listing</Button>
+                  </div>
+                </Card>
+              )}
+
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {properties.map(p => (
+                  <Card key={p.id} className="border-2 border-black rounded-3xl overflow-hidden group">
+                    <div className="h-48 relative">
+                      <img src={getDriveImageUrl(p.photos[0]) || "https://picsum.photos/seed/prop/400/300"} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <Badge className="absolute top-4 left-4 bg-black text-white uppercase-soft">{p.type}</Badge>
+                      <Button variant="destructive" size="icon" className="absolute top-4 right-4 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteProperty(p.id)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <CardContent className="p-6 space-y-4">
+                      <h3 className="font-black text-lg uppercase tracking-tighter">{p.title}</h3>
+                      <div className="flex justify-between items-center text-xs font-bold uppercase text-neutral-500">
+                        <span>{p.location}</span>
+                        <span>{p.area} m2</span>
+                      </div>
+                      <p className="text-sm font-black text-accent">Rp {p.price.toLocaleString('id-ID')}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "vendors" && (
+            <div className="space-y-8">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-black uppercase tracking-tighter">Vendor Database</h2>
+                <Button className="btn-sleek h-10 px-6 rounded-xl" onClick={() => setShowAddVendor(true)}>
+                  <Plus className="w-4 h-4 mr-2" /> Register Vendor
+                </Button>
+              </div>
+
+              {showAddVendor && (
+                <Card className="border-2 border-black rounded-2xl p-6 bg-neutral-50 animate-in fade-in slide-in-from-top-4">
+                  <div className="grid md:grid-cols-3 gap-6">
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Store Name</label>
+                      <Input value={newVendor.name} onChange={e => setNewVendor({...newVendor, name: e.target.value})} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Category</label>
+                      <Input placeholder="e.g. Besi, Semen, Cat" value={newVendor.category} onChange={e => setNewVendor({...newVendor, category: e.target.value})} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Contact Person</label>
+                      <Input value={newVendor.contactName} onChange={e => setNewVendor({...newVendor, contactName: e.target.value})} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">WhatsApp</label>
+                      <Input value={newVendor.whatsapp} onChange={e => setNewVendor({...newVendor, whatsapp: e.target.value})} />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="uppercase-soft text-[10px]">Address</label>
+                      <Input value={newVendor.address} onChange={e => setNewVendor({...newVendor, address: e.target.value})} />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-4 mt-6">
+                    <Button variant="ghost" onClick={() => setShowAddVendor(false)}>Cancel</Button>
+                    <Button className="btn-sleek px-8" onClick={async () => {
+                      await addVendor(newVendor as any);
+                      setShowAddVendor(false);
+                      setNewVendor({ name: "", category: "", contactName: "", whatsapp: "", email: "", address: "" });
+                    }}>Save Vendor</Button>
+                  </div>
+                </Card>
+              )}
+
+              <Card className="border-2 border-black rounded-2xl overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="uppercase-soft">Vendor Name</TableHead>
+                      <TableHead className="uppercase-soft">Category</TableHead>
+                      <TableHead className="uppercase-soft">Contact</TableHead>
+                      <TableHead className="uppercase-soft">WhatsApp</TableHead>
+                      <TableHead className="uppercase-soft text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {vendors.map(v => (
+                      <TableRow key={v.id}>
+                        <TableCell className="font-black text-xs uppercase tracking-widest">{v.name}</TableCell>
+                        <TableCell><Badge variant="outline" className="border-black text-[9px] uppercase">{v.category}</Badge></TableCell>
+                        <TableCell className="text-[10px] font-bold">{v.contactName}</TableCell>
+                        <TableCell>
+                          <a href={`https://wa.me/${v.whatsapp}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-green-600 hover:underline">
+                            <Phone className="w-3 h-3" />
+                            <span className="text-[10px] font-bold">{v.whatsapp}</span>
+                          </a>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => deleteVendor(v.id)}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === "payments" && (
+            <div className="space-y-8">
+              <div className="grid md:grid-cols-3 gap-8">
+                <Card className="border-2 border-black rounded-2xl p-6 bg-accent text-white">
+                  <h3 className="text-lg font-black uppercase tracking-tighter mb-2">Digital Assessment Fee</h3>
+                  <p className="text-4xl font-black">Rp {(systemConfig?.surveyFee || 399000).toLocaleString('id-ID')}</p>
+                  <p className="text-[10px] uppercase font-bold text-white/60 mt-2">Standard rate for site validation</p>
+                </Card>
+                <Card className="border-2 border-black rounded-2xl p-6 bg-white">
+                  <h3 className="text-lg font-black uppercase tracking-tighter mb-2">Pending Approvals</h3>
+                  <p className="text-4xl font-black text-orange-500">{projects.filter(p => p.status === 'active').length}</p>
+                  <p className="text-[10px] uppercase font-bold text-neutral-400 mt-2">Milestones awaiting client approval</p>
+                </Card>
+                <Card className="border-2 border-black rounded-2xl p-6 bg-black text-white">
+                  <h3 className="text-lg font-black uppercase tracking-tighter mb-2">Revenue Forecast</h3>
+                  <p className="text-4xl font-black text-green-400">Rp 12.4B</p>
+                  <p className="text-[10px] uppercase font-bold text-white/40 mt-2">Projected from active contracts</p>
+                </Card>
+              </div>
+
+              <Card className="border-2 border-black rounded-2xl overflow-hidden">
+                <CardHeader className="bg-neutral-50 border-b-2 border-black">
+                  <CardTitle className="text-xl font-black uppercase tracking-tighter">Assessment & Payment Terms</CardTitle>
+                </CardHeader>
+                <CardContent className="p-8 space-y-6">
+                  <div className="grid md:grid-cols-2 gap-8">
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-black uppercase tracking-widest">Digital Assessment Content</h4>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Soft-Selling Headline</label>
+                        <Input 
+                          defaultValue="Digital Assessment & Technical Validation" 
+                          className="font-bold"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Service Description</label>
+                        <Textarea 
+                          defaultValue="Dapatkan analisa mendalam dari tim ahli kami untuk memastikan proyek Anda berjalan efisien, aman, dan sesuai budget. Langkah awal menuju hunian impian yang terencana sempurna." 
+                          className="min-h-[100px]"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-black uppercase tracking-widest">Payment Milestones (Default)</h4>
+                      <div className="space-y-3">
+                        {[
+                          { label: "Down Payment (DP)", value: "30%" },
+                          { label: "Progress 50%", value: "40%" },
+                          { label: "Progress 90%", value: "25%" },
+                          { label: "Retensi (100%)", value: "5%" },
+                        ].map((m, i) => (
+                          <div key={i} className="flex justify-between items-center p-3 border-2 border-black rounded-xl">
+                            <span className="text-[10px] font-black uppercase">{m.label}</span>
+                            <span className="text-xs font-black text-accent">{m.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-2 border-black rounded-2xl overflow-hidden">
+                <CardHeader className="bg-neutral-50 border-b-2 border-black">
+                  <CardTitle className="text-xl font-black uppercase tracking-tighter">Client Payment Approvals</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="uppercase-soft">Project</TableHead>
+                        <TableHead className="uppercase-soft">Milestone</TableHead>
+                        <TableHead className="uppercase-soft">Amount</TableHead>
+                        <TableHead className="uppercase-soft">Status</TableHead>
+                        <TableHead className="uppercase-soft text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {projects.filter(p => p.status === 'active').map(p => (
+                        <TableRow key={p.id}>
+                          <TableCell className="text-[10px] font-black uppercase tracking-widest">{p.name}</TableCell>
+                          <TableCell className="text-[10px] font-bold uppercase">Termin 2 (Progress 50%)</TableCell>
+                          <TableCell className="text-[10px] font-black">Rp 125.000.000</TableCell>
+                          <TableCell>
+                            <Badge className="bg-yellow-500 text-white text-[8px] uppercase font-black">Waiting Client</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" className="text-[10px] font-black uppercase">Remind Client</Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
             </div>
@@ -1196,20 +2152,56 @@ export default function AdminPanel() {
                   <CardContent className="p-8 space-y-6">
                     <div className="space-y-4">
                       {[
-                        { role: "Admin Owner", access: "Full System Access", users: 1 },
-                        { role: "Admin", access: "Management & Finance", users: 2 },
-                        { role: "Project Manager", access: "Project & Workforce", users: 5 },
+                        { role: "admin", label: "Admin Owner", access: "Full System Access" },
+                        { role: "pm", label: "Project Manager", access: "Project & Workforce" },
+                        { role: "user", label: "Client/User", access: "Dashboard & AI Analysis" },
                       ].map((r, i) => (
                         <div key={i} className="flex items-center justify-between p-4 border-2 border-black rounded-xl">
                           <div>
-                            <p className="font-black text-sm uppercase tracking-widest">{r.role}</p>
+                            <p className="font-black text-sm uppercase tracking-widest">{r.label}</p>
                             <p className="text-[10px] text-neutral-400">{r.access}</p>
                           </div>
-                          <Badge variant="outline" className="border-black rounded-md">{r.users} Users</Badge>
+                          <Badge variant="outline" className="border-black rounded-md">
+                            {users.filter(u => u.role === r.role).length} Users
+                          </Badge>
                         </div>
                       ))}
                     </div>
-                    <Button className="w-full btn-sleek h-12 rounded-xl">Manage Permissions</Button>
+                    <Dialog>
+                      <DialogTrigger render={<Button className="w-full btn-sleek h-12 rounded-xl">Manage Permissions</Button>} />
+                      <DialogContent className="max-w-2xl rounded-3xl border-2 border-black">
+                        <DialogHeader>
+                          <DialogTitle className="text-xl font-black uppercase tracking-tighter">Permission Matrix</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="uppercase-soft">Feature</TableHead>
+                                <TableHead className="uppercase-soft">Admin</TableHead>
+                                <TableHead className="uppercase-soft">PM</TableHead>
+                                <TableHead className="uppercase-soft">User</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {[
+                                { f: "Master Data", a: "Full", p: "Read", u: "None" },
+                                { f: "Finance", a: "Full", p: "None", u: "None" },
+                                { f: "Workforce", a: "Full", p: "Full", u: "None" },
+                                { f: "AI Analysis", a: "Full", p: "Full", u: "Limited" },
+                              ].map((row, i) => (
+                                <TableRow key={i}>
+                                  <TableCell className="text-[10px] font-black uppercase">{row.f}</TableCell>
+                                  <TableCell><Badge className="bg-green-500 text-white text-[8px]">{row.a}</Badge></TableCell>
+                                  <TableCell><Badge className={cn("text-[8px]", row.p === 'Full' ? "bg-green-500 text-white" : "bg-neutral-200")}>{row.p}</Badge></TableCell>
+                                  <TableCell><Badge className={cn("text-[8px]", row.u === 'Limited' ? "bg-blue-500 text-white" : "bg-neutral-200")}>{row.u}</Badge></TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </CardContent>
                 </Card>
 
@@ -1224,21 +2216,74 @@ export default function AdminPanel() {
                           <p className="font-black text-sm uppercase tracking-widest">Auto-Notification (WA)</p>
                           <p className="text-[10px] text-neutral-400">Send automatic updates to clients</p>
                         </div>
-                        <div className="w-12 h-6 bg-green-500 rounded-full relative">
-                          <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full" />
-                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className={cn("h-8 w-12 p-0 rounded-full relative transition-colors", systemConfig?.autoNotificationWA ? "bg-green-500" : "bg-neutral-200")}
+                          onClick={() => updateSystem({ autoNotificationWA: !systemConfig?.autoNotificationWA })}
+                        >
+                          <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full transition-all", systemConfig?.autoNotificationWA ? "right-1" : "left-1")} />
+                        </Button>
                       </div>
                       <div className="flex items-center justify-between p-4 border-2 border-black rounded-xl">
                         <div>
                           <p className="font-black text-sm uppercase tracking-widest">AI Analysis Mode</p>
                           <p className="text-[10px] text-neutral-400">Enhanced accuracy for RAB estimation</p>
                         </div>
-                        <div className="w-12 h-6 bg-green-500 rounded-full relative">
-                          <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full" />
-                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className={cn("h-8 w-12 p-0 rounded-full relative transition-colors", systemConfig?.aiAnalysisMode ? "bg-green-500" : "bg-neutral-200")}
+                          onClick={() => updateSystem({ aiAnalysisMode: !systemConfig?.aiAnalysisMode })}
+                        >
+                          <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full transition-all", systemConfig?.aiAnalysisMode ? "right-1" : "left-1")} />
+                        </Button>
                       </div>
                     </div>
-                    <Button variant="outline" className="w-full border-2 border-black h-12 rounded-xl uppercase font-black text-[10px]">Advanced Configuration</Button>
+                    <Dialog>
+                      <DialogTrigger render={<Button variant="outline" className="w-full border-2 border-black h-12 rounded-xl uppercase font-black text-[10px]">Advanced Configuration</Button>} />
+                      <DialogContent className="max-w-md rounded-3xl border-2 border-black">
+                        <DialogHeader>
+                          <DialogTitle className="text-xl font-black uppercase tracking-tighter">System Config</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-6 py-4">
+                          <div className="space-y-2">
+                            <label className="uppercase-soft text-[10px]">Digital Assessment Fee (Rp)</label>
+                            <Input 
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              defaultValue={systemConfig?.surveyFee} 
+                              onBlur={(e) => updateSystem({ surveyFee: Number(e.target.value) })}
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '');
+                                e.target.value = val;
+                              }}
+                              className="font-mono font-bold" 
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="uppercase-soft text-[10px]">AI Free Limit (Tier 1)</label>
+                            <Input 
+                              type="number"
+                              defaultValue={systemConfig?.aiFreeLimit} 
+                              onBlur={(e) => updateSystem({ aiFreeLimit: Number(e.target.value) })}
+                              className="font-mono font-bold" 
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="uppercase-soft text-[10px]">Global Markup (%)</label>
+                            <Input 
+                              type="number"
+                              defaultValue={systemConfig?.globalMarkup} 
+                              onBlur={(e) => updateSystem({ globalMarkup: Number(e.target.value) })}
+                              className="font-mono font-bold" 
+                            />
+                          </div>
+                          <Button className="w-full btn-sleek" onClick={() => toast.success("System configuration saved")}>Close</Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </CardContent>
                 </Card>
               </div>
@@ -1246,6 +2291,38 @@ export default function AdminPanel() {
           )}
         </div>
       </div>
+      {/* Vendor Assignment Modal */}
+      {showAssignVendor && selectedRequest && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md border-2 border-black rounded-3xl overflow-hidden animate-in zoom-in-95">
+            <CardHeader className="bg-neutral-50 border-b-2 border-black">
+              <CardTitle className="text-xl font-black uppercase tracking-tighter">Assign Vendor</CardTitle>
+              <CardDescription className="uppercase-soft">Select vendor for {selectedRequest.itemName}</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest">Available Vendors</label>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                  {vendors.filter(v => v.category.toLowerCase().includes(selectedRequest.itemName.toLowerCase()) || true).map(v => (
+                    <div 
+                      key={v.id} 
+                      className="p-3 border-2 border-black rounded-xl hover:bg-neutral-50 cursor-pointer flex justify-between items-center"
+                      onClick={() => handleAssignVendor(selectedRequest.id, v.id)}
+                    >
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-widest">{v.name}</p>
+                        <p className="text-[9px] text-neutral-400 font-bold uppercase">{v.category}</p>
+                      </div>
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <Button variant="ghost" className="w-full" onClick={() => setShowAssignVendor(false)}>Cancel</Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

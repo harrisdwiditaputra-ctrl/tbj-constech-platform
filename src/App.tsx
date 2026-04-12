@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import ErrorBoundary from "@/components/ErrorBoundary.tsx";
 import Layout from "@/components/Layout.tsx";
 import { useState, useEffect, useMemo } from "react";
-import { useAuth, useProjects, useProjectDetails, useProperties, useMasterData } from "@/lib/hooks";
+import { useAuth, useProjects, useProjectDetails, useProperties, useMasterData, useCMSConfig, useSystemConfig, incrementAIUsage } from "@/lib/hooks";
 import { WORK_ITEMS_MASTER } from "@/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ import Gallery from "./components/Gallery";
 import Profile from "./components/Profile";
 import AdminPanel from "./components/AdminPanel";
 import PMDashboard from "./components/PMDashboard";
+import AIAgent from "./components/AIAgent";
 import RabPage from "./pages/RabPage";
 
 // Fix for default marker icon in React-Leaflet using CDN for reliability
@@ -601,6 +602,8 @@ const ProjectDetail = () => {
 };
 
 const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (data: any) => Promise<void> }) => {
+  const { config: systemConfig } = useSystemConfig();
+  const { masterData } = useMasterData();
   const [step, setStep] = useState(1);
   const navigate = useNavigate();
   
@@ -675,6 +678,8 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
     { id: "Arsitektur", label: "Arsitektur & Perencanaan", icon: Building2, desc: "Layanan Perencanaan & Bangun Baru" },
     { id: "Maintenance", label: "Maintenance", icon: Clock, desc: "Perawatan rutin & perbaikan minor" },
     { id: "Property", label: "TBJ Property & Permit Hub", icon: Home, desc: "Jual, Sewa, & Perizinan (IMB/PBG)" },
+    { id: "Gallery", label: "Project Gallery", icon: ImageIcon, desc: "Lihat Portfolio & Inspirasi Proyek" },
+    { id: "AIAgent", label: "Chat AI Agent", icon: MessageSquare, desc: "Konsultasi Langsung via Chat & Gambar", cosmic: true },
   ];
 
   const INTERIOR_ROOMS = ["Kamar Tidur", "Ruang Tamu", "Kitchen Set", "Walk-in Closet", "Ruang Kerja"];
@@ -697,20 +702,41 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
 
     if (isAIRequired) {
       if (!userProblem) {
-        alert("Mohon isi deskripsi kebutuhan Anda untuk analisa AI.");
+        toast.error("Mohon isi deskripsi kebutuhan Anda untuk analisa AI.");
         return;
       }
+
+      // Tier 1 AI Analysis Limit Check
+      const isStaff = user?.role === "admin" || user?.role === "pm";
+      const isPro = user?.tier === "survey" || user?.tier === "deal";
+      const freeLimit = systemConfig?.aiFreeLimit || 1;
+      
+      if (!isStaff && !isPro) {
+        if ((user?.aiUsageCount || 0) >= freeLimit) {
+          toast.error(`Batas analisa gratis (${freeLimit}x) telah tercapai. Silakan lakukan Survey Lokasi (Digital Assessment) untuk akses penuh.`);
+          setStep(6); // Redirect to survey booking
+          return;
+        }
+      }
+
       setIsAnalyzing(true);
       try {
         let prompt = userProblem;
         if (projectData.type === "Arsitektur") {
           prompt = `Proyek Bangun Baru: ${userProblem}, Luas: ${projectData.area}m2, Lantai: ${projectData.floors}, Finishing: ${projectData.finishing}`;
         }
-        const result = await getAIEstimation(prompt, projectData.type);
+        const result = await getAIEstimation(prompt, projectData.type, masterData);
         setAiEstimation(result);
+        
+        // Increment AI Usage Count for non-staff
+        if (!isStaff) {
+          await incrementAIUsage();
+        }
+        
         setStep(4); // Skip volume input, go to verification
       } catch (error) {
         console.error("AI Estimation failed", error);
+        toast.error("Gagal melakukan analisa AI. Silakan coba lagi.");
       } finally {
         setIsAnalyzing(false);
       }
@@ -745,29 +771,14 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
 
   const verifyOtp = async () => {
     if (otp === "1234") {
-      const isPro = user?.tier === "survey" || user?.tier === "deal" || user?.tier === "admin";
-      const isExpired = user?.proTierExpiresAt && new Date(user.proTierExpiresAt) < new Date();
-      
-      if (!isPro && (user?.aiUsageCount || 0) >= 1) {
-        alert("Batas analisa gratis (1x) telah tercapai. Silakan booking survey lokasi (Digital Assessment) untuk mendapatkan akses estimasi detail dan validasi teknis.");
-        setStep(6); // Redirect to survey booking
-        return;
-      }
-
-      if (isPro && isExpired) {
-        alert("Masa berlaku Tier Pro Anda telah habis. Silakan lakukan booking survey ulang untuk memperpanjang akses.");
-        setStep(6);
-        return;
-      }
-
       await updateProfile({ 
         whatsapp: leadData.whatsapp, 
-        tier: user?.tier === "prospect" ? "prospect" : user?.tier,
-        aiUsageCount: (user?.aiUsageCount || 0) + 1
+        waVerified: true,
+        tier: user?.tier === "prospect" ? "prospect" : user?.tier
       });
       setStep(5); // Show results
     } else {
-      alert("OTP Salah. Gunakan 1234.");
+      toast.error("OTP Salah. Gunakan 1234.");
     }
   };
 
@@ -838,11 +849,19 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                 <h2 className="text-4xl font-black uppercase tracking-tighter">Layanan Konstruksi</h2>
                 <p className="text-neutral-400 uppercase-soft">Pilih kategori proyek untuk memulai estimasi AI</p>
               </div>
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {MAIN_CATEGORIES.map(cat => (
                   <div 
                     key={cat.id}
                     onClick={() => {
+                      if (cat.id === "AIAgent") {
+                        navigate("/ai-agent");
+                        return;
+                      }
+                      if (cat.id === "Gallery") {
+                        navigate("/gallery");
+                        return;
+                      }
                       setProjectData({...projectData, type: cat.id});
                       if (cat.id === "Property") {
                         setStep(10); // Property Page
@@ -850,11 +869,22 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         handleNext();
                       }
                     }}
-                    className="p-8 border-2 border-black hover:bg-titanium hover:text-white cursor-pointer transition-all group relative overflow-hidden rounded-3xl"
+                    className={cn(
+                      "p-8 border-2 border-black cursor-pointer transition-all group relative overflow-hidden rounded-3xl",
+                      cat.cosmic 
+                        ? "bg-[#FF6B00] text-white border-[#FF6B00] shadow-[0_0_20px_rgba(255,107,0,0.3)] hover:bg-[#E65F00]" 
+                        : "hover:bg-titanium hover:text-white"
+                    )}
                   >
-                    <cat.icon className="w-12 h-12 mb-6 transition-transform group-hover:-translate-y-1" />
+                    <cat.icon className={cn(
+                      "w-12 h-12 mb-6 transition-transform group-hover:-translate-y-1",
+                      cat.cosmic ? "text-white" : ""
+                    )} />
                     <h3 className="font-black text-xl uppercase tracking-tighter">{cat.label}</h3>
-                    <p className="uppercase-soft mt-2 opacity-60">{cat.desc}</p>
+                    <p className={cn(
+                      "uppercase-soft mt-2 opacity-60",
+                      cat.cosmic ? "text-white/80" : ""
+                    )}>{cat.desc}</p>
                     <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
                       <ChevronRight className="w-6 h-6" />
                     </div>
@@ -1340,7 +1370,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                                 setIsAnalyzing(true);
                                 try {
                                   const prompt = `Analisa mebel: ${furnitureSpecs.name}, Ukuran: ${furnitureSpecs.length}x${furnitureSpecs.width}x${furnitureSpecs.height}cm, Finishing: ${furnitureSpecs.finishing}, Kelas: ${furnitureSpecs.class}, Catatan: ${furnitureSpecs.notes}`;
-                                  const result = await getAIEstimation(prompt, "Interior");
+                                  const result = await getAIEstimation(prompt, "Interior", masterData);
                                   setAiEstimation(result);
                                   setStep(4);
                                 } catch (error) {
@@ -1747,7 +1777,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                       )}
                       <div className="bg-accent/5 p-4 rounded-xl border border-accent/10">
                         <p className="text-[10px] text-accent font-bold uppercase tracking-widest leading-relaxed">
-                          *Disclaimer: Estimasi ini adalah prakiraan awal berbasis AI berdasarkan data pasar. Nilai final akan divalidasi setelah survey teknis dan verifikasi material di lokasi.
+                          *Disclaimer: Estimasi ini adalah prakiraan awal berbasis AI berdasarkan data pasar. Nilai final akan divalidasi setelah Digital Assessment dan verifikasi teknis di lokasi.
                         </p>
                       </div>
                     </div>
@@ -1781,17 +1811,17 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
 
                 <div className="space-y-6">
                   <div className="p-6 bg-black text-white space-y-6 rounded-2xl">
-                    <h3 className="text-xl font-black uppercase tracking-tighter">Tier 02: Survey Lokasi</h3>
+                    <h3 className="text-xl font-black uppercase tracking-tighter">Tier 02: Digital Assessment</h3>
                     <p className="text-[10px] text-neutral-400 leading-relaxed">
-                      Langkah selanjutnya adalah survey lokasi oleh tim ahli kami untuk validasi teknis dan pengukuran presisi.
+                      Langkah selanjutnya adalah Digital Assessment oleh tim ahli kami untuk validasi teknis, pengukuran presisi, dan optimalisasi budget Anda.
                     </p>
                     <div className="pt-4 border-t border-white/20">
-                      <p className="uppercase-soft text-neutral-500 mb-1">Biaya Survey</p>
-                      <p className="text-2xl font-black tracking-tighter">Rp 500.000</p>
-                      <p className="text-[9px] text-neutral-500 italic mt-1">*Akan menjadi potongan harga saat deal kontrak.</p>
+                      <p className="uppercase-soft text-neutral-500 mb-1">Biaya Assessment</p>
+                      <p className="text-2xl font-black tracking-tighter">Rp {(systemConfig?.surveyFee || 399000).toLocaleString('id-ID')}</p>
+                      <p className="text-[9px] text-neutral-500 italic mt-1">*Investasi ini akan menjadi potongan harga saat kontrak pelaksanaan dimulai.</p>
                     </div>
                     <Button className="w-full bg-accent text-white hover:bg-white hover:text-accent border-2 border-accent rounded-lg font-bold uppercase tracking-[0.2em] text-[10px] py-6" onClick={() => setStep(6)}>
-                      Bayar & Jadwalkan Survey
+                      Amankan Jadwal Assessment
                     </Button>
                   </div>
 
@@ -1817,9 +1847,9 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                   </Card>
 
                   <div className="p-6 border-2 border-black/10 space-y-4 rounded-2xl">
-                    <h3 className="text-sm font-bold uppercase tracking-widest">Tier 03: Deal Kontrak</h3>
+                    <h3 className="text-sm font-bold uppercase tracking-widest">Tier 03: Pelaksanaan & Kontrak</h3>
                     <p className="text-[10px] text-neutral-500">
-                      Setelah survey, kami akan menerbitkan RAB Final dan Kontrak Kerja untuk memulai pelaksanaan.
+                      Setelah Digital Assessment selesai, kami akan menerbitkan RAB Final yang presisi dan Kontrak Kerja untuk memulai mewujudkan proyek Anda.
                     </p>
                   </div>
                 </div>
@@ -1838,47 +1868,49 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
 
           {step === 6 && (
             <div className="p-12 space-y-12 text-center">
-              <div className="w-24 h-24 bg-black text-white flex items-center justify-center mx-auto transition-transform hover:rotate-12">
-                <CreditCard className="w-12 h-12" />
+              <div className="w-24 h-24 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-8">
+                <Calculator className="w-12 h-12 text-accent" />
               </div>
               <div className="space-y-4">
-                <h2 className="text-5xl font-black uppercase tracking-tighter">Tier 02:<br/>Booking Survey</h2>
-                <p className="uppercase-soft text-neutral-500">Langkah terakhir untuk validasi teknis & RAB Final.</p>
+                <h2 className="text-4xl font-black uppercase tracking-tighter">Digital Assessment</h2>
+                <p className="uppercase-soft text-neutral-500 max-w-md mx-auto">
+                  Dapatkan estimasi detail, validasi teknis, dan konsultasi langsung dengan tim ahli kami.
+                </p>
               </div>
-              <div className="max-w-md mx-auto border-2 border-black p-8 space-y-8 rounded-2xl">
+              
+              <div className="max-w-md mx-auto p-8 border-2 border-black rounded-3xl space-y-6 bg-neutral-50">
                 <div className="flex justify-between items-center border-b border-black/10 pb-4">
                   <div className="text-left">
-                    <span className="uppercase-soft text-neutral-500">Biaya Komitmen Survey</span>
-                    <p className="text-[9px] font-bold text-accent uppercase tracking-widest mt-1">Akses Estimasi AI Lifetime</p>
+                    <span className="uppercase-soft text-neutral-500">Investasi Assessment</span>
+                    <p className="text-[9px] font-bold text-accent uppercase tracking-widest mt-1">Validasi Teknis & RAB Presisi</p>
                   </div>
-                  <span className="text-2xl font-black tracking-tighter">Rp 399.000</span>
+                  <span className="text-2xl font-black tracking-tighter">Rp {(systemConfig?.surveyFee || 399000).toLocaleString('id-ID')}</span>
                 </div>
-                <div className="space-y-6 text-left">
-                  <div className="bg-neutral-50 p-6 rounded-xl border border-black/5 space-y-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Instruksi Pembayaran:</p>
-                    <div className="space-y-2">
-                      <p className="text-xs font-bold">Silakan transfer Rp 399.000 ke:</p>
-                      <div className="p-4 bg-white border-2 border-black rounded-lg space-y-1">
-                        <p className="text-lg font-black tracking-tighter">BCA 667067XXXX</p>
-                        <p className="text-[10px] font-bold uppercase">a/n TBJ Contractor</p>
-                      </div>
-                      <p className="text-[9px] text-neutral-500 italic">
-                        *Biaya ini sebagai pengurangan nilai kontrak jika proyek berlanjut dan tidak dapat dikembalikan.
-                      </p>
-                      <p className="text-[9px] text-neutral-500 italic">
-                        *Akses estimasi AI detail & validasi teknis terbuka selamanya (Lifetime).
-                      </p>
-                      <p className="text-[9px] text-neutral-500 italic">
-                        *Setelah transfer, sistem akan memverifikasi otomatis dalam 1-5 menit.
-                      </p>
-                    </div>
+                <div className="space-y-2 text-left">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Value Yang Anda Dapatkan:</p>
+                  <ul className="space-y-2">
+                    {["Validasi Lokasi & Teknis", "RAB Final Tanpa Hidden Cost", "Konsultasi Arsitek/PM", "Prioritas Jadwal Pelaksanaan"].map((b, i) => (
+                      <li key={i} className="flex items-center gap-2 text-xs font-bold uppercase">
+                        <CheckCircle2 className="w-4 h-4 text-green-500" /> {b}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <Button className="w-full btn-orange h-14 text-lg" onClick={() => window.open(`https://wa.me/62821942016509?text=Halo%20TBJ%2C%20saya%20ingin%20booking%20Digital%20Assessment%20untuk%20validasi%20proyek%20saya.`, "_blank")}>
+                  Booking Assessment Sekarang
+                </Button>
+                <div className="pt-4 border-t border-black/10 space-y-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Instruksi Pembayaran:</p>
+                  <div className="p-4 bg-white border-2 border-black rounded-lg space-y-1">
+                    <p className="text-lg font-black tracking-tighter">BCA 667067XXXX</p>
+                    <p className="text-[10px] font-bold uppercase">a/n TBJ Contractor</p>
                   </div>
-                  <Button className="w-full btn-orange py-8 text-lg" onClick={async () => {
+                  <Button variant="outline" className="w-full border-black uppercase-soft text-[10px] font-black" onClick={async () => {
                     await updateProfile({ tier: "survey", lifetimeAccess: true });
-                    toast.success("Pembayaran Berhasil! Tim kami akan segera menghubungi Anda untuk jadwal survey.");
+                    toast.success("Konfirmasi terkirim! Tim kami akan memverifikasi dalam 1-5 menit.");
                     setTimeout(() => window.location.reload(), 1500);
                   }}>
-                    Konfirmasi & Bayar
+                    Konfirmasi Pembayaran
                   </Button>
                 </div>
               </div>
@@ -2243,17 +2275,17 @@ const ClientDashboard = ({ user }: { user: any }) => {
   return <div className="text-center py-20">Belum ada proyek aktif.</div>;
 };
 
-const LoginPage = ({ onLogin, onGuestLogin }: { onLogin: () => void; onGuestLogin: () => void }) => (
+const LoginPage = ({ onLogin, onGuestLogin, cmsConfig }: { onLogin: () => void; onGuestLogin: () => void; cmsConfig: any }) => (
   <div className="min-h-[80vh] flex flex-col items-center justify-center space-y-16 py-20">
     <div className="text-center space-y-6">
       <div className="inline-block border-2 border-black px-4 py-1 text-[10px] font-mono uppercase tracking-[0.4em] mb-4">
         Construction OS v1.0
       </div>
       <h1 className="text-[10vw] font-black tracking-tighter text-black uppercase leading-[0.8] heading-edge">
-        Tukang<br/>Bangunan<br/>Jakarta
+        {cmsConfig?.heroTitle || "Tukang Bangunan Jakarta"}
       </h1>
       <p className="text-neutral-400 font-mono text-sm uppercase tracking-[0.2em] max-w-xl mx-auto">
-        Platform konstruksi modern dengan integrasi AI Estimator & Real-time Management.
+        {cmsConfig?.heroSubtitle || "Platform konstruksi modern dengan integrasi AI Estimator & Real-time Management."}
       </p>
     </div>
 
@@ -2518,6 +2550,7 @@ function TermsPage() {
 
 export default function App() {
   const { user, loading, login, loginAsGuest, logout, updateProfile } = useAuth();
+  const { config: cmsConfig } = useCMSConfig();
 
   if (loading) return <div className="min-h-screen flex flex-col items-center justify-center gap-4">
     <Loader2 className="animate-spin w-12 h-12 text-accent" />
@@ -2535,7 +2568,7 @@ export default function App() {
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/gallery" element={<Gallery />} />
             {!user ? (
-              <Route path="*" element={<LoginPage onLogin={login} onGuestLogin={loginAsGuest} />} />
+              <Route path="*" element={<LoginPage onLogin={login} onGuestLogin={loginAsGuest} cmsConfig={cmsConfig} />} />
             ) : (
               <>
                 {/* Admin Routes */}
@@ -2546,13 +2579,16 @@ export default function App() {
                     <Route path="/projects" element={<ProjectsPage user={user} />} />
                     <Route path="/projects/:id" element={<ProjectDetail />} />
                     <Route path="/master" element={<AdminMasterPage />} />
+                    <Route path="/ai-agent" element={<AIAgent />} />
                   </>
                 )}
 
                 {/* Client Routes */}
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/profile/:id" element={<Profile />} />
                 <Route path="/assistant" element={<VirtualAssistant user={user} updateProfile={updateProfile} />} />
                 <Route path="/rab" element={<RabPage user={user} />} />
+                <Route path="/ai-agent" element={<AIAgent />} />
                 
                 {/* Default Redirect */}
                 <Route path="/" element={user?.role === "admin" ? <AdminPanel /> : user?.role === "pm" ? <PMDashboard /> : <Profile />} />

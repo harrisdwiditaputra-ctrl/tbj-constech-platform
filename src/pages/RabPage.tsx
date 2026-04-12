@@ -13,6 +13,7 @@ import { Search, Plus, Trash2, Download, Share2, Instagram, Phone, Mail, Buildin
 import { cn } from "@/lib/utils";
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
+import { TBJ_LOGO } from "@/constants";
 
 interface RabItem extends WorkItemMaster {
   volume: number;
@@ -94,15 +95,16 @@ const RabPage = ({ user }: { user: any }) => {
   const exportToPDF = () => {
     const doc = new jsPDF() as any;
     
-    // Header
+    // Header with Logo
+    doc.addImage(TBJ_LOGO, 'PNG', 14, 10, 15, 15);
     doc.setFontSize(22);
     doc.setTextColor(0, 0, 0);
-    doc.text("TBJ CONTRACTOR HUB", 14, 20);
+    doc.text("TBJ CONTRACTOR HUB", 35, 22);
     
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
     doc.text("Digital Ecosystem: AI-Powered Construction & Design", 14, 26);
-    doc.text("Instagram: @tbj.bisnis | WA: +62 821-9420-1650", 14, 31);
+    doc.text("Instagram: @tukang.bangunan.jakarta | WA: +62 821-9420-1650", 14, 31);
     
     doc.setDrawColor(0, 0, 0);
     doc.line(14, 35, 196, 35);
@@ -159,7 +161,9 @@ const RabPage = ({ user }: { user: any }) => {
       <div className="flex flex-col md:flex-row justify-between items-end gap-8 pb-12 border-b border-neutral-100">
         <div className="space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-black text-lg">TBJ</div>
+            <div className="w-12 h-12 flex items-center justify-center rounded-xl overflow-hidden">
+              <img src={TBJ_LOGO} alt="TBJ Logo" className="w-full h-full object-contain" />
+            </div>
             <div className="h-8 w-[1px] bg-neutral-200" />
             <Badge variant="outline" className="border-neutral-200 text-neutral-400 uppercase-soft text-[9px] h-6">Master RAB Engine v2.0</Badge>
           </div>
@@ -362,8 +366,8 @@ const RabPage = ({ user }: { user: any }) => {
           </div>
         </div>
         <div className="flex gap-6">
-          <a href="#" className="flex items-center gap-2 text-xs font-bold uppercase hover:text-neutral-500 transition-colors">
-            <Instagram className="w-4 h-4" /> @tbj.bisnis
+          <a href="https://www.instagram.com/tukang.bangunan.jakarta/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold uppercase hover:text-neutral-500 transition-colors">
+            <Instagram className="w-4 h-4" /> @tukang.bangunan.jakarta
           </a>
           <a href="#" className="flex items-center gap-2 text-xs font-bold uppercase hover:text-neutral-500 transition-colors">
             <Share2 className="w-4 h-4" /> Share Project

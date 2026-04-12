@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Calendar, Tag, DollarSign, Quote, ChevronLeft, ChevronRight, Play } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { getDriveImageUrl } from "@/lib/utils";
 
 interface GalleryItem {
   id: string;
@@ -123,7 +124,7 @@ function ProjectCard({ item }: { item: GalleryItem }) {
           >
             {item.images.map((img, idx) => (
               <div key={idx} className="min-w-full h-full snap-center relative">
-                <img src={img} alt={`Slide ${idx}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                <img src={getDriveImageUrl(img)} alt={`Slide ${idx}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 <div className="absolute top-4 left-4 bg-black/80 text-white px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-md backdrop-blur-sm">
                   {idx === 0 ? "Before" : idx === 1 ? "After" : `Detail ${idx - 1}`}
                 </div>

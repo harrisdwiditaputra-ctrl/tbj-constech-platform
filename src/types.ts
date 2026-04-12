@@ -9,6 +9,9 @@ export interface Project {
   workerIds?: string[]; // Added for Tier 3 tracking
   createdAt: string;
   totalBudget: number;
+  escrowBalance: number; // Total money paid by client but not yet released
+  releasedAmount: number; // Total money released to company
+  paymentMilestones: PaymentMilestone[];
   status: "draft" | "survey" | "active" | "completed";
   contractUrl?: string;
   timeline?: TimelineEvent[];
@@ -17,6 +20,20 @@ export interface Project {
   area?: number;
   dailyReports?: DailyReport[];
   requests?: ProjectRequest[];
+  cctvUrls?: { id: string; name: string; url: string }[];
+  imageUrl?: string;
+  clientId?: string;
+  progress?: number;
+}
+
+export interface PaymentMilestone {
+  id: string;
+  label: string;
+  percentage: number;
+  amount: number;
+  status: "pending" | "requested" | "released";
+  releaseDate?: string;
+  requiredProgress: number;
 }
 
 export interface DailyReport {
@@ -41,6 +58,7 @@ export interface TimelineEvent {
   id: string;
   title: string;
   date: string;
+  dueDate?: string; // Added for task tracking
   status: "pending" | "ongoing" | "completed";
 }
 
@@ -117,6 +135,8 @@ export interface MaterialRequest {
   unit: string;
   note: string;
   status: "pending" | "approved" | "rejected" | "purchased";
+  vendorId?: string;
+  vendorName?: string;
   createdAt: string;
   updatedAt: string;
   log: { time: string; action: string; note?: string }[];
@@ -146,6 +166,10 @@ export interface UserProfile {
   phoneNumber?: string; // Added for AI limit tracking
   aiUsageCount?: number; // Added for AI limit tracking
   location?: string;
+  address?: string; // Detailed address
+  secondaryContact?: string; // Emergency or secondary contact
+  notes?: string; // Internal notes about client
+  projectHistory?: string[]; // IDs of projects associated with client
   createdAt: string;
   lastPaymentStatus?: "unpaid" | "pending" | "paid";
   lifetimeAccess?: boolean; // Added for lifetime access
@@ -184,4 +208,75 @@ export interface HasilRAB {
   hargaSatuan: number;
   biayaRangka: number;
   totalHarga: number;
+}
+
+export interface CMSConfig {
+  heroTitle: string;
+  heroSubtitle: string;
+  promoText: string;
+  promoActive: boolean;
+}
+
+export interface Campaign {
+  id: string;
+  name: string;
+  status: "Active" | "Draft" | "Paused";
+  reach: string;
+  conversion: string;
+  content: string;
+  locations: string[];
+  createdAt: string;
+}
+
+export interface SystemConfig {
+  surveyFee: number;
+  aiFreeLimit: number;
+  globalMarkup: number;
+  autoNotificationWA: boolean;
+  aiAnalysisMode: boolean;
+}
+
+export interface Vendor {
+  id: string;
+  name: string;
+  category: string;
+  contactName: string;
+  whatsapp: string;
+  email?: string;
+  address?: string;
+  rating?: number;
+}
+
+export interface GalleryItem {
+  id: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  category: string;
+  createdAt: string;
+}
+
+export interface FinancialTransaction {
+  id: string;
+  projectId?: string;
+  projectName?: string;
+  type: "income" | "expense";
+  category: "client_payment" | "material" | "labor" | "assessment" | "other";
+  amount: number;
+  description: string;
+  date: string;
+  referenceId?: string; // ID of the related object (e.g. material request ID, worker ID)
+  status: "pending" | "completed";
+}
+
+export interface WorkerWage {
+  id: string;
+  workerId: string;
+  workerName: string;
+  projectId: string;
+  projectName: string;
+  amount: number;
+  weekEnding: string;
+  status: "pending" | "paid";
+  createdAt: string;
 }
