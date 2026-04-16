@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { auth, db, handleFirestoreError, OperationType } from "@/lib/firebase";
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot, collection, query, where, orderBy, addDoc, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
-import { Project, BudgetCategory, BudgetItem, UserProfile, Property, WorkItemMaster, Workforce, Attendance, MaterialRequest, CMSConfig, Campaign, SystemConfig, Vendor, GalleryItem } from "@/types";
+import { Project, BudgetCategory, BudgetItem, UserProfile, Property, WorkItemMaster, Workforce, Attendance, MaterialRequest, CMSConfig, Campaign, SystemConfig, Vendor, GalleryItem, TimelineEvent } from "@/types";
 import { WORK_ITEMS_MASTER } from "@/constants";
 import { toast } from "sonner";
 
@@ -203,7 +203,24 @@ export function useProjects(userId?: string, userRole?: string) {
     }
   };
 
-  return { projects, loading, createProject, updateProject, deleteProject };
+  const fixProjectMilestones = async () => {
+    try {
+      for (const p of projects) {
+        const updatedMilestones = [
+          { id: "dp", label: "DP Awal", percentage: 30, amount: p.totalBudget * 0.3, status: p.paymentMilestones[0]?.status || "pending", requiredProgress: 0 },
+          { id: "progress30", label: "Progress 30%", percentage: 30, amount: p.totalBudget * 0.3, status: p.paymentMilestones[1]?.status || "pending", requiredProgress: 30 },
+          { id: "progress60", label: "Progress 60%", percentage: 35, amount: p.totalBudget * 0.35, status: p.paymentMilestones[2]?.status || "pending", requiredProgress: 60 },
+          { id: "retention", label: "Retensi 5%", percentage: 5, amount: p.totalBudget * 0.05, status: p.paymentMilestones[3]?.status || "pending", requiredProgress: 100 }
+        ];
+        await updateDoc(doc(db, "projects", p.id), { paymentMilestones: updatedMilestones });
+      }
+      toast.success("All project milestones updated to 30%, 30%, 35%, 5%");
+    } catch (error) {
+      toast.error("Failed to fix milestones");
+    }
+  };
+
+  return { projects, loading, createProject, updateProject, deleteProject, fixProjectMilestones };
 }
 
 export function useProjectDetails(projectId: string | undefined) {
@@ -332,6 +349,24 @@ export function useProjectDetails(projectId: string | undefined) {
     if (!projectId) return;
     try {
       await updateDoc(doc(db, "projects", projectId, "items", itemId), { progress });
+      
+      // Recalculate project total progress (weighted by price)
+      const itemsSnapshot = await getDocs(collection(db, "projects", projectId, "items"));
+      const allItems = itemsSnapshot.docs.map(d => d.data() as BudgetItem);
+      
+      const totalBudget = allItems.reduce((acc, item) => acc + (item.totalPrice || 0), 0);
+      let totalProgress = 0;
+      
+      if (totalBudget > 0) {
+        const weightedProgress = allItems.reduce((acc, item) => {
+          return acc + ((item.progress || 0) * (item.totalPrice || 0));
+        }, 0);
+        totalProgress = Math.round(weightedProgress / totalBudget);
+      } else if (allItems.length > 0) {
+        totalProgress = Math.round(allItems.reduce((acc, item) => acc + (item.progress || 0), 0) / allItems.length);
+      }
+      
+      await updateDoc(doc(db, "projects", projectId), { progress: totalProgress });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `projects/${projectId}/items/${itemId}`);
     }
@@ -374,7 +409,31 @@ export function useProjectDetails(projectId: string | undefined) {
     }
   };
 
-  return { project, categories, items, loading, addCategory, addItem, deleteCategory, deleteItem, updateProjectStatus, updateItemProgress, releaseMilestone };
+  const addSiteLog = async (data: any) => {
+    if (!projectId) return;
+    try {
+      await addDoc(collection(db, "projects", projectId, "site_logs"), {
+        ...data,
+        createdAt: new Date().toISOString()
+      });
+      toast.success("Site log added successfully");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `projects/${projectId}/site_logs`);
+    }
+  };
+
+  const addTimelineEvent = async (event: Omit<TimelineEvent, "id">) => {
+    if (!projectId || !project) return;
+    try {
+      const newTimeline = [...(project.timeline || []), { ...event, id: Math.random().toString(36).substring(7) }];
+      await updateDoc(doc(db, "projects", projectId), { timeline: newTimeline });
+      toast.success("Milestone added to timeline");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `projects/${projectId}`);
+    }
+  };
+
+  return { project, categories, items, loading, addCategory, addItem, deleteCategory, deleteItem, updateProjectStatus, updateItemProgress, releaseMilestone, addSiteLog, addTimelineEvent };
 }
 
 export function useProperties() {
@@ -469,6 +528,11 @@ export function useVendors() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!auth.currentUser) {
+      setVendors([]);
+      setLoading(false);
+      return;
+    }
     const q = query(collection(db, "vendors"), orderBy("name", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setVendors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Vendor[]);
@@ -604,6 +668,11 @@ export function useMasterCategories() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!auth.currentUser) {
+      setCategories([]);
+      setLoading(false);
+      return;
+    }
     const q = query(collection(db, "master_categories"), orderBy("name", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any);
@@ -672,6 +741,30 @@ export function useUser(uid: string | undefined) {
   }, [uid]);
 
   return { user, loading };
+}
+
+export function usePMs() {
+  const [pms, setPMs] = useState<UserProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!auth.currentUser) {
+      setPMs([]);
+      setLoading(false);
+      return;
+    }
+
+    const q = query(collection(db, "users"), where("role", "==", "pm"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setPMs(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })) as UserProfile[]);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "users");
+    });
+    return () => unsubscribe();
+  }, []);
+
+  return { pms, loading };
 }
 
 export function useWorkforce(userRole?: string, userTier?: string) {
@@ -892,6 +985,11 @@ export function useCampaigns() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!auth.currentUser) {
+      setCampaigns([]);
+      setLoading(false);
+      return;
+    }
     const q = query(collection(db, "campaigns"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setCampaigns(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Campaign[]);
@@ -980,7 +1078,13 @@ export async function incrementAIUsage() {
     const userRef = doc(db, "users", user.uid);
     const userDoc = await getDoc(userRef);
     if (userDoc.exists()) {
-      const currentUsage = userDoc.data().aiUsageCount || 0;
+      const data = userDoc.data();
+      const currentUsage = data.aiUsageCount || 0;
+      const isVerified = data.waVerified || false;
+      
+      // If verified, limit might be higher (e.g. 2), otherwise 1
+      const limit = isVerified ? 2 : 1;
+      
       await updateDoc(userRef, {
         aiUsageCount: currentUsage + 1
       });
@@ -995,6 +1099,11 @@ export function useFinance(projectId?: string) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!auth.currentUser) {
+      setTransactions([]);
+      setLoading(false);
+      return;
+    }
     let q = query(collection(db, "financial_transactions"), orderBy("date", "desc"));
     if (projectId) {
       q = query(collection(db, "financial_transactions"), where("projectId", "==", projectId), orderBy("date", "desc"));
@@ -1029,6 +1138,11 @@ export function useWorkerWages(projectId?: string) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!auth.currentUser) {
+      setWages([]);
+      setLoading(false);
+      return;
+    }
     let q = query(collection(db, "worker_wages"), orderBy("weekEnding", "desc"));
     if (projectId) {
       q = query(collection(db, "worker_wages"), where("projectId", "==", projectId), orderBy("weekEnding", "desc"));
@@ -1065,4 +1179,28 @@ export function useWorkerWages(projectId?: string) {
   };
 
   return { wages, loading, addWage, updateWageStatus };
+}
+
+export function useSiteLogs(projectId?: string) {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!projectId || !auth.currentUser) {
+      setLogs([]);
+      setLoading(false);
+      return;
+    }
+
+    const q = query(collection(db, "projects", projectId, "site_logs"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `projects/${projectId}/site_logs`);
+    });
+    return () => unsubscribe();
+  }, [projectId]);
+
+  return { logs, loading };
 }

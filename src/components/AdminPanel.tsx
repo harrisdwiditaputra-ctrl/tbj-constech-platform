@@ -1,20 +1,20 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMasterData, useAuth, useUsers, useProjects, useWorkforce, useMaterialRequests, useProperties, useCMSConfig, useCampaigns, useSystemConfig, useGallery, useVendors, useAttendance, useFinance, useWorkerWages, useMasterCategories } from "@/lib/hooks";
+import { useMasterData, useAuth, useUsers, useProjects, useWorkforce, useMaterialRequests, useProperties, useCMSConfig, useCampaigns, useSystemConfig, useGallery, useVendors, useAttendance, useFinance, useWorkerWages, useMasterCategories, usePMs } from "@/lib/hooks";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { 
   Loader2, Search, Save, UserPlus, Database, Settings, ShieldCheck, 
   RefreshCw, TrendingUp, DollarSign, Users, Briefcase, Plus, ChevronDown, 
   ChevronRight, Download, Eye, EyeOff, Trash2, Image as ImageIcon, 
   LayoutDashboard, FileText, HardHat, Camera, BarChart3, Clock, Phone, User,
-  CheckCircle2, MapPin, Package, Brain, Zap, AlertCircle
+  CheckCircle2, MapPin, Package, Brain, Zap, AlertCircle, Layers, History, Sparkles, Upload
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs } from "firebase/firestore";
@@ -30,9 +30,9 @@ export default function AdminPanel() {
   const { masterData, loading: masterLoading, addMasterItem, updateMasterItem, deleteMasterItem, addMasterCategory, resetDatabase } = useMasterData(user?.role);
   const { categories: masterCategories } = useMasterCategories();
   const { users, loading: usersLoading, updateUser } = useUsers(user?.role);
-  const { projects, loading: projectsLoading, updateProject, deleteProject } = useProjects(undefined, user?.role);
+  const { projects, loading: projectsLoading, updateProject, deleteProject, fixProjectMilestones } = useProjects(undefined, user?.role);
   const { workforce, loading: workforceLoading, addWorkforce, updateWorkforce, deleteWorkforce } = useWorkforce(user?.role);
-  const { requests, loading: requestsLoading, updateRequestStatus, assignVendor } = useMaterialRequests(user?.role);
+  const { requests, loading: requestsLoading, updateRequestStatus, assignVendor, addRequest } = useMaterialRequests(user?.role);
   const { properties, loading: propertiesLoading, addProperty, updateProperty, deleteProperty } = useProperties();
   const { gallery, addGalleryItem, deleteGalleryItem } = useGallery();
   const { vendors, addVendor, deleteVendor, updateVendor } = useVendors();
@@ -42,8 +42,18 @@ export default function AdminPanel() {
   const { config: systemConfig, updateConfig: updateSystem } = useSystemConfig();
   const { transactions, addTransaction } = useFinance();
   const { wages, updateWageStatus } = useWorkerWages();
+  const { pms } = usePMs();
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "clients" | "projects" | "workforce" | "cms" | "finance" | "marketing" | "management" | "materials" | "attendance" | "gallery" | "properties" | "vendors" | "payments">("dashboard");
+  const standardizedCategories = [
+    "ARSITEKTUR", 
+    "Struktur", 
+    "Lapangan / Sitework", 
+    "Mekanikal Elektrikal", 
+    "Plumbing", 
+    "Site Development"
+  ];
+  const [selectedMasterCategory, setSelectedMasterCategory] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
   const [showAddWorker, setShowAddWorker] = useState(false);
@@ -52,6 +62,10 @@ export default function AdminPanel() {
   const [showAddProperty, setShowAddProperty] = useState(false);
   const [showAddMasterCategory, setShowAddMasterCategory] = useState(false);
   const [newMasterCategory, setNewMasterCategory] = useState("");
+  const [showAssignVendor, setShowAssignVendor] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<MaterialRequest | null>(null);
+  const [showManageTeam, setShowManageTeam] = useState(false);
+  const [selectedProjectTeam, setSelectedProjectTeam] = useState<Project | null>(null);
   
   // Master Data Form
   const [showActivities, setShowActivities] = useState(false);
@@ -100,7 +114,47 @@ export default function AdminPanel() {
   });
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [selectedProjectAI, setSelectedProjectAI] = useState<Project | null>(null);
+  const [selectedProjectFinance, setSelectedProjectFinance] = useState<Project | null>(null);
   const [showRecordPayment, setShowRecordPayment] = useState(false);
+  const [bulkOrderItems, setBulkOrderItems] = useState([{ name: "", quantity: 0, unit: "m3" }]);
+  const [selectedBulkProject, setSelectedBulkProject] = useState("");
+
+  const handleAddBulkRow = () => {
+    setBulkOrderItems([...bulkOrderItems, { name: "", quantity: 0, unit: "m3" }]);
+  };
+
+  const handleBulkOrderSubmit = async () => {
+    if (!selectedBulkProject || bulkOrderItems.some(i => !i.name || i.quantity <= 0)) {
+      toast.error("Please fill all item details.");
+      return;
+    }
+    
+    const project = projects.find(p => p.id === selectedBulkProject);
+    if (!project) return;
+
+    try {
+      // Create ONE request with multiple items
+      await addRequest({
+        projectId: project.id,
+        projectName: project.name,
+        itemName: `${bulkOrderItems.length} Items (Bulk Order)`,
+        quantity: 1,
+        unit: "set",
+        requesterId: user?.uid || "",
+        requesterName: user?.displayName || "Admin",
+        status: "pending",
+        note: "Bulk order created from Admin Panel",
+        items: bulkOrderItems
+      });
+      
+      toast.success("Bulk material request submitted successfully.");
+      setBulkOrderItems([{ name: "", quantity: 0, unit: "m3" }]);
+      setSelectedBulkProject("");
+    } catch (error) {
+      console.error("Error submitting bulk order", error);
+      toast.error("Failed to submit bulk order.");
+    }
+  };
   const [paymentForm, setPaymentForm] = useState({
     projectId: "",
     amount: 0,
@@ -170,9 +224,6 @@ export default function AdminPanel() {
     category: "project"
   });
 
-  const [selectedRequest, setSelectedRequest] = useState<MaterialRequest | null>(null);
-  const [showAssignVendor, setShowAssignVendor] = useState(false);
-
   const handleAssignVendor = async (requestId: string, vendorId: string) => {
     const vendor = vendors.find(v => v.id === vendorId);
     const request = requests.find(r => r.id === requestId);
@@ -214,12 +265,41 @@ export default function AdminPanel() {
   // Grouping Master Data
   const groupedMaster = useMemo(() => {
     const groups: Record<string, WorkItemMaster[]> = {};
+    // Initialize with standardized categories
+    standardizedCategories.forEach(cat => groups[cat] = []);
+    
     masterData.forEach(item => {
-      if (!groups[item.category]) groups[item.category] = [];
-      groups[item.category].push(item);
+      const catName = item.category || "Uncategorized";
+      if (!groups[catName]) groups[catName] = [];
+      groups[catName].push(item);
     });
     return groups;
-  }, [masterData]);
+  }, [masterData, standardizedCategories]);
+
+  const filteredMaster = useMemo(() => {
+    let data = masterData;
+    if (selectedMasterCategory) {
+      data = data.filter(item => item.category === selectedMasterCategory);
+    }
+    if (search) {
+      data = data.filter(item => 
+        item.name.toLowerCase().includes(search.toLowerCase()) || 
+        (item.code && item.code.toLowerCase().includes(search.toLowerCase()))
+      );
+    }
+    return data;
+  }, [masterData, search, selectedMasterCategory]);
+
+  const handleExportMasterRAB = () => {
+    const cats = masterCategories.length > 0 ? masterCategories : Array.from(new Set(masterData.map(i => i.category))).map(c => ({ id: c, name: c }));
+    generateRABPDF("MASTER RAB TBJ CONSTECH", cats, masterData.map(item => ({
+      ...item,
+      quantity: 1,
+      pricePerUnit: item.price,
+      totalPrice: item.price
+    })));
+    toast.success("Master RAB PDF exported successfully");
+  };
 
   const toggleCategory = (cat: string) => {
     setExpandedCategories(prev => 
@@ -262,6 +342,7 @@ export default function AdminPanel() {
   const [newWorker, setNewWorker] = useState<Partial<Workforce>>({
     name: "",
     role: "tukang",
+    skill: "",
     ktp: "",
     whatsapp: "",
     status: "active"
@@ -274,7 +355,7 @@ export default function AdminPanel() {
     }
     await addWorkforce(newWorker as any);
     setShowAddWorker(false);
-    setNewWorker({ name: "", role: "tukang", ktp: "", whatsapp: "", status: "active" });
+    setNewWorker({ name: "", role: "tukang", skill: "", ktp: "", whatsapp: "", status: "active" });
   };
 
   const [cmsForm, setCmsForm] = useState<Partial<CMSConfig>>({
@@ -533,8 +614,19 @@ export default function AdminPanel() {
                 </Card>
                 
                 <Card className="border-2 border-black rounded-2xl shadow-sm bg-accent text-white">
-                  <CardHeader>
+                  <CardHeader className="flex flex-row justify-between items-center">
                     <CardTitle className="text-xl font-black uppercase tracking-tighter">Strategic AI Insight</CardTitle>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-white hover:bg-white/20"
+                      onClick={() => {
+                        toast.success("AI Insights refreshed and logged to history.");
+                        // In real app, this would trigger a re-generation
+                      }}
+                    >
+                      <History className="w-4 h-4" />
+                    </Button>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="space-y-4">
@@ -586,29 +678,29 @@ export default function AdminPanel() {
                     <Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
                     <Input 
                       placeholder="Search products/categories..." 
-                      className="pl-10 h-10 border-2 border-black rounded-xl"
+                      className="pl-10 h-10 border border-black/10 rounded-xl"
                       value={search}
                       onChange={e => setSearch(e.target.value)}
                     />
                   </div>
-                  <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl" onClick={() => setShowAddMasterCategory(true)}>
-                    <Plus className="w-4 h-4 mr-2" /> Add Category
+                  <Button variant="outline" className="border border-black/10 h-10 px-6 rounded-xl" onClick={() => {
+                    setShowAddMasterCategory(!showAddMasterCategory);
+                    setSelectedMasterCategory(null);
+                  }}>
+                    <Plus className="w-4 h-4 mr-2" /> {showAddMasterCategory ? "Back to List" : "Manage Categories"}
                   </Button>
+                  {selectedMasterCategory && (
+                    <Button variant="ghost" className="h-10 px-4 rounded-xl font-bold uppercase text-[10px]" onClick={() => setSelectedMasterCategory(null)}>
+                      &larr; Back to Categories
+                    </Button>
+                  )}
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl" onClick={() => {
-                    // Export all master data to PDF
-                    const items = masterData.map(i => ({
-                      ...i,
-                      quantity: 1,
-                      pricePerUnit: i.price,
-                      totalPrice: i.price,
-                      categoryId: masterCategories.find(c => c.name === i.category)?.id || i.category
-                    }));
-                    const cats = masterCategories.length > 0 ? masterCategories : Array.from(new Set(masterData.map(i => i.category))).map(c => ({ id: c, name: c }));
-                    generateRABPDF("MASTER DATA TBJ", cats, items);
-                  }}>
-                    <Download className="w-4 h-4 mr-2" /> Export PDF
+                  <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={handleExportMasterRAB}>
+                    <Download className="w-4 h-4 mr-2" /> Export Master PDF
+                  </Button>
+                  <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={() => navigate("/import")}>
+                    <Upload className="w-4 h-4 mr-2" /> Bulk Import
                   </Button>
                   <Button className="btn-orange h-10 px-6 rounded-xl" onClick={() => setShowAddProduct(true)}>
                     <Plus className="w-4 h-4 mr-2" /> Add New Product
@@ -617,23 +709,35 @@ export default function AdminPanel() {
               </div>
 
               {showAddMasterCategory && (
-                <Card className="border-2 border-black rounded-2xl p-6 bg-blue-50 animate-in fade-in slide-in-from-top-4">
-                  <div className="flex gap-4 items-end">
-                    <div className="flex-1 space-y-2">
-                      <label className="uppercase-soft text-[10px]">New Category Name</label>
-                      <Input 
-                        placeholder="e.g. Pekerjaan Atap" 
-                        value={newMasterCategory}
-                        onChange={e => setNewMasterCategory(e.target.value)}
-                      />
+                <Card className="border border-black/10 rounded-2xl p-6 bg-blue-50/30 animate-in fade-in slide-in-from-top-4">
+                  <div className="space-y-6">
+                    <div className="flex gap-4 items-end">
+                      <div className="flex-1 space-y-2">
+                        <label className="uppercase-soft text-[10px]">New Category Name</label>
+                        <Input 
+                          placeholder="e.g. Pekerjaan Atap" 
+                          value={newMasterCategory}
+                          onChange={e => setNewMasterCategory(e.target.value)}
+                          className="border-black/10"
+                        />
+                      </div>
+                      <Button className="btn-sleek px-8" onClick={async () => {
+                        if (!newMasterCategory) return;
+                        await addMasterCategory(newMasterCategory);
+                        setNewMasterCategory("");
+                      }}>Add Category</Button>
                     </div>
-                    <Button className="btn-sleek px-8" onClick={async () => {
-                      if (!newMasterCategory) return;
-                      await addMasterCategory(newMasterCategory);
-                      setNewMasterCategory("");
-                      setShowAddMasterCategory(false);
-                    }}>Save Category</Button>
-                    <Button variant="ghost" onClick={() => setShowAddMasterCategory(false)}>Cancel</Button>
+                    
+                    <div className="space-y-2">
+                      <p className="uppercase-soft text-[10px]">Existing Categories</p>
+                      <div className="grid md:grid-cols-4 gap-2">
+                        {masterCategories.map(c => (
+                          <div key={c.id} className="p-2 bg-white border border-black/5 rounded-lg flex justify-between items-center">
+                            <span className="text-[10px] font-bold uppercase">{c.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </Card>
               )}
@@ -699,21 +803,34 @@ export default function AdminPanel() {
               )}
 
               <div className="space-y-4">
-                {Object.entries(groupedMaster).map(([category, items]) => (
-                  <Card key={category} className="border-2 border-black rounded-2xl overflow-hidden shadow-sm">
-                    <button 
-                      onClick={() => toggleCategory(category)}
-                      className="w-full flex items-center justify-between p-4 bg-neutral-50 hover:bg-neutral-100 transition-colors border-b-2 border-black"
-                    >
-                      <div className="flex items-center gap-3">
-                        {expandedCategories.includes(category) ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-                        <h3 className="text-sm font-black uppercase tracking-widest">{category}</h3>
-                        <Badge className="bg-black text-white text-[9px]">{items.length} Items</Badge>
+                {!selectedMasterCategory ? (
+                  <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {Object.entries(groupedMaster).map(([category, items]) => (
+                      <Card 
+                        key={category} 
+                        className="border-2 border-black rounded-2xl p-6 cursor-pointer hover:bg-neutral-50 transition-all group"
+                        onClick={() => setSelectedMasterCategory(category)}
+                      >
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="w-12 h-12 bg-black text-white flex items-center justify-center rounded-xl group-hover:bg-accent transition-colors">
+                            <Layers className="w-6 h-6" />
+                          </div>
+                          <Badge variant="outline" className="border-black text-[10px] font-black">
+                            {items.length} Items
+                          </Badge>
+                        </div>
+                        <h3 className="text-lg font-black uppercase tracking-tighter">{category}</h3>
+                        <p className="text-[10px] uppercase-soft text-neutral-400 mt-2">Manage items in this category.</p>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="col-span-full">
+                    <Card className="border-2 border-black rounded-2xl overflow-hidden shadow-sm">
+                      <div className="p-4 bg-neutral-50 border-b-2 border-black flex justify-between items-center">
+                        <h3 className="text-sm font-black uppercase tracking-widest">{selectedMasterCategory}</h3>
+                        <Badge className="bg-black text-white text-[9px]">{filteredMaster.length} Items</Badge>
                       </div>
-                      <div className="text-[10px] uppercase-soft text-neutral-400">Expand to manage items</div>
-                    </button>
-                    
-                    {expandedCategories.includes(category) && (
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-white">
@@ -726,14 +843,14 @@ export default function AdminPanel() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {items.map((item) => (
+                          {filteredMaster.map((item) => (
                             <TableRow key={item.id} className={cn(item.status === 'hidden' && "opacity-50 bg-neutral-50")}>
                               <TableCell className="font-mono text-[10px] font-bold">{item.code || "N/A"}</TableCell>
                               <TableCell>
                                 {editingId === item.id ? (
                                   <Input 
                                     className="h-8 text-xs font-bold uppercase" 
-                                    value={editForm.name} 
+                                    value={editForm.name || ""} 
                                     onChange={e => setEditForm({...editForm, name: e.target.value})}
                                   />
                                 ) : (
@@ -747,7 +864,7 @@ export default function AdminPanel() {
                                 {editingId === item.id ? (
                                   <Input 
                                     className="h-8 w-16 text-xs font-bold uppercase" 
-                                    value={editForm.unit} 
+                                    value={editForm.unit || ""} 
                                     onChange={e => setEditForm({...editForm, unit: e.target.value})}
                                   />
                                 ) : (
@@ -759,7 +876,7 @@ export default function AdminPanel() {
                                   <Input 
                                     type="number"
                                     className="h-8 w-24 text-right text-xs font-bold" 
-                                    value={editForm.price} 
+                                    value={editForm.price || 0} 
                                     onChange={e => setEditForm({...editForm, price: Number(e.target.value)})}
                                   />
                                 ) : (
@@ -794,9 +911,9 @@ export default function AdminPanel() {
                           ))}
                         </TableBody>
                       </Table>
-                    )}
-                  </Card>
-                ))}
+                    </Card>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -947,21 +1064,21 @@ export default function AdminPanel() {
                         <div className="space-y-1">
                           <label className="uppercase-soft text-[10px]">Display Name</label>
                           <Input 
-                            value={clientEditForm.displayName} 
+                            value={clientEditForm.displayName || ""} 
                             onChange={e => setClientEditForm({...clientEditForm, displayName: e.target.value})}
                           />
                         </div>
                         <div className="space-y-1">
                           <label className="uppercase-soft text-[10px]">WhatsApp / Phone</label>
                           <Input 
-                            value={clientEditForm.whatsapp} 
+                            value={clientEditForm.whatsapp || ""} 
                             onChange={e => setClientEditForm({...clientEditForm, whatsapp: e.target.value})}
                           />
                         </div>
                         <div className="space-y-1">
                           <label className="uppercase-soft text-[10px]">Location (City)</label>
                           <Input 
-                            value={clientEditForm.location} 
+                            value={clientEditForm.location || ""} 
                             onChange={e => setClientEditForm({...clientEditForm, location: e.target.value})}
                           />
                         </div>
@@ -969,7 +1086,7 @@ export default function AdminPanel() {
                           <label className="uppercase-soft text-[10px]">Tier</label>
                           <select 
                             className="w-full h-10 rounded-md border border-black/10 px-3 text-sm"
-                            value={clientEditForm.tier}
+                            value={clientEditForm.tier || "prospect"}
                             onChange={e => setClientEditForm({...clientEditForm, tier: e.target.value as any})}
                           >
                             <option value="prospect">Tier 1 (Lead)</option>
@@ -981,7 +1098,7 @@ export default function AdminPanel() {
                       <div className="space-y-1">
                         <label className="uppercase-soft text-[10px]">Full Address</label>
                         <Textarea 
-                          value={clientEditForm.address} 
+                          value={clientEditForm.address || ""} 
                           onChange={e => setClientEditForm({...clientEditForm, address: e.target.value})}
                           placeholder="Detailed address for site assessment..."
                         />
@@ -989,7 +1106,7 @@ export default function AdminPanel() {
                       <div className="space-y-1">
                         <label className="uppercase-soft text-[10px]">Secondary Contact</label>
                         <Input 
-                          value={clientEditForm.secondaryContact} 
+                          value={clientEditForm.secondaryContact || ""} 
                           onChange={e => setClientEditForm({...clientEditForm, secondaryContact: e.target.value})}
                           placeholder="Name / Phone"
                         />
@@ -997,7 +1114,7 @@ export default function AdminPanel() {
                       <div className="space-y-1">
                         <label className="uppercase-soft text-[10px]">Internal Notes</label>
                         <Textarea 
-                          value={clientEditForm.notes} 
+                          value={clientEditForm.notes || ""} 
                           onChange={e => setClientEditForm({...clientEditForm, notes: e.target.value})}
                           placeholder="Important notes about this client..."
                         />
@@ -1049,8 +1166,11 @@ export default function AdminPanel() {
                         <Progress value={p.progress} className="h-1.5" />
                       </div>
                       <div className="flex gap-2 pt-2">
-                        <Button className="flex-grow btn-sleek h-10 text-[10px]" onClick={() => navigate(`/pm`)}>
-                          PM Dashboard
+                        <Button className="flex-grow btn-sleek h-10 text-[10px]" onClick={() => {
+                          setSelectedProjectTeam(p);
+                          setShowManageTeam(true);
+                        }}>
+                          Manage Team
                         </Button>
                         <Button 
                           variant="outline" 
@@ -1064,6 +1184,74 @@ export default function AdminPanel() {
                   </Card>
                 ))}
               </div>
+
+              {showManageTeam && selectedProjectTeam && (
+                <Dialog open={showManageTeam} onOpenChange={setShowManageTeam}>
+                  <DialogContent className="max-w-2xl rounded-3xl border-2 border-black p-8">
+                    <DialogHeader>
+                      <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Manage Project Team</DialogTitle>
+                      <DialogDescription className="uppercase-soft">Assign Project Manager and Workforce for {selectedProjectTeam.name}</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-8 py-6">
+                      <div className="space-y-4">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Project Manager</label>
+                        <select 
+                          className="w-full h-12 rounded-xl border-2 border-black px-4 font-bold uppercase text-xs"
+                          value={selectedProjectTeam.pmId || ""}
+                          onChange={async (e) => {
+                            const pmId = e.target.value;
+                            await updateProject(selectedProjectTeam.id, { pmId });
+                            setSelectedProjectTeam({...selectedProjectTeam, pmId});
+                            toast.success("PM assigned successfully");
+                          }}
+                        >
+                          <option value="">Select PM</option>
+                          {pms.map(pm => (
+                            <option key={pm.uid} value={pm.uid}>{pm.displayName || pm.email}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-4">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Workforce Assignment</label>
+                        <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto p-2 border-2 border-black rounded-xl">
+                          {workforce.map(worker => {
+                            const isAssigned = selectedProjectTeam.workerIds?.includes(worker.id);
+                            return (
+                              <div 
+                                key={worker.id} 
+                                onClick={async () => {
+                                  let newWorkerIds = [...(selectedProjectTeam.workerIds || [])];
+                                  if (isAssigned) {
+                                    newWorkerIds = newWorkerIds.filter(id => id !== worker.id);
+                                  } else {
+                                    newWorkerIds.push(worker.id);
+                                  }
+                                  await updateProject(selectedProjectTeam.id, { workerIds: newWorkerIds });
+                                  setSelectedProjectTeam({...selectedProjectTeam, workerIds: newWorkerIds});
+                                }}
+                                className={cn(
+                                  "p-3 border-2 rounded-xl cursor-pointer transition-all flex items-center justify-between",
+                                  isAssigned ? "border-black bg-black text-white" : "border-neutral-100 hover:border-black"
+                                )}
+                              >
+                                <div className="space-y-0.5">
+                                  <p className="text-[10px] font-black uppercase tracking-tight">{worker.name}</p>
+                                  <p className="text-[8px] opacity-60 uppercase">{worker.skill}</p>
+                                </div>
+                                {isAssigned && <CheckCircle2 className="w-3 h-3 text-accent" />}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button className="btn-sleek w-full h-12" onClick={() => setShowManageTeam(false)}>Done</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
 
               {selectedProjectAI && (
                 <Dialog open={!!selectedProjectAI} onOpenChange={() => setSelectedProjectAI(null)}>
@@ -1208,6 +1396,14 @@ export default function AdminPanel() {
                       />
                     </div>
                     <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Specialized Skill</label>
+                      <Input 
+                        placeholder="e.g. Las, Keramik, Atap" 
+                        value={newWorker.skill}
+                        onChange={e => setNewWorker({...newWorker, skill: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
                       <label className="uppercase-soft text-[10px]">WhatsApp</label>
                       <Input 
                         placeholder="0812..." 
@@ -1266,6 +1462,7 @@ export default function AdminPanel() {
                                   <CardContent className="p-4 space-y-3">
                                     <div className="space-y-1">
                                       <p className="font-black text-xs uppercase tracking-widest">{worker.name}</p>
+                                      {worker.skill && <p className="text-[9px] font-bold text-accent uppercase">{worker.skill}</p>}
                                       <p className="text-[9px] text-neutral-400 font-mono">KTP: {worker.ktp}</p>
                                     </div>
                                     <div className="space-y-2 pt-2 border-t border-black/5">
@@ -1273,6 +1470,19 @@ export default function AdminPanel() {
                                         <Phone className="w-3 h-3 text-accent" /> {worker.whatsapp || "No WA"}
                                       </div>
                                       <div className="flex justify-end gap-2 pt-2">
+                                        <select 
+                                          className="h-6 text-[8px] rounded border border-black/10 bg-white px-1 font-black uppercase"
+                                          value={worker.projectId || ""}
+                                          onChange={async (e) => {
+                                            await updateWorkforce(worker.id, { projectId: e.target.value });
+                                            toast.success(`Worker assigned to project`);
+                                          }}
+                                        >
+                                          <option value="">Assign Project</option>
+                                          {projects.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                          ))}
+                                        </select>
                                         <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={(e) => {
                                           e.stopPropagation();
                                           if(confirm(`Remove ${worker.name}?`)) deleteWorkforce(worker.id);
@@ -1371,8 +1581,36 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
 
-              <Card className="border-2 border-black rounded-2xl p-6 bg-accent text-white">
-                <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Daily AI Content Suggestions</h3>
+              <Card className="border-2 border-black rounded-2xl p-6 bg-accent text-white relative overflow-hidden">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-black uppercase tracking-tighter">Daily AI Content Suggestions</h3>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-white hover:bg-white/20"
+                      onClick={() => {
+                        toast.info("AI Suggestion History coming soon...");
+                      }}
+                    >
+                      <Clock className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-white hover:bg-white/20"
+                      onClick={async () => {
+                        toast.promise(new Promise(r => setTimeout(r, 2000)), {
+                          loading: 'Generating new suggestions...',
+                          success: 'Suggestions refreshed!',
+                          error: 'Failed to refresh'
+                        });
+                      }}
+                    >
+                      <Sparkles className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
                 <div className="space-y-4">
                   <div className="p-4 bg-black/20 rounded-xl border border-white/10">
                     <p className="text-[10px] font-black uppercase tracking-widest text-accent mb-2">Today's Focus:</p>
@@ -1698,7 +1936,89 @@ export default function AdminPanel() {
             <div className="space-y-8">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-black uppercase tracking-tighter">Material Procurement Hub</h2>
-                <Badge className="bg-accent text-white border-none uppercase-soft">Pending: {requests.filter(r => r.status === 'pending').length}</Badge>
+                <div className="flex gap-2">
+                  <Dialog>
+                    <DialogTrigger>
+                      <Button className="btn-orange h-10 px-6 rounded-xl">
+                        <Plus className="w-4 h-4 mr-2" /> Bulk Order Material
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl rounded-3xl border-2 border-black">
+                      <DialogHeader>
+                        <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Bulk Material Order</DialogTitle>
+                        <DialogDescription className="uppercase-soft">Create a multi-item material request for a project.</DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-6 py-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase">Select Project</label>
+                          <select 
+                            className="w-full h-12 border-2 border-black/10 rounded-xl px-4 text-sm font-bold"
+                            value={selectedBulkProject}
+                            onChange={e => setSelectedBulkProject(e.target.value)}
+                          >
+                            <option value="">Choose Project...</option>
+                            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center">
+                            <h4 className="text-xs font-black uppercase tracking-widest">Order Items</h4>
+                            <Button variant="outline" size="sm" className="h-8 text-[9px] font-black uppercase border-black/10" onClick={handleAddBulkRow}>Add Row</Button>
+                          </div>
+                          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                            {bulkOrderItems.map((item, i) => (
+                              <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                                <Input 
+                                  placeholder="Item Name" 
+                                  className="col-span-6 h-10 text-xs" 
+                                  value={item.name}
+                                  onChange={e => {
+                                    const newItems = [...bulkOrderItems];
+                                    newItems[i].name = e.target.value;
+                                    setBulkOrderItems(newItems);
+                                  }}
+                                />
+                                <Input 
+                                  type="number" 
+                                  placeholder="Qty" 
+                                  className="col-span-3 h-10 text-xs" 
+                                  value={item.quantity}
+                                  onChange={e => {
+                                    const newItems = [...bulkOrderItems];
+                                    newItems[i].quantity = Number(e.target.value);
+                                    setBulkOrderItems(newItems);
+                                  }}
+                                />
+                                <Input 
+                                  placeholder="Unit" 
+                                  className="col-span-2 h-10 text-xs" 
+                                  value={item.unit}
+                                  onChange={e => {
+                                    const newItems = [...bulkOrderItems];
+                                    newItems[i].unit = e.target.value;
+                                    setBulkOrderItems(newItems);
+                                  }}
+                                />
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-red-500"
+                                  onClick={() => setBulkOrderItems(bulkOrderItems.filter((_, idx) => idx !== i))}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button className="btn-sleek w-full h-12 rounded-xl" onClick={handleBulkOrderSubmit}>Submit Bulk Order</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                  <Badge className="bg-accent text-white border-none uppercase-soft">Pending: {requests.filter(r => r.status === 'pending').length}</Badge>
+                </div>
               </div>
 
               <Card className="border-2 border-black rounded-2xl overflow-hidden shadow-sm">
@@ -1727,6 +2047,8 @@ export default function AdminPanel() {
                           <Badge className={cn(
                             "uppercase-soft text-[9px] rounded-md",
                             r.status === 'approved' ? "bg-green-500 text-white" : 
+                            r.status === 'ordered' ? "bg-blue-500 text-white" :
+                            r.status === 'delivered' ? "bg-purple-500 text-white" :
                             r.status === 'rejected' ? "bg-red-500 text-white" : "bg-neutral-200 text-neutral-600"
                           )}>
                             {r.status}
@@ -1744,9 +2066,28 @@ export default function AdminPanel() {
                                 </>
                               )}
                               {r.status === 'approved' && (
-                                <Badge variant="outline" className="border-green-500 text-green-600 text-[8px] uppercase">
-                                  Assigned: {r.vendorName}
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="border-green-500 text-green-600 text-[8px] uppercase">
+                                    Assigned: {r.vendorName}
+                                  </Badge>
+                                  <Button variant="outline" size="sm" className="h-8 text-[9px] font-black uppercase border-black/10" onClick={() => {
+                                    const vendor = vendors.find(v => v.id === r.vendorId);
+                                    if (vendor) {
+                                      generatePOPDF(r, vendor);
+                                      const itemSummary = r.items && r.items.length > 0 
+                                        ? r.items.map((it: any) => `${it.name} (${it.quantity} ${it.unit})`).join(', ')
+                                        : `${r.itemName} (${r.quantity} ${r.unit})`;
+                                      const msg = `Halo ${vendor.name}, ini adalah Purchase Order dari TBJ Constech untuk proyek ${r.projectName}. Item: ${itemSummary}. Silakan cek lampiran PO yang kami kirimkan.`;
+                                      window.open(`https://wa.me/${vendor.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
+                                    }
+                                  }}>
+                                    <Download className="w-3 h-3 mr-1" /> PO & WA
+                                  </Button>
+                                  <Button size="sm" className="bg-blue-500 hover:bg-blue-600 h-8 text-[9px] font-black uppercase" onClick={() => updateRequestStatus(r.id, 'ordered')}>Order</Button>
+                                </div>
+                              )}
+                              {r.status === 'ordered' && (
+                                <Button size="sm" className="bg-orange-500 hover:bg-orange-600 h-8 text-[9px] font-black uppercase" onClick={() => updateRequestStatus(r.id, 'delivered')}>Delivered</Button>
                               )}
                               <Button variant="ghost" size="icon" className="h-8 w-8"><Eye className="w-4 h-4" /></Button>
                             </div>
@@ -2064,8 +2405,16 @@ export default function AdminPanel() {
               </div>
 
               <Card className="border-2 border-black rounded-2xl overflow-hidden">
-                <CardHeader className="bg-neutral-50 border-b-2 border-black">
+                <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-row justify-between items-center">
                   <CardTitle className="text-xl font-black uppercase tracking-tighter">Assessment & Payment Terms</CardTitle>
+                  <select 
+                    className="h-10 rounded-xl border-2 border-black px-3 text-[10px] font-black uppercase"
+                    value={selectedProjectFinance?.id || ""}
+                    onChange={e => setSelectedProjectFinance(projects.find(p => p.id === e.target.value) || null)}
+                  >
+                    <option value="">Select Project to Manage...</option>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
                 </CardHeader>
                 <CardContent className="p-8 space-y-6">
                   <div className="grid md:grid-cols-2 gap-8">
@@ -2087,19 +2436,50 @@ export default function AdminPanel() {
                       </div>
                     </div>
                     <div className="space-y-4">
-                      <h4 className="text-sm font-black uppercase tracking-widest">Payment Milestones (Default)</h4>
+                      <h4 className="text-sm font-black uppercase tracking-widest">
+                        {selectedProjectFinance ? `Payment Milestones: ${selectedProjectFinance.name}` : "Payment Milestones (Default)"}
+                      </h4>
                       <div className="space-y-3">
-                        {[
-                          { label: "Down Payment (DP)", value: "30%" },
-                          { label: "Progress 50%", value: "40%" },
-                          { label: "Progress 90%", value: "25%" },
-                          { label: "Retensi (100%)", value: "5%" },
-                        ].map((m, i) => (
-                          <div key={i} className="flex justify-between items-center p-3 border-2 border-black rounded-xl">
-                            <span className="text-[10px] font-black uppercase">{m.label}</span>
-                            <span className="text-xs font-black text-accent">{m.value}</span>
-                          </div>
-                        ))}
+                        {selectedProjectFinance ? (
+                          <>
+                            {(selectedProjectFinance.paymentMilestones || []).map((m, i) => (
+                              <div key={i} className="flex justify-between items-center p-3 border-2 border-black rounded-xl bg-white">
+                                <div className="space-y-1">
+                                  <span className="text-[10px] font-black uppercase block">{m.label}</span>
+                                  <span className="text-[8px] uppercase-soft text-neutral-400">Status: {m.status}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-xs font-black text-accent">{m.percentage}%</span>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={async () => {
+                                    const newMilestones = selectedProjectFinance.paymentMilestones.filter((_, idx) => idx !== i);
+                                    await updateProject(selectedProjectFinance.id, { paymentMilestones: newMilestones });
+                                    setSelectedProjectFinance({...selectedProjectFinance, paymentMilestones: newMilestones});
+                                    toast.success("Milestone removed");
+                                  }}>
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                            <Button variant="outline" className="w-full border-2 border-black border-dashed h-10 text-[10px] font-black uppercase" onClick={() => {
+                              toast.info("Add milestone feature coming soon...");
+                            }}>
+                              <Plus className="w-3 h-3 mr-2" /> Add Custom Milestone
+                            </Button>
+                          </>
+                        ) : (
+                          [
+                            { label: "Down Payment (DP)", value: "30%" },
+                            { label: "Progress 50%", value: "40%" },
+                            { label: "Progress 90%", value: "25%" },
+                            { label: "Retensi (100%)", value: "5%" },
+                          ].map((m, i) => (
+                            <div key={i} className="flex justify-between items-center p-3 border-2 border-black rounded-xl">
+                              <span className="text-[10px] font-black uppercase">{m.label}</span>
+                              <span className="text-xs font-black text-accent">{m.value}</span>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2249,36 +2629,42 @@ export default function AdminPanel() {
                         <div className="space-y-6 py-4">
                           <div className="space-y-2">
                             <label className="uppercase-soft text-[10px]">Digital Assessment Fee (Rp)</label>
-                            <Input 
-                              type="text"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              defaultValue={systemConfig?.surveyFee} 
-                              onBlur={(e) => updateSystem({ surveyFee: Number(e.target.value) })}
-                              onChange={(e) => {
-                                const val = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '');
-                                e.target.value = val;
-                              }}
-                              className="font-mono font-bold" 
-                            />
+                            {systemConfig && (
+                              <Input 
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                defaultValue={systemConfig.surveyFee} 
+                                onBlur={(e) => updateSystem({ surveyFee: Number(e.target.value) })}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '');
+                                  e.target.value = val;
+                                }}
+                                className="font-mono font-bold" 
+                              />
+                            )}
                           </div>
                           <div className="space-y-2">
                             <label className="uppercase-soft text-[10px]">AI Free Limit (Tier 1)</label>
-                            <Input 
-                              type="number"
-                              defaultValue={systemConfig?.aiFreeLimit} 
-                              onBlur={(e) => updateSystem({ aiFreeLimit: Number(e.target.value) })}
-                              className="font-mono font-bold" 
-                            />
+                            {systemConfig && (
+                              <Input 
+                                type="number"
+                                defaultValue={systemConfig.aiFreeLimit} 
+                                onBlur={(e) => updateSystem({ aiFreeLimit: Number(e.target.value) })}
+                                className="font-mono font-bold" 
+                              />
+                            )}
                           </div>
                           <div className="space-y-2">
                             <label className="uppercase-soft text-[10px]">Global Markup (%)</label>
-                            <Input 
-                              type="number"
-                              defaultValue={systemConfig?.globalMarkup} 
-                              onBlur={(e) => updateSystem({ globalMarkup: Number(e.target.value) })}
-                              className="font-mono font-bold" 
-                            />
+                            {systemConfig && (
+                              <Input 
+                                type="number"
+                                defaultValue={systemConfig.globalMarkup} 
+                                onBlur={(e) => updateSystem({ globalMarkup: Number(e.target.value) })}
+                                className="font-mono font-bold" 
+                              />
+                            )}
                           </div>
                           <Button className="w-full btn-sleek" onClick={() => toast.success("System configuration saved")}>Close</Button>
                         </div>

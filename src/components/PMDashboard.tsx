@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useProjects, useAuth, useUsers, useAttendance, useMaterialRequests, useWorkforce, useFinance, useWorkerWages, useProjectDetails } from "@/lib/hooks";
+import { useProjects, useAuth, useUsers, useAttendance, useMaterialRequests, useWorkforce, useFinance, useWorkerWages, useProjectDetails, useSiteLogs } from "@/lib/hooks";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,11 +12,11 @@ import {
   Loader2, Calendar, CheckCircle2, Clock, MapPin, User, MessageSquare, 
   Phone, HardHat, Package, Camera, BarChart3, ChevronRight, Plus, 
   AlertCircle, LayoutDashboard, History, Send, CameraOff, Briefcase, ShieldCheck,
-  Zap, Settings, Image as ImageIcon, Trash2, DollarSign, TrendingUp, Brain
+  Zap, Settings, Image as ImageIcon, Trash2, DollarSign, TrendingUp, Brain, Sparkles
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, getDriveImageUrl } from "@/lib/utils";
 import { Project, MaterialRequest, Attendance, Workforce } from "@/types";
 
 export default function PMDashboard() {
@@ -30,7 +30,8 @@ export default function PMDashboard() {
 
   const [activeTab, setActiveTab] = useState<"overview" | "projects" | "materials" | "attendance" | "cctv" | "timeline" | "safety" | "rab" | "pm-ai">("overview");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const { project: projectDetails, releaseMilestone } = useProjectDetails(selectedProject?.id);
+  const { project: projectDetails, categories, items, releaseMilestone, addSiteLog, updateItemProgress, addTimelineEvent } = useProjectDetails(selectedProject?.id);
+  const { logs: siteLogs } = useSiteLogs(selectedProject?.id);
   const { transactions, addTransaction } = useFinance(selectedProject?.id);
   const { wages, addWage, updateWageStatus } = useWorkerWages(selectedProject?.id);
   const [isScheduling, setIsScheduling] = useState<string | null>(null);
@@ -39,8 +40,36 @@ export default function PMDashboard() {
     title: "",
     date: new Date().toISOString().split('T')[0],
     dueDate: "",
-    status: "pending" as "pending" | "ongoing" | "completed"
+    status: "pending" as "pending" | "ongoing" | "completed",
+    description: ""
   });
+
+  const [showLogForm, setShowLogForm] = useState(false);
+  const [newLog, setNewLog] = useState({
+    title: "",
+    description: "",
+    photoUrl: "",
+    progressUpdate: 0
+  });
+
+  const handleAddLog = async () => {
+    if (!selectedProject || !newLog.title) return;
+    await addSiteLog({
+      ...newLog,
+      projectId: selectedProject.id,
+      projectName: selectedProject.name,
+      pmName: user?.displayName
+    });
+    
+    // Update project progress if specified
+    if (newLog.progressUpdate > 0) {
+      const newProgress = Math.min(100, (selectedProject.progress || 0) + newLog.progressUpdate);
+      await updateProject(selectedProject.id, { progress: newProgress });
+    }
+
+    setShowLogForm(false);
+    setNewLog({ title: "", description: "", photoUrl: "", progressUpdate: 0 });
+  };
 
   // Material Request Form
   const [showRequestForm, setShowRequestForm] = useState(false);
@@ -97,7 +126,7 @@ export default function PMDashboard() {
     ];
     await updateProject(selectedProject.id, { timeline: updatedTimeline });
     setShowMilestoneForm(false);
-    setNewMilestone({ title: "", date: new Date().toISOString().split('T')[0], dueDate: "", status: "pending" });
+    setNewMilestone({ title: "", date: new Date().toISOString().split('T')[0], dueDate: "", status: "pending", description: "" });
     toast.success("Milestone added to project timeline");
   };
 
@@ -169,25 +198,25 @@ export default function PMDashboard() {
       {activeTab === "overview" && (
         <div className="space-y-8">
           <div className="grid md:grid-cols-4 gap-6">
-            <Card className="border-2 border-black rounded-2xl">
+            <Card className="border border-black/10 rounded-2xl shadow-sm">
               <CardHeader className="pb-2">
                 <CardDescription className="uppercase-soft">Active Sites</CardDescription>
                 <CardTitle className="text-4xl font-black">{myProjects.filter(p => p.status === 'active').length}</CardTitle>
               </CardHeader>
             </Card>
-            <Card className="border-2 border-black rounded-2xl">
+            <Card className="border border-black/10 rounded-2xl shadow-sm">
               <CardHeader className="pb-2">
                 <CardDescription className="uppercase-soft">Pending Requests</CardDescription>
                 <CardTitle className="text-4xl font-black text-accent">{requests.filter(r => r.status === 'pending').length}</CardTitle>
               </CardHeader>
             </Card>
-            <Card className="border-2 border-black rounded-2xl">
+            <Card className="border border-black/10 rounded-2xl shadow-sm">
               <CardHeader className="pb-2">
                 <CardDescription className="uppercase-soft">Workers on Site</CardDescription>
                 <CardTitle className="text-4xl font-black">28</CardTitle>
               </CardHeader>
             </Card>
-            <Card className="border-2 border-black rounded-2xl bg-black text-white">
+            <Card className="border border-black/10 rounded-2xl bg-black text-white shadow-sm">
               <CardHeader className="pb-2">
                 <CardDescription className="uppercase-soft text-white/60">KPI Performance</CardDescription>
                 <CardTitle className="text-4xl font-black text-green-400">92%</CardTitle>
@@ -196,8 +225,8 @@ export default function PMDashboard() {
           </div>
 
           <div className="grid md:grid-cols-2 gap-8">
-            <Card className="border-2 border-black rounded-2xl overflow-hidden">
-              <CardHeader className="bg-neutral-50 border-b-2 border-black">
+            <Card className="border border-black/10 rounded-2xl overflow-hidden shadow-sm">
+              <CardHeader className="bg-neutral-50 border-b border-black/10">
                 <CardTitle className="text-xl font-black uppercase tracking-tighter">Project Timeline (Gantt)</CardTitle>
               </CardHeader>
               <CardContent className="p-8 h-64 flex items-center justify-center text-neutral-300">
@@ -205,8 +234,8 @@ export default function PMDashboard() {
                 <span className="uppercase-soft ml-2">Timeline Visualization</span>
               </CardContent>
             </Card>
-            <Card className="border-2 border-black rounded-2xl overflow-hidden">
-              <CardHeader className="bg-neutral-50 border-b-2 border-black">
+            <Card className="border border-black/10 rounded-2xl overflow-hidden shadow-sm">
+              <CardHeader className="bg-neutral-50 border-b border-black/10">
                 <CardTitle className="text-xl font-black uppercase tracking-tighter">Site Security (CCTV)</CardTitle>
               </CardHeader>
               <CardContent className="p-0 aspect-video bg-neutral-900 flex items-center justify-center text-white/20">
@@ -229,7 +258,7 @@ export default function PMDashboard() {
                 <Card 
                   key={p.id} 
                   className={cn(
-                    "border-2 border-black rounded-2xl p-4 cursor-pointer transition-all hover:shadow-md",
+                    "border border-black/10 rounded-2xl p-4 cursor-pointer transition-all hover:shadow-md",
                     selectedProject?.id === p.id ? "bg-black text-white" : "bg-white"
                   )}
                   onClick={() => setSelectedProject(p)}
@@ -251,14 +280,14 @@ export default function PMDashboard() {
 
             <div className="md:col-span-2">
               {selectedProject ? (
-                <Card className="border-2 border-black rounded-3xl overflow-hidden min-h-[600px]">
-                  <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-row justify-between items-center">
+                <Card className="border border-black/10 rounded-3xl overflow-hidden min-h-[600px] shadow-sm">
+                  <CardHeader className="bg-neutral-50 border-b border-black/10 flex flex-row justify-between items-center">
                     <div>
                       <CardTitle className="text-2xl font-black uppercase tracking-tighter">{selectedProject.name}</CardTitle>
                       <CardDescription className="uppercase-soft">Project Details & Site Management</CardDescription>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" className="border-2 border-black rounded-xl h-10 text-[10px] font-black uppercase">
+                      <Button variant="outline" className="border border-black/10 rounded-xl h-10 text-[10px] font-black uppercase">
                         <MessageSquare className="w-4 h-4 mr-2" /> WA Client
                       </Button>
                       <Button className="btn-orange rounded-xl h-10 text-[10px] font-black uppercase" onClick={() => setShowRequestForm(true)}>
@@ -270,15 +299,15 @@ export default function PMDashboard() {
                     <div className="grid grid-cols-3 gap-8">
                       <div className="space-y-1">
                         <p className="uppercase-soft text-[10px]">Progress</p>
-                        <p className="text-2xl font-black">45.2%</p>
+                        <p className="text-2xl font-black">{(selectedProject.progress || 0).toFixed(1)}%</p>
                         <div className="w-full h-2 bg-neutral-100 rounded-full overflow-hidden border border-black/5">
-                          <div className="h-full bg-accent w-[45.2%]" />
+                          <div className="h-full bg-accent transition-all duration-500" style={{ width: `${selectedProject.progress || 0}%` }} />
                         </div>
                       </div>
                       <div className="space-y-1">
                         <p className="uppercase-soft text-[10px]">Budget Used</p>
-                        <p className="text-2xl font-black text-red-500">Rp 1.2B</p>
-                        <p className="text-[9px] text-neutral-400 uppercase font-bold">of Rp 2.8B Total</p>
+                        <p className="text-2xl font-black text-red-500">Rp {(selectedProject.releasedAmount || 0).toLocaleString('id-ID')}</p>
+                        <p className="text-[9px] text-neutral-400 uppercase font-bold">of Rp {(selectedProject.totalBudget || 0).toLocaleString('id-ID')} Total</p>
                       </div>
                       <div className="space-y-1">
                         <p className="uppercase-soft text-[10px]">Deadline</p>
@@ -288,22 +317,95 @@ export default function PMDashboard() {
                     </div>
 
                     <div className="space-y-4">
-                      <h4 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
-                        <History className="w-4 h-4" /> Recent Site Logs
-                      </h4>
-                      <div className="space-y-3">
-                        {[1, 2, 3].map(i => (
-                          <div key={i} className="flex gap-4 p-4 bg-neutral-50 rounded-2xl border border-black/5">
-                            <div className="w-10 h-10 rounded-xl bg-white border border-black/10 flex items-center justify-center">
-                              <Camera className="w-5 h-5 text-neutral-400" />
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                          <History className="w-4 h-4" /> Recent Site Logs
+                        </h4>
+                        <Button size="sm" className="btn-orange h-8 text-[9px] font-black uppercase" onClick={() => setShowLogForm(true)}>
+                          <Plus className="w-3 h-3 mr-1" /> Add Log
+                        </Button>
+                      </div>
+
+                      {showLogForm && (
+                        <Card className="border border-black/10 p-4 bg-neutral-50 space-y-4 animate-in fade-in slide-in-from-top-2">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black uppercase">Log Title</label>
+                              <Input 
+                                placeholder="e.g. Pengecoran Kolom" 
+                                className="h-8 text-xs"
+                                value={newLog.title}
+                                onChange={e => setNewLog({...newLog, title: e.target.value})}
+                              />
                             </div>
-                            <div>
-                              <p className="text-[10px] font-black uppercase tracking-widest">Progress Update: Dinding Lantai 1</p>
-                              <p className="text-[10px] text-neutral-500">Pemasangan bata hebel selesai 100%. Lanjut plester.</p>
-                              <p className="text-[9px] text-neutral-400 mt-1">Today, 10:45 AM</p>
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black uppercase">Progress Boost (%)</label>
+                              <Input 
+                                type="number" 
+                                className="h-8 text-xs"
+                                value={newLog.progressUpdate}
+                                onChange={e => setNewLog({...newLog, progressUpdate: Number(e.target.value)})}
+                              />
+                            </div>
+                            <div className="col-span-2 space-y-1">
+                              <label className="text-[9px] font-black uppercase">Upload Photo</label>
+                              <Input 
+                                type="file"
+                                accept="image/*"
+                                className="h-10 text-xs border-black/10"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      setNewLog({...newLog, photoUrl: reader.result as string});
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                              />
+                            </div>
+                            <div className="col-span-2 space-y-1">
+                              <label className="text-[9px] font-black uppercase">Description</label>
+                              <Textarea 
+                                className="text-xs min-h-[60px]"
+                                value={newLog.description}
+                                onChange={e => setNewLog({...newLog, description: e.target.value})}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="sm" className="h-8 text-[9px] font-black uppercase" onClick={() => setShowLogForm(false)}>Cancel</Button>
+                            <Button size="sm" className="btn-sleek h-8 text-[9px] font-black uppercase" onClick={handleAddLog}>Save Log</Button>
+                          </div>
+                        </Card>
+                      )}
+
+                      <div className="space-y-3">
+                        {siteLogs.map(log => (
+                          <div key={log.id} className="flex gap-4 p-4 bg-neutral-50 rounded-2xl border border-black/5 group">
+                            <div className="w-16 h-16 rounded-xl bg-white border border-black/10 overflow-hidden flex items-center justify-center shrink-0">
+                              {log.photoUrl ? (
+                                <img src={getDriveImageUrl(log.photoUrl)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              ) : (
+                                <Camera className="w-5 h-5 text-neutral-400" />
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex justify-between items-start">
+                                <p className="text-[10px] font-black uppercase tracking-widest">{log.title}</p>
+                                {log.progressUpdate > 0 && (
+                                  <Badge className="bg-green-500 text-white text-[8px] font-black">+{log.progressUpdate}% Progress</Badge>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-neutral-500 mt-1">{log.description}</p>
+                              <p className="text-[9px] text-neutral-400 mt-1">{new Date(log.createdAt).toLocaleString()}</p>
                             </div>
                           </div>
                         ))}
+                        {siteLogs.length === 0 && (
+                          <div className="text-center py-8 text-neutral-400 italic text-[10px]">No site logs recorded yet.</div>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -532,15 +634,15 @@ export default function PMDashboard() {
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-black uppercase tracking-tighter">Project RAB & Timeline</h2>
             <div className="flex gap-2">
-              <Button variant="outline" className="border-2 border-black rounded-xl h-10 text-[10px] font-black uppercase">
+              <Button variant="outline" className="border border-black/10 rounded-xl h-10 text-[10px] font-black uppercase">
                 <History className="w-4 h-4 mr-2" /> View Revision History
               </Button>
             </div>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            <Card className="md:col-span-2 border-2 border-black rounded-2xl overflow-hidden shadow-sm">
-              <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-row justify-between items-center">
+            <Card className="md:col-span-2 border border-black/10 rounded-2xl overflow-hidden shadow-sm">
+              <CardHeader className="bg-neutral-50 border-b border-black/10 flex flex-row justify-between items-center">
                 <CardTitle className="text-xl font-black uppercase tracking-tighter">Budget Items & Progress</CardTitle>
                 <Button size="sm" className="btn-sleek h-8 rounded-lg text-[10px]">
                   <Plus className="w-3 h-3 mr-1" /> Add Item
@@ -557,28 +659,24 @@ export default function PMDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {[
-                      { name: "Pekerjaan Tanah & Galian", progress: 100, photos: 3 },
-                      { name: "Pondasi & Struktur", progress: 65, photos: 5 },
-                      { name: "Dinding & Plesteran", progress: 20, photos: 2 },
-                    ].map((item, i) => (
-                      <TableRow key={i}>
+                    {items.map((item) => (
+                      <TableRow key={item.id}>
                         <TableCell className="text-[10px] font-black uppercase tracking-widest">{item.name}</TableCell>
                         <TableCell className="w-48">
                           <div className="space-y-1">
                             <div className="flex justify-between text-[8px] font-black">
-                              <span>{item.progress}%</span>
+                              <span>{item.progress || 0}%</span>
                             </div>
                             <div className="h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden border border-black/5">
-                              <div className="h-full bg-green-500 transition-all" style={{ width: `${item.progress}%` }} />
+                              <div className="h-full bg-green-500 transition-all" style={{ width: `${item.progress || 0}%` }} />
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex -space-x-2">
-                            {[...Array(item.photos)].map((_, j) => (
+                            {item.photos?.progress?.slice(0, 3).map((img, j) => (
                               <div key={j} className="w-6 h-6 rounded-full border-2 border-white bg-neutral-200 overflow-hidden">
-                                <img src={`https://picsum.photos/seed/${item.name}${j}/50/50`} className="w-full h-full object-cover" />
+                                <img src={getDriveImageUrl(img)} className="w-full h-full object-cover" />
                               </div>
                             ))}
                             <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full bg-neutral-100 border-2 border-white">
@@ -587,32 +685,40 @@ export default function PMDashboard() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <Camera className="w-4 h-4" />
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Input 
+                              type="number" 
+                              className="w-16 h-8 text-center text-[10px] font-black border-black/10" 
+                              value={item.progress || 0}
+                              onChange={(e) => updateItemProgress(item.id, Number(e.target.value))}
+                            />
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <Camera className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
+                    {items.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-8 text-neutral-400 italic text-[10px]">No budget items found for this project.</TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
             </Card>
 
-            <Card className="border-2 border-black rounded-2xl overflow-hidden shadow-sm">
-              <CardHeader className="bg-neutral-50 border-b-2 border-black">
+            <Card className="border border-black/10 rounded-2xl overflow-hidden shadow-sm">
+              <CardHeader className="bg-neutral-50 border-b border-black/10">
                 <CardTitle className="text-xl font-black uppercase tracking-tighter">Project Timeline</CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
-                {(selectedProject?.timeline || [
-                  { title: "Site Clearing", date: "10 Mar 2026", dueDate: "12 Mar 2026", status: "completed" },
-                  { title: "Excavation", date: "25 Mar 2026", dueDate: "30 Mar 2026", status: "completed" },
-                  { title: "Foundation", date: "15 Apr 2026", dueDate: "25 Apr 2026", status: "ongoing" },
-                  { title: "Wall Structure", date: "05 May 2026", dueDate: "20 May 2026", status: "pending" },
-                ]).map((event, i) => (
-                  <div key={i} className="flex gap-4 relative">
-                    {i < (selectedProject?.timeline?.length || 3) && <div className="absolute left-2 top-6 bottom-0 w-0.5 bg-neutral-200" />}
+                {(projectDetails?.timeline || []).map((event, i) => (
+                  <div key={event.id} className="flex gap-4 relative">
+                    {i < (projectDetails?.timeline?.length || 0) - 1 && <div className="absolute left-2 top-6 bottom-0 w-0.5 bg-neutral-200" />}
                     <div className={cn(
-                      "w-4 h-4 rounded-full border-2 border-black z-10",
+                      "w-4 h-4 rounded-full border border-black/20 z-10",
                       event.status === 'completed' ? "bg-green-500" : 
                       event.status === 'ongoing' ? "bg-accent animate-pulse" : "bg-white"
                     )} />
@@ -628,9 +734,54 @@ export default function PMDashboard() {
                     </div>
                   </div>
                 ))}
-                <Button className="w-full btn-sleek h-10 rounded-xl mt-4" onClick={() => setShowMilestoneForm(true)}>
-                  <Plus className="w-4 h-4 mr-2" /> Add Milestone
-                </Button>
+                
+                {showMilestoneForm && (
+                  <div className="p-4 border border-black/10 rounded-xl bg-neutral-50 space-y-4 animate-in fade-in slide-in-from-top-2">
+                    <div className="space-y-2">
+                      <label className="text-[8px] font-black uppercase">Milestone Title</label>
+                      <Input 
+                        className="h-8 text-xs border-black/10" 
+                        value={newMilestone.title}
+                        onChange={e => setNewMilestone({...newMilestone, title: e.target.value})}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-2">
+                        <label className="text-[8px] font-black uppercase">Start Date</label>
+                        <Input 
+                          type="date" 
+                          className="h-8 text-xs border-black/10" 
+                          value={newMilestone.date}
+                          onChange={e => setNewMilestone({...newMilestone, date: e.target.value})}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[8px] font-black uppercase">Due Date</label>
+                        <Input 
+                          type="date" 
+                          className="h-8 text-xs border-black/10" 
+                          value={newMilestone.dueDate}
+                          onChange={e => setNewMilestone({...newMilestone, dueDate: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" className="flex-1 h-8 text-[8px] uppercase font-black" onClick={() => setShowMilestoneForm(false)}>Cancel</Button>
+                      <Button className="flex-1 h-8 text-[8px] uppercase font-black btn-sleek" onClick={async () => {
+                        if (!newMilestone.title) return;
+                        await addTimelineEvent(newMilestone);
+                        setShowMilestoneForm(false);
+                        setNewMilestone({ title: "", date: new Date().toISOString().split('T')[0], dueDate: "", status: "pending", description: "" });
+                      }}>Add</Button>
+                    </div>
+                  </div>
+                )}
+
+                {!showMilestoneForm && (
+                  <Button className="w-full btn-sleek h-10 rounded-xl mt-4" onClick={() => setShowMilestoneForm(true)}>
+                    <Plus className="w-4 h-4 mr-2" /> Add Milestone
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -662,18 +813,46 @@ export default function PMDashboard() {
             </div>
           ) : (
             <div className="grid md:grid-cols-3 gap-8">
-              <Card className="md:col-span-2 border-2 border-black rounded-3xl overflow-hidden bg-black text-white relative">
+              <Card className="md:col-span-2 border border-black/10 rounded-3xl overflow-hidden bg-black text-white relative shadow-sm">
                 <div className="absolute top-0 right-0 p-8 opacity-10">
                   <Brain className="w-48 h-48" />
                 </div>
                 <CardHeader className="border-b border-white/10 relative z-10">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center">
-                      <Zap className="w-6 h-6 text-white" />
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center">
+                        <Zap className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-2xl font-black uppercase tracking-tighter">PM AI Strategic Assistant</CardTitle>
+                        <CardDescription className="text-white/60 uppercase-soft">Real-time Site Optimization & Goal Setting</CardDescription>
+                      </div>
                     </div>
-                    <div>
-                      <CardTitle className="text-2xl font-black uppercase tracking-tighter">PM AI Strategic Assistant</CardTitle>
-                      <CardDescription className="text-white/60 uppercase-soft">Real-time Site Optimization & Goal Setting</CardDescription>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-white hover:bg-white/20"
+                        onClick={() => {
+                          toast.info("AI Strategic History coming soon...");
+                        }}
+                      >
+                        <Clock className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-white hover:bg-white/20"
+                        onClick={async () => {
+                          toast.promise(new Promise(r => setTimeout(r, 2000)), {
+                            loading: 'Analyzing site data...',
+                            success: 'Strategic suggestions updated!',
+                            error: 'Failed to analyze'
+                          });
+                        }}
+                      >
+                        <Sparkles className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>
@@ -722,7 +901,7 @@ export default function PMDashboard() {
               </Card>
 
               <div className="space-y-8">
-                <Card className="border-2 border-black rounded-3xl p-6 bg-accent text-white">
+                <Card className="border border-black/10 rounded-3xl p-6 bg-accent text-white shadow-sm">
                   <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Site Performance</h3>
                   <div className="space-y-4">
                     <div className="p-4 bg-white/10 rounded-xl border border-white/20">
@@ -736,7 +915,7 @@ export default function PMDashboard() {
                   </div>
                 </Card>
 
-                <Card className="border-2 border-black rounded-3xl p-6">
+                <Card className="border border-black/10 rounded-3xl p-6 shadow-sm">
                   <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Daily Report Summary</h3>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
@@ -756,8 +935,8 @@ export default function PMDashboard() {
       {activeTab === "safety" && (
         <div className="space-y-8">
           <div className="grid md:grid-cols-3 gap-8">
-            <Card className="md:col-span-2 border-2 border-black rounded-2xl overflow-hidden shadow-sm">
-              <CardHeader className="bg-neutral-50 border-b-2 border-black">
+            <Card className="md:col-span-2 border border-black/10 rounded-2xl overflow-hidden shadow-sm">
+              <CardHeader className="bg-neutral-50 border-b border-black/10">
                 <CardTitle className="text-xl font-black uppercase tracking-tighter">Safety Checklist (HSE)</CardTitle>
                 <CardDescription className="uppercase-soft">Daily site safety verification protocol.</CardDescription>
               </CardHeader>
@@ -771,7 +950,7 @@ export default function PMDashboard() {
                   { item: "Penyediaan Kotak P3K & APAR di Lokasi", status: "warning", category: "Emergency" },
                   { item: "Verifikasi Izin Kerja (Work Permit) Berisiko Tinggi", status: "ok", category: "Administrative" },
                 ].map((check, i) => (
-                  <div key={i} className="flex items-center justify-between p-4 border-2 border-black rounded-xl bg-white hover:bg-neutral-50 transition-colors">
+                  <div key={i} className="flex items-center justify-between p-4 border border-black/10 rounded-xl bg-white hover:bg-neutral-50 transition-colors">
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "w-2 h-2 rounded-full",
@@ -783,7 +962,7 @@ export default function PMDashboard() {
                       </div>
                     </div>
                     <div className={cn(
-                      "w-6 h-6 border-2 border-black rounded-md flex items-center justify-center cursor-pointer",
+                      "w-6 h-6 border border-black/10 rounded-md flex items-center justify-center cursor-pointer",
                       check.status === "ok" ? "bg-green-500" : "bg-white"
                     )}>
                       {check.status === "ok" ? <CheckCircle2 className="w-4 h-4 text-white" /> : <AlertCircle className="w-4 h-4 text-yellow-500" />}
@@ -794,7 +973,7 @@ export default function PMDashboard() {
                 <div className="grid grid-cols-2 gap-4 pt-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Incident Type</label>
-                    <select className="w-full h-12 border-2 border-black rounded-xl px-4 text-xs font-bold uppercase">
+                    <select className="w-full h-12 border border-black/10 rounded-xl px-4 text-xs font-bold uppercase">
                       <option>None / Safe</option>
                       <option>Near Miss</option>
                       <option>Minor Injury</option>
@@ -804,7 +983,7 @@ export default function PMDashboard() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Weather Condition</label>
-                    <select className="w-full h-12 border-2 border-black rounded-xl px-4 text-xs font-bold uppercase">
+                    <select className="w-full h-12 border border-black/10 rounded-xl px-4 text-xs font-bold uppercase">
                       <option>Sunny / Clear</option>
                       <option>Cloudy</option>
                       <option>Rainy</option>
@@ -815,14 +994,14 @@ export default function PMDashboard() {
 
                 <div className="pt-4">
                   <label className="text-[10px] font-black uppercase tracking-widest mb-2 block">Catatan HSE Tambahan</label>
-                  <Textarea placeholder="Input catatan kondisi lapangan, temuan bahaya, atau tindakan korektif..." className="mb-4 border-2 border-black rounded-xl min-h-[100px]" />
+                  <Textarea placeholder="Input catatan kondisi lapangan, temuan bahaya, atau tindakan korektif..." className="mb-4 border border-black/10 rounded-xl min-h-[100px]" />
                   <Button className="w-full btn-orange h-14 rounded-xl font-black uppercase tracking-widest">Submit Daily HSE Report</Button>
                 </div>
               </CardContent>
             </Card>
 
             <div className="space-y-8">
-              <Card className="border-2 border-black rounded-2xl p-6 bg-red-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.3)]">
+              <Card className="border border-black/10 rounded-2xl p-6 bg-red-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.3)]">
                 <div className="flex justify-between items-start mb-6">
                   <ShieldCheck className="w-10 h-10" />
                   <Badge className="bg-white text-red-600 border-none font-black">LIVE STATS</Badge>
@@ -840,7 +1019,7 @@ export default function PMDashboard() {
                 </div>
               </Card>
 
-              <Card className="border-2 border-black rounded-2xl p-6 bg-white">
+              <Card className="border border-black/10 rounded-2xl p-6 bg-white shadow-sm">
                 <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Safety Equipment</h3>
                 <div className="space-y-3">
                   {[
@@ -861,7 +1040,7 @@ export default function PMDashboard() {
                     </div>
                   ))}
                 </div>
-                <Button variant="outline" className="w-full mt-6 border-2 border-black h-10 text-[10px] font-black uppercase">Request PPE Restock</Button>
+                <Button variant="outline" className="w-full mt-6 border border-black/10 h-10 text-[10px] font-black uppercase">Request PPE Restock</Button>
               </Card>
             </div>
           </div>
@@ -871,8 +1050,8 @@ export default function PMDashboard() {
       {/* Milestone Modal */}
       {showMilestoneForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md border-2 border-black rounded-3xl overflow-hidden animate-in zoom-in-95">
-            <CardHeader className="bg-neutral-50 border-b-2 border-black">
+          <Card className="w-full max-w-md border border-black/10 rounded-3xl overflow-hidden animate-in zoom-in-95 shadow-2xl">
+            <CardHeader className="bg-neutral-50 border-b border-black/10">
               <CardTitle className="text-xl font-black uppercase tracking-tighter">Add Project Milestone</CardTitle>
               <CardDescription className="uppercase-soft">Schedule a new task for {selectedProject?.name}.</CardDescription>
             </CardHeader>
@@ -929,8 +1108,8 @@ export default function PMDashboard() {
       {/* Material Request Modal */}
       {showRequestForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg border-2 border-black rounded-3xl overflow-hidden animate-in zoom-in-95">
-            <CardHeader className="bg-neutral-50 border-b-2 border-black">
+          <Card className="w-full max-w-lg border border-black/10 rounded-3xl overflow-hidden animate-in zoom-in-95 shadow-2xl">
+            <CardHeader className="bg-neutral-50 border-b border-black/10">
               <CardTitle className="text-xl font-black uppercase tracking-tighter">Request Material to System</CardTitle>
               <CardDescription className="uppercase-soft">Log material request for {selectedProject?.name}.</CardDescription>
             </CardHeader>

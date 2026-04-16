@@ -85,6 +85,8 @@ export interface BudgetItem {
     after?: string[];
   };
   progress?: number; // 0 to 100
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface Property {
@@ -98,6 +100,7 @@ export interface Property {
   photos: string[];
   features: string[];
   status: "available" | "sold" | "rented" | "requested";
+  category?: string; // e.g. Rumah, Ruko, Tanah
 }
 
 export interface Workforce {
@@ -106,6 +109,7 @@ export interface Workforce {
   ktp: string;
   photoUrl: string;
   role: "pm" | "designer" | "drafter" | "tukang" | "mandor" | "kenek" | string;
+  skill?: string; // Added for worker specialization
   whatsapp: string;
   projectId?: string; // Label proyek dimana
   status: "active" | "inactive";
@@ -134,12 +138,13 @@ export interface MaterialRequest {
   quantity: number;
   unit: string;
   note: string;
-  status: "pending" | "approved" | "rejected" | "purchased";
+  status: "pending" | "approved" | "rejected" | "purchased" | "ordered" | "delivered";
   vendorId?: string;
   vendorName?: string;
   createdAt: string;
   updatedAt: string;
   log: { time: string; action: string; note?: string }[];
+  items?: { name: string; quantity: number; unit: string }[];
 }
 
 export interface WorkItemMaster {
@@ -173,6 +178,7 @@ export interface UserProfile {
   createdAt: string;
   lastPaymentStatus?: "unpaid" | "pending" | "paid";
   lifetimeAccess?: boolean; // Added for lifetime access
+  waVerified?: boolean; // Added for WA OTP verification
 }
 
 export interface AIEstimateItem {

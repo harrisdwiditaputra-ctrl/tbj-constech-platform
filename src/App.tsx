@@ -22,9 +22,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { WorkItemMaster, Property, AIEstimateResponse } from "@/types";
-import { cn } from "@/lib/utils";
+import { cn, getDriveImageUrl } from "@/lib/utils";
 import { getAIEstimation } from "./services/aiEstimator";
-import { Plus, Trash2, ChevronRight, Loader2, Calculator, Search, CheckCircle2, Phone, Mail, Lock, CreditCard, Image as ImageIcon, Calendar, FileCheck, Clock, ExternalLink, ChevronDown, ChevronUp, Home, Wrench, PenTool, Building2, MapPin, Ruler, Layers, FileText, Gavel, Key, Camera, Upload, UserCheck, Map as MapIcon, Share2, Instagram, Download, Star, Settings, User, MessageSquare, ShieldCheck } from "lucide-react";
+import { generateAIPDF } from "@/lib/pdfUtils";
+import { Plus, Trash2, ChevronRight, Loader2, Calculator, Search, CheckCircle2, Phone, Mail, Lock, CreditCard, Image as ImageIcon, Calendar, FileCheck, Clock, ExternalLink, ChevronDown, ChevronUp, Home, Wrench, PenTool, Building2, MapPin, Ruler, Layers, FileText, Gavel, Key, Camera, Upload, UserCheck, Map as MapIcon, Share2, Instagram, Download, Star, Settings, User, MessageSquare, ShieldCheck, Sparkles } from "lucide-react";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import Gallery from "./components/Gallery";
@@ -33,6 +34,7 @@ import AdminPanel from "./components/AdminPanel";
 import PMDashboard from "./components/PMDashboard";
 import AIAgent from "./components/AIAgent";
 import RabPage from "./pages/RabPage";
+import ImportPage from "./pages/ImportPage";
 
 // Fix for default marker icon in React-Leaflet using CDN for reliability
 const markerIcon = "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png";
@@ -279,6 +281,8 @@ const ProjectsPage = ({ user }: { user: any }) => {
 
 const ProjectDetail = () => {
   const { id } = useParams();
+  const { user } = useAuth();
+  const { masterData } = useMasterData(user?.role);
   const { project, categories, items, loading, addCategory, addItem, deleteCategory, deleteItem, updateProjectStatus, updateItemProgress } = useProjectDetails(id);
   const [newCatName, setNewCatName] = useState("");
   const [newItemName, setNewItemName] = useState("");
@@ -294,17 +298,19 @@ const ProjectDetail = () => {
 
   useEffect(() => {
     if (searchQuery.length > 1) {
-      const filtered = WORK_ITEMS_MASTER.filter(item => 
+      const dataToUse = masterData && masterData.length > 0 ? masterData : WORK_ITEMS_MASTER;
+      const filtered = dataToUse.filter(item => 
         item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchQuery.toLowerCase())
+        item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.code && item.code.toLowerCase().includes(searchQuery.toLowerCase()))
       );
-      setSearchResults(filtered.slice(0, 10));
+      setSearchResults(filtered.slice(0, 15));
       setIsSearching(true);
     } else {
       setSearchResults([]);
       setIsSearching(false);
     }
-  }, [searchQuery]);
+  }, [searchQuery, masterData]);
 
   const selectMasterItem = (item: WorkItemMaster) => {
     setNewItemName(item.name);
@@ -622,6 +628,11 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
     notes: ""
   });
   const [aiEstimation, setAiEstimation] = useState<AIEstimateResponse | null>(null);
+  const [waNumber, setWaNumber] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [showOtpDialog, setShowOtpDialog] = useState(false);
   const [expandedRenovasi, setExpandedRenovasi] = useState(false);
   const [leadData, setLeadData] = useState({
     whatsapp: user.whatsapp || "",
@@ -701,24 +712,11 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
       ));
 
     if (isAIRequired) {
-      if (!userProblem) {
-        toast.error("Mohon isi deskripsi kebutuhan Anda untuk analisa AI.");
-        return;
-      }
-
       // Tier 1 AI Analysis Limit Check
       const isStaff = user?.role === "admin" || user?.role === "pm";
       const isPro = user?.tier === "survey" || user?.tier === "deal";
       const freeLimit = systemConfig?.aiFreeLimit || 1;
       
-      if (!isStaff && !isPro) {
-        if ((user?.aiUsageCount || 0) >= freeLimit) {
-          toast.error(`Batas analisa gratis (${freeLimit}x) telah tercapai. Silakan lakukan Survey Lokasi (Digital Assessment) untuk akses penuh.`);
-          setStep(6); // Redirect to survey booking
-          return;
-        }
-      }
-
       setIsAnalyzing(true);
       try {
         let prompt = userProblem;
@@ -728,6 +726,12 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
         const result = await getAIEstimation(prompt, projectData.type, masterData);
         setAiEstimation(result);
         
+        if (!isStaff && !isPro && (user?.aiUsageCount || 0) >= freeLimit) {
+          toast.info("Analisa AI selesai. Silakan verifikasi WhatsApp untuk melihat detail lengkap.");
+          setStep(6); // Redirect to survey booking & summary
+          return;
+        }
+
         // Increment AI Usage Count for non-staff
         if (!isStaff) {
           await incrementAIUsage();
@@ -828,7 +832,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
         </div>
       )}
 
-      <Card className="border-2 border-black shadow-[20px_20px_0px_0px_rgba(0,0,0,0.05)] overflow-hidden rounded-2xl">
+      <Card className="border border-black/10 shadow-xl overflow-hidden rounded-2xl">
         <CardContent className="p-0">
           {user?.role === "admin" && step === 1 && (
             <div className="bg-black text-white p-4 flex justify-between items-center">
@@ -1523,7 +1527,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                             {Object.entries(items).map(([name, detail]) => (
                               <div key={name} className="flex justify-between items-center text-sm">
                                 <span className="font-bold uppercase tracking-widest text-[10px]">{name}</span>
-                                <span className="font-mono font-bold">{detail.size} {WORK_ITEMS_MASTER[room]?.[name]?.unit || "m2"}</span>
+                                <span className="font-mono font-bold">{detail.size} {masterData.find(i => i.name === name)?.unit || "m2"}</span>
                               </div>
                             ))}
                           </div>
@@ -1537,7 +1541,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                           <Layers className="w-6 h-6" /> {cat}
                         </h3>
                         <div className="grid gap-4">
-                          {WORK_ITEMS_MASTER.filter(i => i.category.toLowerCase().includes(cat.toLowerCase())).slice(0, 3).map(item => {
+                          {(masterData.length > 0 ? masterData : WORK_ITEMS_MASTER).filter(i => i.category.toLowerCase().includes(cat.toLowerCase())).slice(0, 3).map(item => {
                             const selected = selectedItems.find(si => si.item.id === item.id);
                             return (
                               <div key={item.id} className="flex items-center gap-6 p-6 border-2 border-black bg-white">
@@ -1877,8 +1881,65 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                   Dapatkan estimasi detail, validasi teknis, dan konsultasi langsung dengan tim ahli kami.
                 </p>
               </div>
+
+              {aiEstimation && (
+                <div className="max-w-2xl mx-auto p-6 border-2 border-black rounded-2xl bg-white text-left space-y-4 animate-in fade-in slide-in-from-bottom-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-accent font-black uppercase tracking-tighter">
+                      <Sparkles className="w-4 h-4" />
+                      <h4>Hasil Analisa AI TBJ</h4>
+                    </div>
+                    {user?.waVerified && (
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="xs" className="h-7 text-[9px] font-black uppercase border-black" onClick={() => generateAIPDF(projectData.location || "Proyek TBJ", aiEstimation)}>
+                          <Download className="w-3 h-3 mr-1" /> PDF
+                        </Button>
+                        <Button variant="outline" size="xs" className="h-7 text-[9px] font-black uppercase border-black" onClick={() => {
+                          const msg = `Halo TBJ, ini hasil analisa AI saya:\n\n${aiEstimation.analysis}\n\nTotal Estimasi: Rp ${aiEstimation.totalEstimatedCost.toLocaleString('id-ID')}`;
+                          window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+                        }}>
+                          <Share2 className="w-3 h-3 mr-1" /> WA
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="p-4 bg-neutral-50 border-2 border-black/5 rounded-xl">
+                    <p className="text-xs text-neutral-600 italic leading-relaxed">"{aiEstimation.analysis}"</p>
+                  </div>
+
+                  <div className="pt-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-2">Item Pekerjaan Terdeteksi:</p>
+                    <div className="space-y-2">
+                      {aiEstimation.items.slice(0, user?.waVerified ? 10 : 3).map((item, i) => (
+                        <div key={i} className="flex justify-between items-center p-2 border-b border-black/5 last:border-0">
+                          <span className="text-[10px] font-bold uppercase">{item.name}</span>
+                          <div className="text-right">
+                            <span className="text-[10px] font-black">Rp {item.totalPrice.toLocaleString('id-ID')}</span>
+                          </div>
+                        </div>
+                      ))}
+                      {!user?.waVerified && (
+                        <div className="p-4 bg-accent/5 border-2 border-dashed border-accent/20 rounded-xl text-center space-y-3">
+                          <p className="text-[10px] font-bold uppercase text-accent">Verifikasi WhatsApp untuk melihat detail lengkap & download PDF</p>
+                          <Button size="sm" className="btn-orange h-8 text-[9px] font-black uppercase rounded-lg" onClick={() => setShowOtpDialog(true)}>
+                            Verifikasi Sekarang
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {user?.waVerified && (
+                    <div className="pt-4 border-t-2 border-black flex justify-between items-center">
+                      <span className="text-xs font-black uppercase">Total Estimasi Kasar:</span>
+                      <span className="text-xl font-black tracking-tighter text-accent">Rp {aiEstimation.totalEstimatedCost.toLocaleString('id-ID')}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               
-              <div className="max-w-md mx-auto p-8 border-2 border-black rounded-3xl space-y-6 bg-neutral-50">
+              <div className="max-w-md mx-auto p-8 border-2 border-black rounded-3xl space-y-6 bg-neutral-50 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
                 <div className="flex justify-between items-center border-b border-black/10 pb-4">
                   <div className="text-left">
                     <span className="uppercase-soft text-neutral-500">Investasi Assessment</span>
@@ -1960,16 +2021,12 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                 </div>
 
                 <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-                  {[
-                    { title: "Modern Villa Jagakarsa", loc: "Jagakarsa, Jakarta Selatan", price: 3500000000, type: "jual", img: "https://picsum.photos/seed/prop1/800/600", area: "150/200" },
-                    { title: "Ruko Premium Kemang", loc: "Kemang, Jakarta Selatan", price: 150000000, type: "sewa", img: "https://picsum.photos/seed/prop2/800/600", area: "60/180" },
-                    { title: "Minimalist House BSD", loc: "BSD City, Tangerang", price: 1800000000, type: "jual", img: "https://picsum.photos/seed/prop3/800/600", area: "90/120" },
-                  ].map((p, i) => (
-                    <div key={i} className="group cursor-pointer border-2 border-black rounded-3xl overflow-hidden hover:shadow-xl transition-all duration-500">
+                  {properties.length > 0 ? properties.map((p) => (
+                    <div key={p.id} className="group cursor-pointer border border-black/10 rounded-3xl overflow-hidden hover:shadow-xl transition-all duration-500">
                       <div className="aspect-[4/3] bg-neutral-100 relative overflow-hidden">
-                        <img src={p.img} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
+                        <img src={getDriveImageUrl(p.photos[0]) || `https://picsum.photos/seed/${p.id}/800/600`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
                         <Badge className="absolute top-4 left-4 bg-black text-white px-4 py-1.5 rounded-full uppercase text-[10px] font-black tracking-widest">
-                          {p.type === "jual" ? "Dijual" : "Disewakan"}
+                          {p.type === "jual" ? "Dijual" : p.type === "sewa" ? "Disewakan" : "Dicari"}
                         </Badge>
                         <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-md border border-black/10 text-[10px] font-black uppercase">
                           {p.area} m2
@@ -1978,15 +2035,22 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                       <div className="p-6 space-y-4">
                         <div className="space-y-1">
                           <h3 className="text-xl font-black uppercase tracking-tighter group-hover:text-accent transition-colors">{p.title}</h3>
-                          <p className="text-[10px] text-neutral-500 flex items-center gap-1 font-bold uppercase tracking-widest"><MapPin className="w-3 h-3 text-accent" /> {p.loc}</p>
+                          <p className="text-[10px] text-neutral-500 flex items-center gap-1 font-bold uppercase tracking-widest"><MapPin className="w-3 h-3 text-accent" /> {p.location}</p>
                         </div>
                         <div className="flex justify-between items-center pt-2 border-t border-black/5">
                           <p className="text-xl font-black tracking-tighter">Rp {p.price.toLocaleString('id-ID')}{p.type === 'sewa' ? '/thn' : ''}</p>
-                          <Button size="sm" className="rounded-xl btn-orange h-9 px-4 text-[10px] uppercase font-black">Detail</Button>
+                          <Button size="sm" className="rounded-xl btn-orange h-9 px-4 text-[10px] uppercase font-black" onClick={() => {
+                            const message = `Halo TBJ Property, saya tertarik dengan properti: ${p.title} (${p.location}). Mohon info lebih lanjut.`;
+                            window.open(`https://wa.me/62821942016509?text=${encodeURIComponent(message)}`, "_blank");
+                          }}>Hubungi</Button>
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="col-span-full py-20 text-center border-2 border-dashed border-black/10 rounded-3xl">
+                      <p className="uppercase-soft text-neutral-400">Belum ada listing properti tersedia.</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2021,6 +2085,82 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
           )}
         </CardContent>
       </Card>
+      
+      <Dialog open={showOtpDialog} onOpenChange={setShowOtpDialog}>
+        <DialogContent className="max-w-sm rounded-3xl border-2 border-black p-8">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-center">Verifikasi WhatsApp</DialogTitle>
+            <DialogDescription className="text-center uppercase-soft">
+              {!otpSent ? "Masukkan nomor WhatsApp Anda untuk menerima kode verifikasi." : "Masukkan 6 digit kode yang kami kirimkan ke WhatsApp Anda."}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-6 space-y-4">
+            {!otpSent ? (
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest">Nomor WhatsApp</Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-3 w-4 h-4 text-neutral-400" />
+                  <Input 
+                    placeholder="08123456789" 
+                    className="pl-10 h-12 border-2 border-black/10 rounded-xl font-bold"
+                    value={waNumber}
+                    onChange={e => setWaNumber(e.target.value)}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest">Kode OTP</Label>
+                <Input 
+                  placeholder="123456" 
+                  className="h-12 border-2 border-black/10 rounded-xl font-bold text-center tracking-[1em]"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={e => setOtpCode(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            {!otpSent ? (
+              <Button 
+                className="w-full btn-orange h-12 rounded-xl" 
+                disabled={isVerifying || !waNumber}
+                onClick={async () => {
+                  setIsVerifying(true);
+                  // Mock OTP send
+                  setTimeout(() => {
+                    setOtpSent(true);
+                    setIsVerifying(false);
+                    toast.success("Kode OTP terkirim ke WhatsApp Anda!");
+                  }, 1500);
+                }}
+              >
+                {isVerifying ? <Loader2 className="animate-spin w-4 h-4" /> : "Kirim OTP"}
+              </Button>
+            ) : (
+              <Button 
+                className="w-full btn-sleek h-12 rounded-xl" 
+                disabled={isVerifying || otpCode.length < 6}
+                onClick={async () => {
+                  setIsVerifying(true);
+                  // Mock OTP verify
+                  setTimeout(async () => {
+                    await updateProfile({ waVerified: true, whatsapp: waNumber });
+                    setIsVerifying(false);
+                    setShowOtpDialog(false);
+                    toast.success("WhatsApp berhasil diverifikasi!");
+                  }, 1500);
+                }}
+              >
+                {isVerifying ? <Loader2 className="animate-spin w-4 h-4" /> : "Verifikasi"}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -2170,7 +2310,7 @@ const ClientDashboard = ({ user }: { user: any }) => {
                 <CardTitle className="text-xl font-black uppercase tracking-tighter">Project Team</CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
-                <div className="flex items-center gap-4 p-4 border-2 border-black rounded-xl">
+                <div className="flex items-center gap-4 p-4 border border-black/10 rounded-xl">
                   <div className="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center font-black">
                     {project.pmId ? "PM" : "TBJ"}
                   </div>
@@ -2200,7 +2340,7 @@ const ClientDashboard = ({ user }: { user: any }) => {
             </Card>
 
             {user?.tier === "survey" && (
-              <Card className="border-2 border-black bg-accent text-white rounded-2xl overflow-hidden shadow-[10px_10px_0px_0px_rgba(0,0,0,0.1)]">
+              <Card className="border border-black/10 bg-accent text-white rounded-2xl overflow-hidden shadow-lg">
                 <CardHeader>
                   <CardTitle className="text-white text-xl font-black uppercase tracking-tighter">Contract Deal</CardTitle>
                   <CardDescription className="text-white/60 uppercase-soft">Siap untuk memulai pembangunan? Pilih paket kontrak Anda.</CardDescription>
@@ -2579,6 +2719,7 @@ export default function App() {
                     <Route path="/projects" element={<ProjectsPage user={user} />} />
                     <Route path="/projects/:id" element={<ProjectDetail />} />
                     <Route path="/master" element={<AdminMasterPage />} />
+                    <Route path="/import" element={<ImportPage />} />
                     <Route path="/ai-agent" element={<AIAgent />} />
                   </>
                 )}

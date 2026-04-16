@@ -1,5 +1,7 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { TBJ_LOGO } from '../constants';
+import { AIEstimateResponse } from '../types';
 
 // Extend jsPDF with autotable
 declare module 'jspdf' {
@@ -10,21 +12,32 @@ declare module 'jspdf' {
 
 export const generateRABPDF = (projectName: string, categories: any[], items: any[]) => {
   const doc = new jsPDF();
-  const logoUrl = 'https://picsum.photos/seed/tbj/200/200'; // Placeholder logo
+  const logoUrl = TBJ_LOGO;
 
   // Header
-  doc.addImage(logoUrl, 'JPEG', 10, 10, 30, 30);
+  try {
+    doc.addImage(logoUrl, 'PNG', 10, 10, 30, 30);
+  } catch (e) {
+    console.error('Failed to add logo to PDF:', e);
+    doc.rect(10, 10, 30, 30, 'S');
+    doc.setFontSize(8);
+    doc.text('LOGO', 18, 27);
+  }
   doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
   doc.text('TBJ CONSTECH', 50, 25);
   doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
   doc.text('Professional Construction & Renovation Services', 50, 32);
   doc.text('Jakarta, Indonesia | +62 812-3456-7890', 50, 37);
 
   doc.line(10, 45, 200, 45);
 
   doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
   doc.text('BILL OF QUANTITIES (RAB)', 10, 55);
   doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
   doc.text(`Project: ${projectName}`, 10, 65);
   doc.text(`Date: ${new Date().toLocaleDateString()}`, 10, 72);
 
@@ -52,7 +65,7 @@ export const generateRABPDF = (projectName: string, categories: any[], items: an
       head: [['Item Description', 'Qty', 'Unit', 'Price', 'Total']],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillStyle: [0, 0, 0], textColor: [255, 255, 255] },
+      headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
       margin: { left: 10, right: 10 },
     });
 
@@ -69,13 +82,22 @@ export const generateRABPDF = (projectName: string, categories: any[], items: an
 
 export const generatePOPDF = (request: any, vendor: any) => {
   const doc = new jsPDF();
-  const logoUrl = 'https://picsum.photos/seed/tbj/200/200';
+  const logoUrl = TBJ_LOGO;
 
   // Header
-  doc.addImage(logoUrl, 'JPEG', 10, 10, 30, 30);
+  try {
+    doc.addImage(logoUrl, 'PNG', 10, 10, 30, 30);
+  } catch (e) {
+    console.error('Failed to add logo to PDF:', e);
+    doc.rect(10, 10, 30, 30, 'S');
+    doc.setFontSize(8);
+    doc.text('LOGO', 18, 27);
+  }
   doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
   doc.text('TBJ CONSTECH', 50, 25);
   doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
   doc.text('PURCHASE ORDER', 160, 25);
   doc.text(`PO-${request.id.substring(0, 8).toUpperCase()}`, 160, 32);
 
@@ -97,10 +119,14 @@ export const generatePOPDF = (request: any, vendor: any) => {
   doc.text(request.projectName, 120, 62);
   doc.text('Lokasi Proyek TBJ', 120, 69);
 
+  const tableBody = request.items && request.items.length > 0
+    ? request.items.map((it: any) => [it.name, it.quantity, it.unit, '-'])
+    : [[request.itemName, request.quantity, request.unit, request.note || '-']];
+
   doc.autoTable({
     startY: 90,
     head: [['Item Description', 'Quantity', 'Unit', 'Notes']],
-    body: [[request.itemName, request.quantity, request.unit, request.note || '-']],
+    body: tableBody,
     theme: 'striped',
     headStyles: { fillColor: [0, 0, 0] }
   });
@@ -112,4 +138,65 @@ export const generatePOPDF = (request: any, vendor: any) => {
   doc.text('TBJ Management', 10, finalY + 55);
 
   doc.save(`PO-${request.id.substring(0, 8).toUpperCase()}.pdf`);
+};
+
+export const generateAIPDF = (projectName: string, estimation: AIEstimateResponse) => {
+  const doc = new jsPDF();
+  const logoUrl = TBJ_LOGO;
+
+  // Header
+  try {
+    doc.addImage(logoUrl, 'PNG', 10, 10, 30, 30);
+  } catch (e) {
+    console.error('Failed to add logo to PDF:', e);
+    doc.rect(10, 10, 30, 30, 'S');
+    doc.setFontSize(8);
+    doc.text('LOGO', 18, 27);
+  }
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TBJ CONSTECH', 50, 25);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('AI ESTIMATION SUMMARY', 150, 25);
+
+  doc.line(10, 45, 200, 45);
+
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Project: ${projectName}`, 10, 55);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Date: ${new Date().toLocaleDateString()}`, 10, 62);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('AI ANALYSIS:', 10, 72);
+  doc.setFont('helvetica', 'normal');
+  const splitAnalysis = doc.splitTextToSize(estimation.analysis, 180);
+  doc.text(splitAnalysis, 10, 79);
+
+  const startY = 79 + (splitAnalysis.length * 5) + 10;
+
+  const tableData = estimation.items.map(item => [
+    item.name,
+    item.quantity,
+    item.unit,
+    `Rp ${item.pricePerUnit.toLocaleString()}`,
+    `Rp ${item.totalPrice.toLocaleString()}`
+  ]);
+
+  doc.autoTable({
+    startY: startY,
+    head: [['Item Description', 'Qty', 'Unit', 'Price', 'Total']],
+    body: tableData,
+    theme: 'grid',
+    headStyles: { fillColor: [0, 0, 0] }
+  });
+
+  const finalY = (doc as any).lastAutoTable.finalY;
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`TOTAL ESTIMATED COST: Rp ${estimation.totalEstimatedCost.toLocaleString()}`, 10, finalY + 15);
+
+  doc.save(`AI-Estimation-${projectName.replace(/\s+/g, '-')}.pdf`);
 };

@@ -28,11 +28,15 @@ export default function AIAgent() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scrollToTop = () => {
-    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
   };
 
   const scrollToBottom = () => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
   };
 
   useEffect(() => {
@@ -97,7 +101,7 @@ export default function AIAgent() {
         });
       } else {
         response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
+          model: "gemini-flash-latest",
           contents: promptText
         });
       }
@@ -126,7 +130,7 @@ export default function AIAgent() {
         </Badge>
       </div>
 
-      <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[600px] relative">
+      <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[70vh] min-h-[500px] max-h-[800px] relative">
         <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-10">
           <Button 
             variant="outline" 
@@ -145,7 +149,14 @@ export default function AIAgent() {
             <ChevronRight className="w-4 h-4 rotate-90" />
           </Button>
         </div>
-        <ScrollArea className="flex-grow p-6 bg-white" ref={scrollRef}>
+        <div 
+          ref={scrollRef}
+          className="flex-grow p-4 md:p-6 bg-white overflow-y-auto custom-scrollbar touch-pan-y overscroll-contain"
+          style={{ 
+            scrollBehavior: 'smooth',
+            WebkitOverflowScrolling: 'touch'
+          }}
+        >
           <div className="space-y-6">
             {messages.map((msg, i) => (
               <div key={i} className={cn(
@@ -188,7 +199,7 @@ export default function AIAgent() {
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         <div className="p-6 bg-neutral-50 border-t-2 border-black space-y-4">
           {selectedImage && (

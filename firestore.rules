@@ -131,6 +131,25 @@ service cloud.firestore {
       match /items/{itemId} {
         allow read, write: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
       }
+      match /site_logs/{logId} {
+        allow read: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
+        allow write: if isStaff();
+      }
+    }
+
+    match /financial_transactions/{txId} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+
+    match /worker_wages/{wageId} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+
+    match /master_categories/{catId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     match /master_items/{itemId} {

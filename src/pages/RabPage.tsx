@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { WORK_ITEMS_MASTER } from "@/constants";
+import { useMasterData, useAuth } from "@/lib/hooks";
 import { WorkItemMaster, UserTier } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Search, Plus, Trash2, Download, Share2, Instagram, Phone, Mail, Building2, Save, FileText, ChevronRight, Calculator } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 import { TBJ_LOGO } from "@/constants";
@@ -24,7 +25,18 @@ interface RabItem extends WorkItemMaster {
 
 const RabPage = ({ user }: { user: any }) => {
   const navigate = useNavigate();
+  const { masterData } = useMasterData(user?.role);
   const [rabItems, setRabItems] = useState<RabItem[]>([]);
+  const [categories, setCategories] = useState<string[]>([
+    "ARSITEKTUR", 
+    "Struktur", 
+    "Lapangan / Sitework", 
+    "Mekanikal Elektrikal", 
+    "Plumbing", 
+    "Site Development"
+  ]);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [showAddCategory, setShowAddCategory] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddingItem, setIsAddingItem] = useState(false);
   
@@ -58,12 +70,14 @@ const RabPage = ({ user }: { user: any }) => {
 
   const filteredMaster = useMemo(() => {
     if (!searchQuery) return [];
-    return WORK_ITEMS_MASTER.filter(item => 
+    const dataToUse = masterData && masterData.length > 0 ? masterData : [];
+    return dataToUse.filter(item => 
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.code && item.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
       item.id.toLowerCase().includes(searchQuery.toLowerCase())
-    ).slice(0, 8);
-  }, [searchQuery]);
+    ).slice(0, 15);
+  }, [searchQuery, masterData]);
 
   const addItemToRab = (master: WorkItemMaster) => {
     const newItem: RabItem = {
@@ -89,6 +103,19 @@ const RabPage = ({ user }: { user: any }) => {
   const removeItem = (index: number) => {
     setRabItems(rabItems.filter((_, i) => i !== index));
   };
+
+  const groupedItems = useMemo(() => {
+    const groups: Record<string, RabItem[]> = {};
+    categories.forEach(cat => groups[cat] = []);
+    
+    rabItems.forEach(item => {
+      const cat = item.category || "Lain-lain";
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(item);
+    });
+    
+    return groups;
+  }, [rabItems, categories]);
 
   const grandTotal = rabItems.reduce((sum, item) => sum + item.total, 0);
 
@@ -246,52 +273,87 @@ const RabPage = ({ user }: { user: any }) => {
         <div className="lg:col-span-3 space-y-6">
           <div className="flex justify-between items-center">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Work Items Breakdown</h3>
-            {canEdit && (
-              <Dialog open={isAddingItem} onOpenChange={setIsAddingItem}>
-                <DialogTrigger render={
-                  <Button variant="ghost" className="text-[10px] font-black uppercase gap-2 hover:bg-neutral-50">
-                    <Plus className="w-3 h-3" /> Add Item
-                  </Button>
-                } />
-                <DialogContent className="max-w-2xl rounded-3xl border border-neutral-100 shadow-2xl">
-                  <DialogHeader>
-                    <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Search Master AHSP</DialogTitle>
-                  </DialogHeader>
-                  <div className="py-6 space-y-6">
-                    <div className="relative">
-                      <Search className="absolute left-4 top-3.5 h-5 w-5 text-neutral-400" />
-                      <Input 
-                        placeholder="Search work items..." 
-                        className="pl-12 h-12 rounded-2xl border-neutral-100 focus:border-black transition-all"
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                      />
+            <div className="flex gap-2">
+              {canEdit && (
+                <Dialog open={showAddCategory} onOpenChange={setShowAddCategory}>
+                  <DialogTrigger render={
+                    <Button variant="ghost" className="text-[10px] font-black uppercase gap-2 hover:bg-neutral-50">
+                      <Plus className="w-3 h-3" /> Add Category
+                    </Button>
+                  } />
+                  <DialogContent className="max-w-sm rounded-3xl border border-neutral-100 shadow-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Add Category</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-6 space-y-4">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase">Category Name</Label>
+                        <Input 
+                          placeholder="e.g. Pekerjaan Atap" 
+                          className="h-12 rounded-2xl border-neutral-100 focus:border-black transition-all"
+                          value={newCategoryName}
+                          onChange={e => setNewCategoryName(e.target.value)}
+                        />
+                      </div>
+                      <Button className="w-full btn-sleek h-12 rounded-2xl" onClick={() => {
+                        if (newCategoryName) {
+                          setCategories([...categories, newCategoryName]);
+                          setNewCategoryName("");
+                          setShowAddCategory(false);
+                          toast.success("Category added");
+                        }
+                      }}>Add Category</Button>
                     </div>
-                    <div className="grid gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                      {filteredMaster.map(item => (
-                        <div 
-                          key={item.id} 
-                          className="p-4 border border-neutral-100 hover:border-black rounded-2xl cursor-pointer transition-all group flex justify-between items-center"
-                          onClick={() => addItemToRab(item)}
-                        >
-                          <div>
-                            <p className="font-bold text-sm uppercase tracking-tight group-hover:text-black">{item.name}</p>
-                            <div className="flex gap-2 mt-1">
-                              <Badge variant="outline" className="text-[8px] uppercase font-bold rounded-md border-neutral-100">{item.category}</Badge>
-                              <span className="text-[9px] text-neutral-400 font-bold uppercase">{item.unit}</span>
+                  </DialogContent>
+                </Dialog>
+              )}
+              {canEdit && (
+                <Dialog open={isAddingItem} onOpenChange={setIsAddingItem}>
+                  <DialogTrigger render={
+                    <Button variant="ghost" className="text-[10px] font-black uppercase gap-2 hover:bg-neutral-50">
+                      <Plus className="w-3 h-3" /> Add Item
+                    </Button>
+                  } />
+                  <DialogContent className="max-w-2xl rounded-3xl border border-neutral-100 shadow-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Search Master AHSP</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-6 space-y-6">
+                      <div className="relative">
+                        <Search className="absolute left-4 top-3.5 h-5 w-5 text-neutral-400" />
+                        <Input 
+                          placeholder="Search work items..." 
+                          className="pl-12 h-12 rounded-2xl border-neutral-100 focus:border-black transition-all"
+                          value={searchQuery}
+                          onChange={e => setSearchQuery(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                        {filteredMaster.map(item => (
+                          <div 
+                            key={item.id} 
+                            className="p-4 border border-neutral-100 hover:border-black rounded-2xl cursor-pointer transition-all group flex justify-between items-center"
+                            onClick={() => addItemToRab(item)}
+                          >
+                            <div>
+                              <p className="font-bold text-sm uppercase tracking-tight group-hover:text-black">{item.name}</p>
+                              <div className="flex gap-2 mt-1">
+                                <Badge variant="outline" className="text-[8px] uppercase font-bold rounded-md border-neutral-100">{item.category}</Badge>
+                                <span className="text-[9px] text-neutral-400 font-bold uppercase">{item.unit}</span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-black text-sm">Rp {item.price.toLocaleString('id-ID')}</p>
+                              <p className="text-[8px] text-neutral-400 uppercase font-bold">Unit Price</p>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-black text-sm">Rp {item.price.toLocaleString('id-ID')}</p>
-                            <p className="text-[8px] text-neutral-400 uppercase font-bold">Unit Price</p>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            )}
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
           </div>
 
           <div className="border border-neutral-100 rounded-3xl overflow-hidden shadow-sm">
@@ -308,37 +370,51 @@ const RabPage = ({ user }: { user: any }) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rabItems.map((item, index) => (
-                  <TableRow key={index} className="border-b border-neutral-50 hover:bg-neutral-50/30 transition-colors">
-                    <TableCell className="font-mono text-[9px] text-neutral-300 px-6">{item.code}</TableCell>
-                    <TableCell>
-                      <p className="font-bold text-xs uppercase tracking-tight text-neutral-800">{item.name}</p>
-                      <p className="text-[8px] text-neutral-400 uppercase font-bold">{item.category}</p>
-                    </TableCell>
-                    <TableCell>
-                      <Input 
-                        disabled={!canEdit}
-                        type="number" 
-                        value={item.volume || 0} 
-                        onChange={e => updateItem(index, { volume: Math.max(0, Number(e.target.value)) })}
-                        className="h-7 text-center border-neutral-100 rounded-lg font-bold text-xs bg-transparent focus-visible:ring-black"
-                      />
-                    </TableCell>
-                    <TableCell className="text-center font-bold text-[10px] uppercase text-neutral-400">{item.unit}</TableCell>
-                    <TableCell className="text-right font-bold text-[10px] text-neutral-600">
-                      Rp {item.price.toLocaleString('id-ID')}
-                    </TableCell>
-                    <TableCell className="text-right font-black text-xs tracking-tighter px-6">
-                      Rp {item.total.toLocaleString('id-ID')}
-                    </TableCell>
-                    {canEdit && (
-                      <TableCell>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-neutral-200 hover:text-red-500" onClick={() => removeItem(index)}>
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </TableCell>
+                {Object.entries(groupedItems).map(([catName, items]) => (
+                  <React.Fragment key={catName}>
+                    {items.length > 0 && (
+                      <TableRow className="bg-neutral-50/50 border-b border-neutral-100">
+                        <TableCell colSpan={canEdit ? 7 : 6} className="py-2 px-6">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-black">{catName}</span>
+                        </TableCell>
+                      </TableRow>
                     )}
-                  </TableRow>
+                    {items.map((item, index) => {
+                      const globalIndex = rabItems.findIndex(ri => ri.id === item.id && ri.name === item.name);
+                      return (
+                        <TableRow key={index} className="border-b border-neutral-50 hover:bg-neutral-50/30 transition-colors">
+                          <TableCell className="font-mono text-[9px] text-neutral-300 px-6">{item.code}</TableCell>
+                          <TableCell>
+                            <p className="font-bold text-xs uppercase tracking-tight text-neutral-800">{item.name}</p>
+                            <p className="text-[8px] text-neutral-400 uppercase font-bold">{item.category}</p>
+                          </TableCell>
+                          <TableCell>
+                            <Input 
+                              disabled={!canEdit}
+                              type="number" 
+                              value={item.volume || 0} 
+                              onChange={e => updateItem(globalIndex, { volume: Math.max(0, Number(e.target.value)) })}
+                              className="h-7 text-center border-neutral-100 rounded-lg font-bold text-xs bg-transparent focus-visible:ring-black"
+                            />
+                          </TableCell>
+                          <TableCell className="text-center font-bold text-[10px] uppercase text-neutral-400">{item.unit}</TableCell>
+                          <TableCell className="text-right font-bold text-[10px] text-neutral-600">
+                            Rp {item.price.toLocaleString('id-ID')}
+                          </TableCell>
+                          <TableCell className="text-right font-black text-xs tracking-tighter px-6">
+                            Rp {item.total.toLocaleString('id-ID')}
+                          </TableCell>
+                          {canEdit && (
+                            <TableCell>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-neutral-200 hover:text-red-500" onClick={() => removeItem(globalIndex)}>
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
+                  </React.Fragment>
                 ))}
                 {rabItems.length === 0 && (
                   <TableRow>

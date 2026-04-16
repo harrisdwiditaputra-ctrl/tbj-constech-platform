@@ -1,6 +1,6 @@
 import { WorkItemMaster } from "./types";
 
-export const TBJ_LOGO = "https://drive.google.com/uc?export=view&id=1kiigvLWdSslkfMZPT_u4RpxMKyOLtutM";
+export const TBJ_LOGO = "https://placehold.co/400x400/FF6B00/FFFFFF/png?text=TBJ+CONSTECH";
 
 export const WORK_ITEMS_MASTER: WorkItemMaster[] = [
   // ==========================================
