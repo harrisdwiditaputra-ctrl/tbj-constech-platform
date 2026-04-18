@@ -10,7 +10,7 @@ import ErrorBoundary from "@/components/ErrorBoundary.tsx";
 import Layout from "@/components/Layout.tsx";
 import { useState, useEffect, useMemo } from "react";
 import { useAuth, useProjects, useProjectDetails, useProperties, useMasterData, useCMSConfig, useSystemConfig, incrementAIUsage } from "@/lib/hooks";
-import { WORK_ITEMS_MASTER } from "@/constants";
+import { WORK_ITEMS_MASTER, QRIS_IMAGE } from "@/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -22,7 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { WorkItemMaster, Property, AIEstimateResponse } from "@/types";
-import { cn, getDriveImageUrl } from "@/lib/utils";
+import { cn, getDriveImageUrl, calculateAdminPrice, calculateClientPrice, formatRupiah } from "@/lib/utils";
 import { getAIEstimation } from "./services/aiEstimator";
 import { generateAIPDF } from "@/lib/pdfUtils";
 import { Plus, Trash2, ChevronRight, Loader2, Calculator, Search, CheckCircle2, Phone, Mail, Lock, CreditCard, Image as ImageIcon, Calendar, FileCheck, Clock, ExternalLink, ChevronDown, ChevronUp, Home, Wrench, PenTool, Building2, MapPin, Ruler, Layers, FileText, Gavel, Key, Camera, Upload, UserCheck, Map as MapIcon, Share2, Instagram, Download, Star, Settings, User, MessageSquare, ShieldCheck, Sparkles } from "lucide-react";
@@ -304,7 +304,7 @@ const ProjectDetail = () => {
         item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (item.code && item.code.toLowerCase().includes(searchQuery.toLowerCase()))
       );
-      setSearchResults(filtered.slice(0, 15));
+      setSearchResults(filtered.slice(0, 50));
       setIsSearching(true);
     } else {
       setSearchResults([]);
@@ -360,7 +360,9 @@ const ProjectDetail = () => {
         </div>
         <div className="text-right">
           <p className="text-[10px] text-neutral-500 uppercase tracking-wider font-bold">Total Anggaran (RAB)</p>
-          <p className="text-3xl font-black text-black tracking-tighter">Rp {project.totalBudget.toLocaleString('id-ID')}</p>
+          <p className="text-3xl font-black text-black tracking-tighter">
+            {formatRupiah(user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(project.totalBudget) : calculateClientPrice(project.totalBudget))}
+          </p>
           <Button 
             variant="ghost" 
             size="sm" 
@@ -537,7 +539,9 @@ const ProjectDetail = () => {
                 </Button>
               </div>
               <Badge variant="outline">
-                Rp {items.filter(i => i.categoryId === category.id).reduce((sum, i) => sum + i.totalPrice, 0).toLocaleString('id-ID')}
+                {formatRupiah(user?.role === "admin" || user?.role === "pm" 
+                  ? calculateAdminPrice(items.filter(i => i.categoryId === category.id).reduce((sum, i) => sum + i.totalPrice, 0)) 
+                  : calculateClientPrice(items.filter(i => i.categoryId === category.id).reduce((sum, i) => sum + i.totalPrice, 0)))}
               </Badge>
             </div>
             <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
@@ -560,8 +564,12 @@ const ProjectDetail = () => {
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell className="text-center">{item.quantity}</TableCell>
                       <TableCell className="text-center">{item.unit}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px]">Rp {item.pricePerUnit.toLocaleString('id-ID')}</TableCell>
-                      <TableCell className="text-right font-mono font-bold text-[10px]">Rp {item.totalPrice.toLocaleString('id-ID')}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px]">
+                        {formatRupiah(user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(item.pricePerUnit) : calculateClientPrice(item.pricePerUnit))}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-[10px]">
+                        {formatRupiah(user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(item.totalPrice) : calculateClientPrice(item.totalPrice))}
+                      </TableCell>
                       <TableCell className="text-center text-[10px] font-bold">
                         {((item.totalPrice / (project.totalBudget || 1)) * 100).toFixed(2)}%
                       </TableCell>
@@ -723,7 +731,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
         if (projectData.type === "Arsitektur") {
           prompt = `Proyek Bangun Baru: ${userProblem}, Luas: ${projectData.area}m2, Lantai: ${projectData.floors}, Finishing: ${projectData.finishing}`;
         }
-        const result = await getAIEstimation(prompt, projectData.type, masterData);
+        const result = await getAIEstimation(prompt, projectData.type, masterData, user?.role);
         setAiEstimation(result);
         
         if (!isStaff && !isPro && (user?.aiUsageCount || 0) >= freeLimit) {
@@ -766,23 +774,30 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
 
   const totalEstimate = aiEstimation 
     ? aiEstimation.totalEstimatedCost 
-    : selectedItems.reduce((sum, si) => sum + (si.item.price * si.qty), 0) + interiorEstimate + designFee;
+    : selectedItems.reduce((sum, si) => {
+        const itemPrice = user?.role === "admin" || user?.role === "pm" 
+          ? calculateAdminPrice(si.item.price) 
+          : calculateClientPrice(si.item.price);
+        return sum + (itemPrice * si.qty);
+      }, 0) + (interiorEstimate > 0 ? (user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(interiorEstimate) : calculateClientPrice(interiorEstimate)) : 0) + designFee;
 
   const handleLeadSubmit = async () => {
     if (!leadData.whatsapp || !leadData.email) return;
     setIsOtpSent(true);
   };
 
-  const verifyOtp = async () => {
-    if (otp === "1234") {
+  const handleVerifyOtp = async (code: string) => {
+    if (code === "1234") { // Sesuaikan dengan kode Anda
       await updateProfile({ 
-        whatsapp: leadData.whatsapp, 
+        whatsapp: leadData.whatsapp || waNumber, 
         waVerified: true,
         tier: user?.tier === "prospect" ? "prospect" : user?.tier
       });
-      setStep(5); // Show results
+      setStep(5); // <-- INI KRUSIAL: Memaksa tampilan pindah ke hasil
+      setShowOtpDialog(false);
+      console.log("Estimasi Berhasil Diambil");
     } else {
-      toast.error("OTP Salah. Gunakan 1234.");
+      alert("Kode salah");
     }
   };
 
@@ -1650,15 +1665,15 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                 ) : (
                   <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
                     <div className="space-y-1">
-                      <label className="uppercase-soft text-neutral-400">OTP Code (Check WA)</label>
+                      <label className="uppercase-soft text-neutral-400">Kode Verifikasi (Cek WA)</label>
                       <Input 
-                        placeholder="1234" 
+                        placeholder="---" 
                         className="input-sleek text-center text-2xl tracking-[1em]"
                         value={otp}
                         onChange={e => setOtp(e.target.value)}
                       />
                     </div>
-                    <Button className="w-full btn-orange" onClick={verifyOtp}>Verifikasi & Lihat Hasil</Button>
+                    <Button className="w-full btn-orange" onClick={() => handleVerifyOtp(otp)}>Verifikasi & Lihat Hasil</Button>
                   </div>
                 )}
               </div>
@@ -1962,9 +1977,12 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                 </Button>
                 <div className="pt-4 border-t border-black/10 space-y-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Instruksi Pembayaran:</p>
-                  <div className="p-4 bg-white border-2 border-black rounded-lg space-y-1">
-                    <p className="text-lg font-black tracking-tighter">BCA 667067XXXX</p>
-                    <p className="text-[10px] font-bold uppercase">a/n TBJ Contractor</p>
+                  <div className="p-6 bg-white border-2 border-black rounded-3xl space-y-4 text-center">
+                    <img src={QRIS_IMAGE} alt="QRIS TBJ" className="w-48 h-48 mx-auto object-contain" referrerPolicy="no-referrer" />
+                    <div>
+                      <p className="text-lg font-black tracking-tighter uppercase">Scan QRIS TBJ</p>
+                      <p className="text-[10px] font-bold uppercase text-neutral-400">a/n TBJ Contractor</p>
+                    </div>
                   </div>
                   <Button variant="outline" className="w-full border-black uppercase-soft text-[10px] font-black" onClick={async () => {
                     await updateProfile({ tier: "survey", lifetimeAccess: true });
@@ -2091,7 +2109,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
           <DialogHeader>
             <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-center">Verifikasi WhatsApp</DialogTitle>
             <DialogDescription className="text-center uppercase-soft">
-              {!otpSent ? "Masukkan nomor WhatsApp Anda untuk menerima kode verifikasi." : "Masukkan 6 digit kode yang kami kirimkan ke WhatsApp Anda."}
+              {!otpSent ? "Masukkan nomor WhatsApp Anda untuk menerima kode verifikasi." : "Masukkan kode yang kami kirimkan ke WhatsApp Anda."}
             </DialogDescription>
           </DialogHeader>
           
@@ -2102,7 +2120,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                 <div className="relative">
                   <Phone className="absolute left-3 top-3 w-4 h-4 text-neutral-400" />
                   <Input 
-                    placeholder="08123456789" 
+                    placeholder="08xxxxxxxxxx" 
                     className="pl-10 h-12 border-2 border-black/10 rounded-xl font-bold"
                     value={waNumber}
                     onChange={e => setWaNumber(e.target.value)}
@@ -2113,7 +2131,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest">Kode OTP</Label>
                 <Input 
-                  placeholder="123456" 
+                  placeholder="----" 
                   className="h-12 border-2 border-black/10 rounded-xl font-bold text-center tracking-[1em]"
                   maxLength={6}
                   value={otpCode}
@@ -2143,16 +2161,11 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
             ) : (
               <Button 
                 className="w-full btn-sleek h-12 rounded-xl" 
-                disabled={isVerifying || otpCode.length < 6}
+                disabled={isVerifying || otpCode.length < 4}
                 onClick={async () => {
                   setIsVerifying(true);
-                  // Mock OTP verify
-                  setTimeout(async () => {
-                    await updateProfile({ waVerified: true, whatsapp: waNumber });
-                    setIsVerifying(false);
-                    setShowOtpDialog(false);
-                    toast.success("WhatsApp berhasil diverifikasi!");
-                  }, 1500);
+                  await handleVerifyOtp(otpCode);
+                  setIsVerifying(false);
                 }}
               >
                 {isVerifying ? <Loader2 className="animate-spin w-4 h-4" /> : "Verifikasi"}
@@ -2547,29 +2560,36 @@ const AdminMasterPage = () => {
           </div>
 
           <div className="sleek-card overflow-hidden">
-            <Table>
-              <TableHeader className="bg-neutral-50/50">
-                <TableRow className="border-b border-black/5">
-                  <TableHead className="text-[10px] uppercase tracking-widest py-6">Kode</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-widest">Kategori</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-widest">Pekerjaan</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-widest">Satuan</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-widest text-right">Harga (Rp)</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredMasterData.map(item => (
-                  <TableRow key={item.id} className="border-b border-black/5 last:border-0">
-                    <TableCell className="font-mono text-[10px] text-neutral-400">{item.code || "N/A"}</TableCell>
-                    <TableCell><Badge variant="outline" className="tag-sleek mb-0">{item.category}</Badge></TableCell>
-                    <TableCell className="font-medium text-sm">
-                      <Input 
-                        defaultValue={item.name} 
-                        className="border-none bg-transparent p-0 h-auto focus-visible:ring-0"
-                        onBlur={(e) => updateMasterItem(item.id, { name: e.target.value })}
-                      />
-                    </TableCell>
+            <div className="overflow-x-auto w-full max-w-full">
+              <Table className="min-w-[800px] md:min-w-full">
+                <TableHeader className="bg-neutral-50/50">
+                  <TableRow className="border-b border-black/5">
+                    <TableHead className="text-[10px] uppercase tracking-widest py-6">Kode ID</TableHead>
+                    <TableHead className="text-[10px] uppercase tracking-widest">Kategori</TableHead>
+                    <TableHead className="text-[10px] uppercase tracking-widest">Pekerjaan</TableHead>
+                    <TableHead className="text-[10px] uppercase tracking-widest">Satuan</TableHead>
+                    <TableHead className="text-[10px] uppercase tracking-widest text-right">Harga (Rp)</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredMasterData.map(item => (
+                    <TableRow key={item.id} className="border-b border-black/5 last:border-0 hover:bg-neutral-50/30 transition-colors">
+                      <TableCell className="font-mono text-[10px] text-neutral-400 font-bold">{item.code || "N/A"}</TableCell>
+                      <TableCell><Badge variant="outline" className="tag-sleek mb-0 truncate max-w-[120px]">{item.category}</Badge></TableCell>
+                      <TableCell className="font-medium text-sm py-4">
+                        <div className="max-w-[200px] md:max-w-[300px]">
+                          <Textarea 
+                            defaultValue={item.name} 
+                            className="border-none bg-transparent p-0 min-h-[40px] focus-visible:ring-0 font-bold uppercase tracking-tight text-[10px] md:text-[11px] resize-none break-words whitespace-normal leading-tight h-auto overflow-hidden"
+                            onBlur={(e) => updateMasterItem(item.id, { name: e.target.value })}
+                            onInput={(e: any) => {
+                              e.target.style.height = 'auto';
+                              e.target.style.height = e.target.scrollHeight + 'px';
+                            }}
+                          />
+                        </div>
+                      </TableCell>
                     <TableCell className="text-xs font-light">{item.unit}</TableCell>
                     <TableCell className="text-right">
                       <Input 
@@ -2595,7 +2615,8 @@ const AdminMasterPage = () => {
             </Table>
           </div>
         </div>
-      ) : (
+      </div>
+    ) : (
         <div className="space-y-8">
           <div className="flex justify-end">
             <Button className="btn-accent" onClick={() => addProperty({

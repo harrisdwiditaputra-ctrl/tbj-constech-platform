@@ -84,7 +84,7 @@ const RabPage = ({ user }: { user: any }) => {
       ...master,
       volume: 1,
       total: master.price,
-      code: master.id,
+      code: master.code || master.id,
       notes: ""
     };
     setRabItems([...rabItems, newItem]);
@@ -150,7 +150,7 @@ const RabPage = ({ user }: { user: any }) => {
     // Table
     const tableData = rabItems.map((item, index) => [
       index + 1,
-      item.code || item.id,
+      item.code || "N/A",
       item.category,
       item.name,
       item.volume,
@@ -335,8 +335,8 @@ const RabPage = ({ user }: { user: any }) => {
                             className="p-4 border border-neutral-100 hover:border-black rounded-2xl cursor-pointer transition-all group flex justify-between items-center"
                             onClick={() => addItemToRab(item)}
                           >
-                            <div>
-                              <p className="font-bold text-sm uppercase tracking-tight group-hover:text-black">{item.name}</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-sm uppercase tracking-tight group-hover:text-black break-words whitespace-normal leading-tight">{item.name}</p>
                               <div className="flex gap-2 mt-1">
                                 <Badge variant="outline" className="text-[8px] uppercase font-bold rounded-md border-neutral-100">{item.category}</Badge>
                                 <span className="text-[9px] text-neutral-400 font-bold uppercase">{item.unit}</span>
@@ -383,9 +383,9 @@ const RabPage = ({ user }: { user: any }) => {
                       const globalIndex = rabItems.findIndex(ri => ri.id === item.id && ri.name === item.name);
                       return (
                         <TableRow key={index} className="border-b border-neutral-50 hover:bg-neutral-50/30 transition-colors">
-                          <TableCell className="font-mono text-[9px] text-neutral-300 px-6">{item.code}</TableCell>
-                          <TableCell>
-                            <p className="font-bold text-xs uppercase tracking-tight text-neutral-800">{item.name}</p>
+                          <TableCell className="font-mono text-[9px] text-neutral-400 font-bold px-6">{item.code || "N/A"}</TableCell>
+                          <TableCell className="max-w-[200px] md:max-w-[350px]">
+                            <p className="font-bold text-[11px] uppercase tracking-tight text-neutral-800 break-words whitespace-normal leading-tight">{item.name}</p>
                             <p className="text-[8px] text-neutral-400 uppercase font-bold">{item.category}</p>
                           </TableCell>
                           <TableCell>

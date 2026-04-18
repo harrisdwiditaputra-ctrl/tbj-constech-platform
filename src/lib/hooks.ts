@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { auth, db, handleFirestoreError, OperationType } from "@/lib/firebase";
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from "firebase/auth";
-import { doc, getDoc, setDoc, onSnapshot, collection, query, where, orderBy, addDoc, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc, onSnapshot, collection, query, where, orderBy, addDoc, updateDoc, deleteDoc, getDocs, writeBatch, limit } from "firebase/firestore";
 import { Project, BudgetCategory, BudgetItem, UserProfile, Property, WorkItemMaster, Workforce, Attendance, MaterialRequest, CMSConfig, Campaign, SystemConfig, Vendor, GalleryItem, TimelineEvent } from "@/types";
 import { WORK_ITEMS_MASTER } from "@/constants";
+import { nuclearWipe } from "./database";
 import { toast } from "sonner";
 
 export function useAuth() {
@@ -585,12 +586,21 @@ export function useMasterData(userRole?: string) {
     }
     const q = query(collection(db, "master_data"), orderBy("category", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (snapshot.empty) {
-        // Fallback to constants if DB is empty (initial setup)
-        setMasterData(WORK_ITEMS_MASTER);
-      } else {
-        setMasterData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as WorkItemMaster[]);
-      }
+      const dbData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as WorkItemMaster[];
+      
+      // Merge: 
+      // 1. Start with local data as base
+      const itemsMap = new Map<string, WorkItemMaster>();
+      WORK_ITEMS_MASTER.forEach(item => itemsMap.set(item.id, item));
+      
+      // 2. Overwrite with Cloud data. If Cloud has a new ID, it adds it.
+      // If Cloud has the same field 'code', we might still have duplicates if ID differs.
+      // We will prefer the ID from Cloud.
+      dbData.forEach(item => {
+        itemsMap.set(item.id, item);
+      });
+      
+      setMasterData(Array.from(itemsMap.values()));
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "master_data");
@@ -598,11 +608,57 @@ export function useMasterData(userRole?: string) {
     return () => unsubscribe();
   }, [auth.currentUser, userRole]);
 
-  const addMasterItem = async (data: Omit<WorkItemMaster, "id">) => {
+  const addMasterItem = async (data: WorkItemMaster | Omit<WorkItemMaster, "id">) => {
     try {
-      await addDoc(collection(db, "master_data"), data);
-      toast.success("Item added to Master Database");
+      if ('id' in data) {
+        // Use setDoc if we have a specific ID (especially for syncing constants)
+        await setDoc(doc(db, "master_data", data.id), data);
+      } else {
+        await addDoc(collection(db, "master_data"), data);
+      }
+      toast.success("Item berhasil ditambahkan ke database.");
     } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, "master_data");
+    }
+  };
+
+  const bulkAddMasterItems = async (items: any[]) => {
+    try {
+      const total = items.length;
+      toast.loading(`Importing ${total} items...`, { id: "bulk-import" });
+      
+      let batch = writeBatch(db);
+      let count = 0;
+      let processed = 0;
+
+      for (const item of items) {
+        const docRef = ('id' in item) ? doc(db, "master_data", item.id) : doc(collection(db, "master_data"));
+        batch.set(docRef, {
+          ...item,
+          soldCount: item.soldCount || 0,
+          revenue: item.revenue || 0,
+          status: item.status || "visible",
+          createdAt: item.createdAt || new Date().toISOString()
+        });
+        
+        count++;
+        processed++;
+
+        if (count === 500) {
+          await batch.commit();
+          batch = writeBatch(db);
+          count = 0;
+          toast.loading(`Imported ${processed}/${total}...`, { id: "bulk-import" });
+        }
+      }
+
+      if (count > 0) {
+        await batch.commit();
+      }
+
+      toast.success(`Successfully imported ${total} items.`, { id: "bulk-import" });
+    } catch (error) {
+      console.error("Bulk add error:", error);
       handleFirestoreError(error, OperationType.CREATE, "master_data");
     }
   };
@@ -637,30 +693,60 @@ export function useMasterData(userRole?: string) {
     if (!confirm("PERINGATAN: Ini akan menghapus SEMUA proyek dan data klien. Data Master tidak akan dihapus. Lanjutkan?")) return;
     
     try {
-      // Note: In a real app, this should be a Cloud Function. 
-      // Here we simulate by clearing the main collections we have access to.
-      const projectsSnap = await getDocs(collection(db, "projects"));
-      for (const d of projectsSnap.docs) {
-        await deleteDoc(doc(db, "projects", d.id));
-      }
+      toast.loading("Resetting database...", { id: "reset-db" });
       
-      const usersSnap = await getDocs(collection(db, "users"));
-      for (const d of usersSnap.docs) {
-        // Don't delete the current admin
-        if (d.id !== auth.currentUser?.uid) {
-          await deleteDoc(doc(db, "users", d.id));
+      const collectionsToClear = ["projects", "material_requests", "attendance", "financial_transactions", "worker_wages"];
+      for (const colName of collectionsToClear) {
+        let hasMore = true;
+        let deletedInCol = 0;
+        
+        while (hasMore) {
+          const q = query(collection(db, colName), limit(500));
+          const snap = await getDocs(q);
+          
+          if (snap.empty) {
+            hasMore = false;
+            break;
+          }
+          
+          const batch = writeBatch(db);
+          snap.docs.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+          deletedInCol += snap.docs.length;
+          toast.loading(`Resetting ${colName}: ${deletedInCol} items...`, { id: "reset-db" });
         }
       }
       
-      toast.success("Database berhasil di-reset (Proyek & Klien dihapus)");
+      const usersSnap = await getDocs(collection(db, "users"));
+      let userBatch = writeBatch(db);
+      let userCount = 0;
+      for (const d of usersSnap.docs) {
+        if (d.id !== auth.currentUser?.uid) {
+          userBatch.delete(d.ref);
+          userCount++;
+          if (userCount === 500) {
+            await userBatch.commit();
+            userBatch = writeBatch(db);
+            userCount = 0;
+          }
+        }
+      }
+      if (userCount > 0) await userBatch.commit();
+      
+      toast.success("Database berhasil di-reset (Kecuali Master)", { id: "reset-db" });
       window.location.reload();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Reset error:", error);
-      toast.error("Gagal melakukan reset database");
+      toast.error(`Gagal reset: ${error.message || "Unknown error"}`, { id: "reset-db" });
     }
   };
 
-  return { masterData, loading, addMasterItem, updateMasterItem, deleteMasterItem, addMasterCategory, resetDatabase };
+  const clearMasterData = async () => {
+    if (!confirm("⚠️ PERINGATAN KRITIKAL: Ini akan MENGHAPUS SEMUA DATA MASTER di Firestore. Lanjutkan?")) return;
+    await nuclearWipe();
+  };
+
+  return { masterData, loading, addMasterItem, updateMasterItem, deleteMasterItem, addMasterCategory, resetDatabase, clearMasterData, bulkAddMasterItems };
 }
 
 export function useMasterCategories() {

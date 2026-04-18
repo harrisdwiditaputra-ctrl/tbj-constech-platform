@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMasterData, useAuth, useUsers, useProjects, useWorkforce, useMaterialRequests, useProperties, useCMSConfig, useCampaigns, useSystemConfig, useGallery, useVendors, useAttendance, useFinance, useWorkerWages, useMasterCategories, usePMs } from "@/lib/hooks";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -14,20 +14,32 @@ import {
   RefreshCw, TrendingUp, DollarSign, Users, Briefcase, Plus, ChevronDown, 
   ChevronRight, Download, Eye, EyeOff, Trash2, Image as ImageIcon, 
   LayoutDashboard, FileText, HardHat, Camera, BarChart3, Clock, Phone, User,
-  CheckCircle2, MapPin, Package, Brain, Zap, AlertCircle, Layers, History, Sparkles, Upload
+  CheckCircle2, MapPin, Package, Brain, Zap, AlertCircle, Layers, History, Sparkles, Upload, X
 } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, query, where, getDocs } from "firebase/firestore";
+import { collection, addDoc, query, where, getDocs, limit, writeBatch, getDocsFromServer } from "firebase/firestore";
 import PMDashboard from "./PMDashboard";
-import { cn, getDriveImageUrl } from "@/lib/utils";
+import { cn, getDriveImageUrl, formatRupiah, calculateAdminPrice } from "@/lib/utils";
 import { toast } from "sonner";
 import { WorkItemMaster, UserProfile, Project, Workforce, MaterialRequest, Property, Campaign, SystemConfig, CMSConfig, Vendor, GalleryItem } from "@/types";
 import { generateRABPDF, generatePOPDF } from "@/lib/pdfUtils";
+import { WORK_ITEMS_MASTER } from "@/constants";
+import { nuclearWipe } from "@/lib/database";
 
 export default function AdminPanel() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { masterData, loading: masterLoading, addMasterItem, updateMasterItem, deleteMasterItem, addMasterCategory, resetDatabase } = useMasterData(user?.role);
+  const { 
+    masterData, 
+    loading: masterLoading, 
+    addMasterItem, 
+    updateMasterItem, 
+    deleteMasterItem, 
+    addMasterCategory, 
+    resetDatabase, 
+    clearMasterData,
+    bulkAddMasterItems
+  } = useMasterData(user?.role);
   const { categories: masterCategories } = useMasterCategories();
   const { users, loading: usersLoading, updateUser } = useUsers(user?.role);
   const { projects, loading: projectsLoading, updateProject, deleteProject, fixProjectMilestones } = useProjects(undefined, user?.role);
@@ -45,6 +57,23 @@ export default function AdminPanel() {
   const { pms } = usePMs();
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "clients" | "projects" | "workforce" | "cms" | "finance" | "marketing" | "management" | "materials" | "attendance" | "gallery" | "properties" | "vendors" | "payments">("dashboard");
+  const [isClearing, setIsClearing] = useState(false);
+  const [clearProgress, setClearProgress] = useState(0);
+
+  const handleNuclearClear = async () => {
+    setIsClearing(true);
+    setClearProgress(0);
+    try {
+      await nuclearWipe("master_data", (count) => {
+        setClearProgress(count);
+      });
+    } catch (error) {
+      console.error("Nuclear Wipe failed", error);
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   const standardizedCategories = [
     "ARSITEKTUR", 
     "Struktur", 
@@ -54,6 +83,7 @@ export default function AdminPanel() {
     "Site Development"
   ];
   const [selectedMasterCategory, setSelectedMasterCategory] = useState<string | null>(null);
+  const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
   const [showAddWorker, setShowAddWorker] = useState(false);
@@ -75,7 +105,12 @@ export default function AdminPanel() {
   
   // Master Data Editing
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedRows, setExpandedRows] = useState<string[]>([]);
   const [editForm, setEditForm] = useState<Partial<WorkItemMaster>>({});
+
+  const toggleRow = (id: string) => {
+    setExpandedRows(prev => prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]);
+  };
 
   const handleEdit = (item: WorkItemMaster) => {
     setEditingId(item.id);
@@ -281,14 +316,24 @@ export default function AdminPanel() {
     if (selectedMasterCategory) {
       data = data.filter(item => item.category === selectedMasterCategory);
     }
+    if (selectedUnit) {
+      data = data.filter(item => item.unit === selectedUnit);
+    }
     if (search) {
+      const s = search.toLowerCase();
       data = data.filter(item => 
-        item.name.toLowerCase().includes(search.toLowerCase()) || 
-        (item.code && item.code.toLowerCase().includes(search.toLowerCase()))
+        item.name.toLowerCase().includes(s) || 
+        (item.code && item.code.toLowerCase().includes(s)) ||
+        (item.category && item.category.toLowerCase().includes(s))
       );
     }
     return data;
-  }, [masterData, search, selectedMasterCategory]);
+  }, [masterData, search, selectedMasterCategory, selectedUnit]);
+
+  const allUnits = useMemo(() => {
+    const units = new Set(masterData.map(i => i.unit).filter(Boolean));
+    return Array.from(units).sort();
+  }, [masterData]);
 
   const handleExportMasterRAB = () => {
     const cats = masterCategories.length > 0 ? masterCategories : Array.from(new Set(masterData.map(i => i.category))).map(c => ({ id: c, name: c }));
@@ -315,7 +360,8 @@ export default function AdminPanel() {
 
   const handleAddProduct = async () => {
     if (!newProduct.name || !newProduct.category) return;
-    const code = generateCode(newProduct.category);
+    // Use manual code if provided, otherwise generate one
+    const code = newProduct.code || generateCode(newProduct.category);
     await addMasterItem({
       ...newProduct as any,
       code,
@@ -324,7 +370,7 @@ export default function AdminPanel() {
       status: "visible"
     });
     setShowAddProduct(false);
-    setNewProduct({ category: "", name: "", description: "", unit: "m2", price: 0 });
+    setNewProduct({ category: "", name: "", code: "", description: "", unit: "m2", price: 0 });
   };
 
   const exportClients = () => {
@@ -671,51 +717,129 @@ export default function AdminPanel() {
           )}
 
           {activeTab === "products" && (
-            <div className="space-y-8">
-              <div className="flex justify-between items-center">
-                <div className="flex gap-4 items-center">
-                  <div className="relative w-96">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
-                    <Input 
-                      placeholder="Search products/categories..." 
-                      className="pl-10 h-10 border border-black/10 rounded-xl"
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                    />
-                  </div>
-                  <Button variant="outline" className="border border-black/10 h-10 px-6 rounded-xl" onClick={() => {
-                    setShowAddMasterCategory(!showAddMasterCategory);
-                    setSelectedMasterCategory(null);
-                  }}>
-                    <Plus className="w-4 h-4 mr-2" /> {showAddMasterCategory ? "Back to List" : "Manage Categories"}
-                  </Button>
+            <div className="space-y-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex items-center gap-4">
                   {selectedMasterCategory && (
-                    <Button variant="ghost" className="h-10 px-4 rounded-xl font-bold uppercase text-[10px]" onClick={() => setSelectedMasterCategory(null)}>
-                      &larr; Back to Categories
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => setSelectedMasterCategory(null)}
+                      className="border-2 border-black rounded-lg"
+                    >
+                      <ChevronRight className="w-4 h-4 rotate-180" />
                     </Button>
                   )}
+                  <div>
+                    <h2 className="text-2xl font-black uppercase tracking-tighter">AHSP Master Data</h2>
+                    <p className="text-[10px] uppercase-soft text-neutral-500">Manage {masterData.length.toLocaleString('id-ID')}+ construction work items and pricing.</p>
+                  </div>
                 </div>
                 <div className="flex gap-2">
+                  <Button className="btn-orange h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={() => setShowAddProduct(!showAddProduct)}>
+                    <Plus className="w-4 h-4 mr-2" /> {showAddProduct ? "Close Form" : "Add New Item"}
+                  </Button>
+                  <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={() => setShowAddMasterCategory(!showAddMasterCategory)}>
+                    <Layers className="w-4 h-4 mr-2" /> Categories
+                  </Button>
                   <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={handleExportMasterRAB}>
-                    <Download className="w-4 h-4 mr-2" /> Export Master PDF
+                    <Download className="w-4 h-4 mr-2" /> Export PDF
+                  </Button>
+                  <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={async () => {
+                    const mode = confirm("SYNC LOCAL DATA\n\nOK: Sync Tambahan (Hanya tambah yang belum ada)\nCancel: Overwrite (Hapus semua cloud lalu upload ulang 161 item)");
+                    
+                    if (mode) {
+                      // Sync Addition
+                      let count = 0;
+                      for (const item of WORK_ITEMS_MASTER) {
+                        const existing = masterData.find(d => d.id === item.id);
+                        if (!existing) {
+                          await addMasterItem(item);
+                          count++;
+                        }
+                      }
+                      toast.success(`Berhasil menambahkan ${count} item baru.`);
+                    } else {
+                      // Hard Reset & Sync
+                      if (confirm("⚠️ PERINGATAN: Ini akan menghapus SEMUA data master di Cloud (termasuk hasil import manual) dan menggantinya dengan 161 item internal. Lanjutkan?")) {
+                        await clearMasterData();
+                        await bulkAddMasterItems(WORK_ITEMS_MASTER);
+                      }
+                    }
+                  }}>
+                    <RefreshCw className="w-4 h-4 mr-2" /> Sync AHSP
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="border-2 border-red-600 text-red-600 hover:bg-red-50 h-10 px-6 rounded-xl font-black uppercase text-[10px]" 
+                    onClick={handleNuclearClear}
+                    disabled={isClearing}
+                  >
+                    {isClearing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                    {isClearing ? `Deleting (${clearProgress})...` : "Hapus Semua"}
                   </Button>
                   <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={() => navigate("/import")}>
                     <Upload className="w-4 h-4 mr-2" /> Bulk Import
                   </Button>
-                  <Button className="btn-orange h-10 px-6 rounded-xl" onClick={() => setShowAddProduct(true)}>
-                    <Plus className="w-4 h-4 mr-2" /> Add New Product
-                  </Button>
                 </div>
+              </div>
+              
+              {isClearing && (
+                <div className="bg-red-50 border-2 border-red-600 p-6 rounded-2xl flex flex-col gap-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-black text-red-600 uppercase tracking-widest text-sm">System Deletion In Progress</h3>
+                    <Badge variant="outline" className="border-red-600 text-red-600">{clearProgress} Items Removed</Badge>
+                  </div>
+                  <Progress value={100} className="h-4 bg-red-200" />
+                  <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest animate-pulse">
+                    ⚠️ Jangan menutup halaman ini hingga proses pembersihan selesai.
+                  </p>
+                </div>
+              )}
+
+              {/* Advanced Filter Bar */}
+              <div className="grid md:grid-cols-4 gap-4 bg-neutral-50 p-4 rounded-2xl border-2 border-black/5 shadow-sm">
+                <div className="relative col-span-1 md:col-span-2">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
+                  <Input 
+                    placeholder="Search by name, code, or category..." 
+                    className="pl-10 h-10 border-2 border-black rounded-xl focus:ring-accent bg-white"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                  />
+                </div>
+                <select 
+                  className="h-10 rounded-xl border-2 border-black px-3 text-[10px] font-black uppercase tracking-widest bg-white"
+                  value={selectedMasterCategory || ""}
+                  onChange={e => setSelectedMasterCategory(e.target.value || null)}
+                >
+                  <option value="">All Categories</option>
+                  {standardizedCategories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                  {masterCategories.filter(c => !standardizedCategories.includes(c.name)).map(c => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+                <select 
+                  className="h-10 rounded-xl border-2 border-black px-3 text-[10px] font-black uppercase tracking-widest bg-white"
+                  value={selectedUnit || ""}
+                  onChange={e => setSelectedUnit(e.target.value || null)}
+                >
+                  <option value="">All Units</option>
+                  {allUnits.map(unit => (
+                    <option key={unit} value={unit}>{unit}</option>
+                  ))}
+                </select>
               </div>
 
               {showAddMasterCategory && (
-                <Card className="border border-black/10 rounded-2xl p-6 bg-blue-50/30 animate-in fade-in slide-in-from-top-4">
-                  <div className="space-y-6">
-                    <div className="flex gap-4 items-end">
-                      <div className="flex-1 space-y-2">
-                        <label className="uppercase-soft text-[10px]">New Category Name</label>
+                <Card className="border-2 border-black rounded-2xl p-6 bg-white animate-in slide-in-from-top-4">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex-grow">
                         <Input 
-                          placeholder="e.g. Pekerjaan Atap" 
+                          placeholder="New Category Name..." 
                           value={newMasterCategory}
                           onChange={e => setNewMasterCategory(e.target.value)}
                           className="border-black/10"
@@ -725,47 +849,46 @@ export default function AdminPanel() {
                         if (!newMasterCategory) return;
                         await addMasterCategory(newMasterCategory);
                         setNewMasterCategory("");
+                        setShowAddMasterCategory(false);
                       }}>Add Category</Button>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <p className="uppercase-soft text-[10px]">Existing Categories</p>
-                      <div className="grid md:grid-cols-4 gap-2">
-                        {masterCategories.map(c => (
-                          <div key={c.id} className="p-2 bg-white border border-black/5 rounded-lg flex justify-between items-center">
-                            <span className="text-[10px] font-bold uppercase">{c.name}</span>
-                          </div>
-                        ))}
-                      </div>
                     </div>
                   </div>
                 </Card>
               )}
 
               {showAddProduct && (
-                <Card className="border-2 border-black rounded-2xl p-6 bg-neutral-50 animate-in fade-in slide-in-from-top-4">
+                <Card className="border-2 border-black rounded-2xl p-6 bg-neutral-50 animate-in fade-in slide-in-from-top-4 shadow-lg">
                   <div className="grid md:grid-cols-3 gap-6">
                     <div className="space-y-2">
                       <label className="uppercase-soft text-[10px]">Category</label>
                       <select 
-                        className="w-full h-10 rounded-xl border-2 border-black/10 px-3 text-sm"
+                        className="w-full h-10 rounded-xl border-2 border-black px-3 text-xs font-bold uppercase bg-white"
                         value={newProduct.category}
                         onChange={e => setNewProduct({...newProduct, category: e.target.value})}
                       >
                         <option value="">Select Category...</option>
-                        {masterCategories.map(c => (
+                        {standardizedCategories.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                        {masterCategories.filter(c => !standardizedCategories.includes(c.name)).map(c => (
                           <option key={c.id} value={c.name}>{c.name}</option>
                         ))}
-                        {/* Fallback for legacy categories */}
-                        {Array.from(new Set(masterData.map(i => i.category))).filter(c => !masterCategories.some(mc => mc.name === c)).map(c => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
                       </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="uppercase-soft text-[10px]">Kode ID</label>
+                      <Input 
+                        placeholder="e.g. P001" 
+                        className="h-10 border-2 border-black/10 rounded-xl"
+                        value={newProduct.code}
+                        onChange={e => setNewProduct({...newProduct, code: e.target.value})}
+                      />
                     </div>
                     <div className="space-y-2">
                       <label className="uppercase-soft text-[10px]">Product Name</label>
                       <Input 
                         placeholder="e.g. Galian Tanah" 
+                        className="h-10 border-2 border-black/10 rounded-xl"
                         value={newProduct.name}
                         onChange={e => setNewProduct({...newProduct, name: e.target.value})}
                       />
@@ -774,6 +897,7 @@ export default function AdminPanel() {
                       <label className="uppercase-soft text-[10px]">Unit</label>
                       <Input 
                         placeholder="m3, m2, ls" 
+                        className="h-10 border-2 border-black/10 rounded-xl"
                         value={newProduct.unit}
                         onChange={e => setNewProduct({...newProduct, unit: e.target.value})}
                       />
@@ -782,6 +906,7 @@ export default function AdminPanel() {
                       <label className="uppercase-soft text-[10px]">Price (Rp)</label>
                       <Input 
                         type="number"
+                        className="h-10 border-2 border-black/10 rounded-xl"
                         value={newProduct.price || 0}
                         onChange={e => setNewProduct({...newProduct, price: Math.max(0, Number(e.target.value))})}
                       />
@@ -790,133 +915,222 @@ export default function AdminPanel() {
                       <label className="uppercase-soft text-[10px]">Description</label>
                       <Input 
                         placeholder="Detailed description of the work item..." 
+                        className="h-10 border-2 border-black/10 rounded-xl"
                         value={newProduct.description}
                         onChange={e => setNewProduct({...newProduct, description: e.target.value})}
                       />
                     </div>
                   </div>
                   <div className="flex justify-end gap-4 mt-6">
-                    <Button variant="ghost" onClick={() => setShowAddProduct(false)}>Cancel</Button>
-                    <Button className="btn-sleek px-8" onClick={handleAddProduct}>Save Product</Button>
+                    <Button variant="ghost" className="rounded-xl" onClick={() => setShowAddProduct(false)}>Cancel</Button>
+                    <Button className="btn-sleek px-8 rounded-xl" onClick={handleAddProduct}>Save Product</Button>
                   </div>
                 </Card>
               )}
 
               <div className="space-y-4">
-                {!selectedMasterCategory ? (
-                  <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-6">
-                    {Object.entries(groupedMaster).map(([category, items]) => (
-                      <Card 
-                        key={category} 
-                        className="border-2 border-black rounded-2xl p-6 cursor-pointer hover:bg-neutral-50 transition-all group"
-                        onClick={() => setSelectedMasterCategory(category)}
-                      >
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="w-12 h-12 bg-black text-white flex items-center justify-center rounded-xl group-hover:bg-accent transition-colors">
-                            <Layers className="w-6 h-6" />
-                          </div>
-                          <Badge variant="outline" className="border-black text-[10px] font-black">
-                            {items.length} Items
-                          </Badge>
-                        </div>
-                        <h3 className="text-lg font-black uppercase tracking-tighter">{category}</h3>
-                        <p className="text-[10px] uppercase-soft text-neutral-400 mt-2">Manage items in this category.</p>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="col-span-full">
-                    <Card className="border-2 border-black rounded-2xl overflow-hidden shadow-sm">
-                      <div className="p-4 bg-neutral-50 border-b-2 border-black flex justify-between items-center">
-                        <h3 className="text-sm font-black uppercase tracking-widest">{selectedMasterCategory}</h3>
-                        <Badge className="bg-black text-white text-[9px]">{filteredMaster.length} Items</Badge>
-                      </div>
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-white">
-                            <TableHead className="uppercase-soft w-24">ID Code</TableHead>
-                            <TableHead className="uppercase-soft">Product Name</TableHead>
-                            <TableHead className="uppercase-soft">Unit</TableHead>
-                            <TableHead className="uppercase-soft text-right">Price (Rp)</TableHead>
-                            <TableHead className="uppercase-soft text-center">Stats</TableHead>
-                            <TableHead className="uppercase-soft text-right">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredMaster.map((item) => (
-                            <TableRow key={item.id} className={cn(item.status === 'hidden' && "opacity-50 bg-neutral-50")}>
-                              <TableCell className="font-mono text-[10px] font-bold">{item.code || "N/A"}</TableCell>
-                              <TableCell>
-                                {editingId === item.id ? (
-                                  <Input 
-                                    className="h-8 text-xs font-bold uppercase" 
-                                    value={editForm.name || ""} 
-                                    onChange={e => setEditForm({...editForm, name: e.target.value})}
-                                  />
-                                ) : (
-                                  <div className="space-y-1">
-                                    <p className="font-black text-xs uppercase tracking-widest">{item.name}</p>
-                                    <p className="text-[9px] text-neutral-400 line-clamp-1">{item.description}</p>
-                                  </div>
+                <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-2xl bg-white">
+                  <div className="overflow-x-auto w-full max-w-full">
+                    <Table className="min-w-[800px] md:min-w-full">
+                      <TableHeader>
+                        <TableRow className="bg-black hover:bg-black border-none">
+                          <TableHead className="w-12 text-center text-white uppercase font-black text-[9px]">No.</TableHead>
+                          <TableHead className="w-24 text-white uppercase font-black text-[9px]">Kode ID</TableHead>
+                          <TableHead className="text-white uppercase font-black text-[9px]">Uraian Pekerjaan</TableHead>
+                          <TableHead className="w-24 text-center text-white uppercase font-black text-[9px]">Satuan</TableHead>
+                          <TableHead className="w-40 text-white uppercase font-black text-[9px]">Kategori</TableHead>
+                          <TableHead className="w-32 text-right text-white uppercase font-black text-[9px]">Harga (Rp)</TableHead>
+                          <TableHead className="w-32 text-right text-white uppercase font-black text-[9px]">Aksi</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                    <TableBody>
+                      {filteredMaster.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="h-40 text-center text-neutral-400 italic uppercase font-black tracking-widest">
+                            No items found matching your filters.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredMaster.map((item, index) => {
+                          const isExpanded = expandedRows.includes(item.id);
+                          const isEditing = editingId === item.id;
+                          
+                          return (
+                            <React.Fragment key={item.id}>
+                              <TableRow 
+                                className={cn(
+                                  "group transition-colors border-b-2 border-black/5",
+                                  item.status === 'hidden' && "opacity-50 grayscale",
+                                  isExpanded && "bg-neutral-50"
                                 )}
-                              </TableCell>
-                              <TableCell className="text-[10px] font-bold uppercase">
-                                {editingId === item.id ? (
-                                  <Input 
-                                    className="h-8 w-16 text-xs font-bold uppercase" 
-                                    value={editForm.unit || ""} 
-                                    onChange={e => setEditForm({...editForm, unit: e.target.value})}
-                                  />
-                                ) : (
-                                  item.unit
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right font-mono font-bold">
-                                {editingId === item.id ? (
-                                  <Input 
-                                    type="number"
-                                    className="h-8 w-24 text-right text-xs font-bold" 
-                                    value={editForm.price || 0} 
-                                    onChange={e => setEditForm({...editForm, price: Number(e.target.value)})}
-                                  />
-                                ) : (
-                                  `Rp ${item.price.toLocaleString('id-ID')}`
-                                )}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <div className="text-[9px] uppercase-soft">
-                                  Sold: <span className="font-bold text-black">{item.soldCount || 0}</span>
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex justify-end gap-2">
-                                  {editingId === item.id ? (
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-green-500" onClick={handleSaveEdit}>
-                                      <Save className="w-4 h-4" />
-                                    </Button>
+                              >
+                                <TableCell className="text-center font-mono text-[10px] text-neutral-400 font-black">
+                                  {index + 1}
+                                </TableCell>
+                                <TableCell className="font-mono text-[10px] font-black text-accent">
+                                  {isEditing ? (
+                                    <Input 
+                                      className="h-8 w-20 text-[10px] font-black border-2 border-accent bg-white uppercase" 
+                                      value={editForm.code || ""} 
+                                      onChange={e => setEditForm({...editForm, code: e.target.value})}
+                                    />
                                   ) : (
-                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleEdit(item)}>
-                                      <FileText className="w-4 h-4" />
-                                    </Button>
+                                    item.code || "N/A"
                                   )}
-                                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => updateMasterItem(item.id, { status: item.status === 'visible' ? 'hidden' : 'visible' })}>
-                                    {item.status === 'visible' ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                                  </Button>
-                                  <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500" onClick={() => deleteMasterItem(item.id)}>
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </Card>
-                  </div>
-                )}
-              </div>
+                                </TableCell>
+                                <TableCell className="max-w-[180px] md:max-w-[250px]">
+                                  {isEditing ? (
+                                    <Textarea 
+                                      className="text-[11px] font-black uppercase tracking-tight border-2 border-accent bg-white min-h-[80px] resize-none overflow-hidden" 
+                                      value={editForm.name || ""} 
+                                      onChange={e => setEditForm({...editForm, name: e.target.value})}
+                                    />
+                                  ) : (
+                                    <div className="flex items-start gap-2 cursor-pointer group/name py-2" onClick={() => toggleRow(item.id)}>
+                                      <span className="font-black text-[10px] md:text-[11px] uppercase tracking-tighter group-hover/name:text-accent transition-colors block whitespace-normal break-words leading-tight">
+                                        {item.name}
+                                      </span>
+                                      {(item.description || item.soldCount > 0) && <ChevronDown className={cn("w-3 h-3 text-neutral-300 transition-transform mt-0.5 shrink-0", isExpanded && "rotate-180")} />}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {isEditing ? (
+                                    <Input 
+                                      className="h-8 w-16 mx-auto text-[10px] font-black uppercase text-center border-2 border-accent bg-white" 
+                                      value={editForm.unit || ""} 
+                                      onChange={e => setEditForm({...editForm, unit: e.target.value})}
+                                    />
+                                  ) : (
+                                    <Badge variant="outline" className="text-[9px] font-black uppercase border-black/10">
+                                      {item.unit}
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {isEditing ? (
+                                    <select 
+                                      className="h-8 w-full rounded-md border-2 border-accent px-2 text-[10px] font-black uppercase bg-white"
+                                      value={editForm.category || ""}
+                                      onChange={e => setEditForm({...editForm, category: e.target.value})}
+                                    >
+                                      {standardizedCategories.map(cat => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                      ))}
+                                      {masterCategories.filter(c => !standardizedCategories.includes(c.name)).map(c => (
+                                        <option key={c.id} value={c.name}>{c.name}</option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <span className="text-[9px] font-black uppercase text-neutral-400 tracking-widest">{item.category}</span>
+                                  )}
+                                </TableCell>
+                                  <TableCell className="text-right">
+                                    {isEditing ? (
+                                      <div className="space-y-1">
+                                        <Input 
+                                          type="number"
+                                          className="h-8 w-28 ml-auto text-right text-[11px] font-black border-2 border-accent bg-white" 
+                                          value={editForm.price || 0} 
+                                          onChange={e => setEditForm({...editForm, price: Number(e.target.value)})}
+                                        />
+                                        <div className="text-[9px] text-neutral-400 font-bold uppercase text-right">
+                                          Base: {formatRupiah(editForm.price || 0)}
+                                        </div>
+                                        <div className="text-[9px] text-accent font-bold uppercase text-right">
+                                          Marked Up: {formatRupiah(calculateAdminPrice(editForm.price || 0))}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="flex flex-col items-end">
+                                        <span className="font-mono text-[11px] font-black text-black">
+                                          {formatRupiah(calculateAdminPrice(item.price))}
+                                        </span>
+                                        <span className="text-[9px] text-neutral-400 font-bold uppercase">
+                                          Base: {formatRupiah(item.price)}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end gap-1">
+                                    {isEditing ? (
+                                      <>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600 bg-green-50 hover:bg-green-100 border border-green-200" onClick={handleSaveEdit}>
+                                          <Save className="w-3.5 h-3.5" />
+                                        </Button>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200" onClick={() => setEditingId(null)}>
+                                          <X className="w-3.5 h-3.5" />
+                                        </Button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:bg-blue-50" onClick={() => handleEdit(item)}>
+                                          <FileText className="w-3.5 h-3.5" />
+                                        </Button>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateMasterItem(item.id, { status: item.status === 'visible' ? 'hidden' : 'visible' })}>
+                                          {item.status === 'visible' ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5 text-neutral-400" />}
+                                        </Button>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:bg-red-50" onClick={() => {
+                                          if (confirm("Hapus item ini selamanya?")) deleteMasterItem(item.id);
+                                        }}>
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                              {isExpanded && (
+                                <TableRow className="bg-neutral-50/50 border-b-2 border-black/5">
+                                  <TableCell colSpan={7} className="py-6 px-4 md:px-12">
+                                    <div className="space-y-4 animate-in fade-in slide-in-from-left-2">
+                                      <div className="flex items-start gap-4">
+                                        <div className="p-3 bg-white rounded-2xl border-2 border-black/5 shadow-sm shrink-0">
+                                          <AlertCircle className="w-5 h-5 text-accent" />
+                                        </div>
+                                        <div className="space-y-1 min-w-0 flex-1">
+                                          <h4 className="text-[10px] font-black uppercase text-neutral-400 tracking-widest">Deskripsi Pekerjaan & AHSP Detail</h4>
+                                          <p className="text-xs font-bold leading-relaxed max-w-md text-neutral-600 break-words whitespace-normal">
+                                            {item.description || "Tidak ada deskripsi tambahan untuk item pekerjaan ini. AHSP ini mencakup tenaga kerja, material, dan peralatan standar."}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="grid grid-cols-4 gap-8">
+                                        <div className="space-y-1">
+                                          <h4 className="text-[10px] font-black uppercase text-neutral-400 tracking-widest">Total Digunakan</h4>
+                                          <p className="text-xs font-black">{item.soldCount || 0} Proyek Aktif</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                          <h4 className="text-[10px] font-black uppercase text-neutral-400 tracking-widest">Estimasi Margin</h4>
+                                          <p className="text-xs font-black text-green-600">20% (Adjusted)</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                          <h4 className="text-[10px] font-black uppercase text-neutral-400 tracking-widest">Status Katalog</h4>
+                                          <Badge className={cn("text-[9px] font-black uppercase", item.status === 'visible' ? "bg-green-500 text-white" : "bg-neutral-200 text-neutral-500")}>
+                                            {item.status || 'visible'}
+                                          </Badge>
+                                        </div>
+                                        <div className="space-y-1">
+                                          <h4 className="text-[10px] font-black uppercase text-neutral-400 tracking-widest">Revenue Terkumpul</h4>
+                                          <p className="text-xs font-black">Rp {(item.revenue || 0).toLocaleString('id-ID')}</p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </React.Fragment>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </Card>
             </div>
-          )}
+          </div>
+        )}
 
           {activeTab === "clients" && (
             <div className="space-y-8">

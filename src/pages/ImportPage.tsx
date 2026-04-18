@@ -1,26 +1,22 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { db } from "@/lib/firebase";
-import { collection, addDoc } from "firebase/firestore";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useMasterData } from "@/lib/hooks";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2, FileUp, AlertTriangle } from "lucide-react";
 
 export default function ImportPage() {
   const [text, setText] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [total, setTotal] = useState(0);
+  const { addMasterItem, clearMasterData, bulkAddMasterItems } = useMasterData("admin");
 
   const parseOCR = (text: string) => {
     const lines = text.split("\n");
     const items: any[] = [];
     
-    const targetCategories = [
-      "ARSITEKTUR", "Struktur", "Lapangan / Sitework", "Mekanikal Elektrikal", "Plumbing", "Site Development"
-    ];
-
     const mapCategory = (cat: string) => {
       const c = cat.toLowerCase();
       if (c.includes("arsitektur")) return "ARSITEKTUR";
@@ -32,59 +28,67 @@ export default function ImportPage() {
       return "ARSITEKTUR";
     };
 
-    const categories = [
-      "Mekanikal Elektrikal", "Perpipaan / Plumbing", "M2 Arsitektur", 
-      "Site Development", "Lapangan / Site work", "M3 Struktur", 
-      "Struktur", "Arsitektur", "Sipil", "Pondasi", "Beton", "Galian", "Persiapan",
-      "M Arsitektur", "Kg Struktur", "Unit Arsitektur", "Unit Persiapan", "Buis", "Testing", "Tutup", "Box", "Kabel", "Ton", "Perkerasan", "Beton", "Kering", "Basah", "Biaya", "Pekerjaan", "Septictank", "Mic", "TB", "Material", "Pengecatan", "M3 Struktur", "M Struktur", "Ha Persiapan", "Tunggul Persiapan", "Batang Persiapan", "Penyapuan", "Gulma", "Buah Persiapan", "untuk Site Development"
+    // User requested order: [KODE] NAMA_ITEM UNIT KATEGORI HARGA
+    // We work backwards from the price.
+    const categoriesList = [
+      "ARSITEKTUR", "Arsitektur", "Struktur", "Lapangan / Sitework", "Sitework", "Lapangan", 
+      "Mekanikal Elektrikal", "Mekanikal", "Elektrikal", "Plumbing", "Perpipaan", 
+      "Site Development", "Development", "Sipil", "Beton", "Pondasi", "Galian", "Persiapan"
     ].sort((a, b) => b.length - a.length);
 
-    const units = [
-      "Unit", "unit", "m", "Set", "Titik", "ACP", "M2", "Buah", "buah", "Gulma", "Penyapuan", "untuk", "Saluran", "Buis", "Testing", "Tutup", "Box", "M", "m'", "Kg", "kg", "titik", "Pemasangan", "Obstruction", "Kabel", "Ton", "Perkerasan", "Beton", "Kering", "Basah", "Biaya", "Pekerjaan", "Septictank", "Mic", "TB", "Material", "Pengecatan", "M3", "M'", "Ha", "Tunggul", "dan", "tebang", "kayu", "Ulang", "patok", "Pekerjaam", "Exhaust", "Instalasi", "Pencabut", "Pemangkasan", "Pembersihan", "Penyiraman", "Pemotongan", "Pembongkaran", "Pembuatan", "Pabrikasi", "Pelaburan", "Pengikisan/Pengerokan", "Pengerokan", "Pelituran", "Jasa", "Pengecoran", "Penyambungan", "Urukan", "Timbunan", "Pemadatan", "Striping)"
+    const unitsList = [
+      "Unit", "unit", "m", "Set", "Titik", "ACP", "M2", "m2", "M3", "m3", "Buah", "buah", "ls", "Ls", "Lot", "Kg", "kg", "M", "m'", "titik", "Pemasangan", "Ton", "Ha", "Box", "Kabel"
     ].sort((a, b) => b.length - a.length);
 
     for (let line of lines) {
       line = line.trim();
       if (!line || line.toLowerCase().startsWith("no name") || line.toLowerCase().startsWith("noname")) continue;
 
-      const priceMatch = line.match(/Rp\.\s+([\d\.,]+)$/);
+      // 1. Extract Price (at the end)
+      const priceMatch = line.match(/(?:Rp\.?\s*)?([\d\.,]+)$/i);
       if (!priceMatch) continue;
 
       const priceStr = priceMatch[1].trim();
-      const price = parseFloat(priceStr.replace(/\./g, "").replace(",", "."));
+      let normalizedPrice = priceStr.replace(/\./g, "").replace(",", ".");
+      const price = parseFloat(normalizedPrice);
+      if (isNaN(price)) continue;
 
-      let rest = line.substring(0, priceMatch.index).trim();
+      let remaining = line.substring(0, priceMatch.index || 0).trim();
 
-      let rawCategory = "Lain-lain";
-      for (const cat of categories) {
-        if (rest.endsWith(cat)) {
+      // 2. Extract Category (now before price)
+      let rawCategory = "ARSITEKTUR";
+      for (const cat of categoriesList) {
+        if (remaining.toLowerCase().endsWith(cat.toLowerCase())) {
           rawCategory = cat;
-          rest = rest.substring(0, rest.length - cat.length).trim();
+          remaining = remaining.substring(0, remaining.length - cat.length).trim();
           break;
         }
       }
-
       const foundCategory = mapCategory(rawCategory);
 
+      // 3. Extract Unit (before category)
       let foundUnit = "ls";
-      for (const u of units) {
-        if (rest.endsWith(u)) {
+      for (const u of unitsList) {
+        if (remaining.toLowerCase().endsWith(u.toLowerCase())) {
           foundUnit = u;
-          rest = rest.substring(0, rest.length - u.length).trim();
+          remaining = remaining.substring(0, remaining.length - u.length).trim();
           break;
         }
       }
 
-      const codeMatch = rest.match(/^([A-Z]\.[\d\.]+[a-z]?|[A-Z]\d+)\s+/);
+      // 4. Extract Code (at the start)
+      const codeMatch = remaining.match(/^([A-Z][\.\d\w]*)\s+/i);
       let code = "";
-      let name = rest;
+      let name = remaining;
       if (codeMatch) {
         code = codeMatch[1].trim();
-        name = rest.substring(codeMatch[0].length).trim();
+        name = remaining.substring(codeMatch[0].length).trim();
       }
 
+      if (!name) name = "Item Tanpa Nama";
+
       items.push({
-        code,
+        code: code.toUpperCase(),
         category: foundCategory,
         name,
         unit: foundUnit,
@@ -101,24 +105,27 @@ export default function ImportPage() {
   const handleImport = async () => {
     const items = parseOCR(text);
     if (items.length === 0) {
-      toast.error("No valid items found to import");
+      toast.error("Format tidak dikenali. Pastikan ada Kode (opsional), Nama, Unit, dan Harga di setiap baris.");
       return;
     }
 
+    const shouldClear = confirm(`Ditemukan ${items.length} item. Apakah Anda ingin MENGHAPUS semua data master di Cloud terlebih dahulu sebelum mengimpor? (Disarankan untuk mencegah duplikasi)`);
+    
     setIsImporting(true);
     setTotal(items.length);
     setProgress(0);
 
     try {
-      for (let i = 0; i < items.length; i++) {
-        await addDoc(collection(db, "master_data"), items[i]);
-        setProgress(i + 1);
+      if (shouldClear) {
+        await clearMasterData();
       }
-      toast.success(`Successfully imported ${items.length} items`);
+      
+      await bulkAddMasterItems(items);
+      
       setText("");
     } catch (error) {
       console.error("Import error:", error);
-      toast.error("Failed to import some items");
+      toast.error("Gagal mengimpor beberapa item.");
     } finally {
       setIsImporting(false);
     }
@@ -126,33 +133,58 @@ export default function ImportPage() {
 
   return (
     <div className="container mx-auto py-10 space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Import Master Data from OCR</CardTitle>
+      <div className="flex justify-between items-center bg-white p-6 rounded-2xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <div>
+          <h1 className="text-3xl font-black uppercase tracking-tighter">Bulk Import Master Data</h1>
+          <p className="text-neutral-500 uppercase text-xs font-bold">Impor data AHSP secara massal dari teks OCR.</p>
+        </div>
+        <Button 
+          variant="destructive" 
+          className="rounded-xl font-black uppercase tracking-tight border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+          onClick={clearMasterData}
+        >
+          <Trash2 className="w-4 h-4 mr-2" /> Hapus Semua Data Cloud
+        </Button>
+      </div>
+
+      <Card className="border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] rounded-2xl overflow-hidden">
+        <CardHeader className="bg-neutral-50 border-b-2 border-black">
+          <CardTitle className="uppercase font-black text-xl flex items-center">
+            <FileUp className="w-6 h-6 mr-2" /> Paste OCR Text
+          </CardTitle>
+          <CardDescription className="text-neutral-600 font-medium">
+            Format yang didukung: <code className="bg-neutral-200 px-1 rounded">[KODE] NAMA_ITEM UNIT KATEGORI HARGA</code>. Harga harus berada di akhir baris.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="p-6 space-y-4">
           <Textarea 
-            placeholder="Paste OCR text here..." 
-            className="min-h-[400px] font-mono text-xs"
+            placeholder="Contoh: A.1.1.a Pekerjaan Galian Tanah m3 Struktur 75000" 
+            className="min-h-[400px] font-mono text-xs border-2 border-black rounded-xl focus:ring-0"
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
-          <div className="flex items-center gap-4">
-            <Button 
-              onClick={handleImport} 
-              disabled={isImporting || !text.trim()}
-              className="w-full"
-            >
-              {isImporting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Importing ({progress}/{total})
-                </>
-              ) : (
-                "Import Items"
-              )}
-            </Button>
+          
+          <div className="bg-amber-50 border-2 border-amber-200 p-4 rounded-xl flex gap-3 items-start">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-800 font-medium leading-relaxed">
+              Pastikan data lama sudah dihapus jika Anda ingin mengganti seluruh database. Gunakan tombol <strong>Hapus Semua Data Cloud</strong> di atas sebelum melakukan impor baru.
+            </p>
           </div>
+
+          <Button 
+            onClick={handleImport} 
+            disabled={isImporting || !text.trim()}
+            className="w-full bg-black hover:bg-neutral-800 text-white font-black uppercase tracking-widest h-14 rounded-xl shadow-[4px_4px_0px_0px_rgba(100,100,100,1)] disabled:opacity-50 transition-all active:translate-y-1 active:shadow-none"
+          >
+            {isImporting ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Mengimpor ({progress}/{total})
+              </>
+            ) : (
+              "Mulai Impor Sekarang"
+            )}
+          </Button>
         </CardContent>
       </Card>
     </div>

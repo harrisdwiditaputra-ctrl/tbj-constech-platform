@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { toast } from "sonner";
-import { cn, getDriveImageUrl } from "@/lib/utils";
+import { cn, getDriveImageUrl, formatRupiah, calculateAdminPrice } from "@/lib/utils";
 import { Project, MaterialRequest, Attendance, Workforce } from "@/types";
 
 export default function PMDashboard() {
@@ -306,8 +306,8 @@ export default function PMDashboard() {
                       </div>
                       <div className="space-y-1">
                         <p className="uppercase-soft text-[10px]">Budget Used</p>
-                        <p className="text-2xl font-black text-red-500">Rp {(selectedProject.releasedAmount || 0).toLocaleString('id-ID')}</p>
-                        <p className="text-[9px] text-neutral-400 uppercase font-bold">of Rp {(selectedProject.totalBudget || 0).toLocaleString('id-ID')} Total</p>
+                        <p className="text-2xl font-black text-red-500">{formatRupiah(calculateAdminPrice(selectedProject.releasedAmount || 0))}</p>
+                        <p className="text-[9px] text-neutral-400 uppercase font-bold">of {formatRupiah(calculateAdminPrice(selectedProject.totalBudget || 0))} Total (Adm)</p>
                       </div>
                       <div className="space-y-1">
                         <p className="uppercase-soft text-[10px]">Deadline</p>

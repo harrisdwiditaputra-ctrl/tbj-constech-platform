@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useAuth } from "@/lib/hooks";
+import { useAuth, useMasterData } from "@/lib/hooks";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ interface Message {
 
 export default function AIAgent() {
   const { user } = useAuth();
+  const { masterData } = useMasterData();
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: "Halo! Saya TBJ AI Agent. Ada yang bisa saya bantu terkait proyek konstruksi, renovasi, atau desain interior Anda hari ini? Anda juga bisa mengirimkan foto area yang ingin dikonsultasikan." }
   ]);
@@ -59,6 +60,26 @@ export default function AIAgent() {
   const handleSend = async () => {
     if (!input.trim() && !selectedImage) return;
 
+    // Guardrail: WA Verification for Clients (Prospect)
+    if (user && user.role === "user" && user.tier === "prospect" && !user.waVerified) {
+      toast.error("Akses Dibatasi! Silakan lakukan verifikasi WhatsApp terlebih dahulu di menu Profil.");
+      setMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: "Maaf, akses analisis AI dibatasi. Demi keamanan data, silakan lakukan verifikasi nomor WhatsApp Anda di halaman Profil terlebih dahulu untuk melanjutkan konsultasi." 
+      }]);
+      return;
+    }
+
+    // Guardrail: AI Quota for Clients (Prospect)
+    if (user && user.role === "user" && user.tier === "prospect" && (user.aiUsageCount || 0) >= 1) {
+      toast.error("Kuota Terlampaui!");
+      setMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: "Anda telah menggunakan kuota 1x analisis AI gratis untuk Tier 1. Silakan hubungi Admin untuk meningkatkan paket Anda atau melakukan Digital Assessment (Survey) berbayar." 
+      }]);
+      return;
+    }
+
     const userMessage: Message = { 
       role: "user", 
       content: input,
@@ -72,42 +93,60 @@ export default function AIAgent() {
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+      const modelName = userMessage.image ? "gemini-2.5-flash-image" : "gemini-3-flash-preview";
 
-      let promptText = `Anda adalah TBJ AI Agent, asisten ahli konstruksi dan renovasi dari Tukang Bangunan Jakarta. 
-      Tugas Anda adalah memberikan saran teknis, estimasi kasar, dan solusi desain yang profesional namun ramah.
-      Gunakan gaya bahasa yang sopan dan solutif.
+      const masterDataSample = masterData.slice(0, 50).map(item => `- ${item.name}: Rp ${item.price.toLocaleString('id-ID')} (${item.unit})`).join('\n');
+
+      const promptText = `Anda adalah "TBJ Constech OS", Chief Estimator AI eksklusif untuk platform TBJ Constech. 
+      Tugas Anda adalah memberikan saran teknis, estimasi kasar, dan solusi desain yang sangat profesional.
       
-      Aturan Penting:
+      DATA REFERENSI ITEM (Harga di bawah adalah harga dasar, Anda WAJIB menaikkan 20% sebelum menjawab):
+      ${masterDataSample}
+
+      LOGIKA LAYANAN:
       1. Gunakan istilah "Digital Assessment" sebagai pengganti "Survey".
-      2. Biaya Digital Assessment adalah Rp 399.000 (Mutlak).
-      3. Jangan pernah membocorkan harga modal (price_base).
-      4. Fokus hanya pada konstruksi, renovasi, dan desain interior.
+      2. Biaya Digital Assessment adalah Rp 399.000 (Murni & Mutlak).
+      3. Jangan pernah membocorkan harga modal (base price).
+      4. Markup Global 20% sudah diaplikasikan pada harga yang Anda berikan.
+      5. Anda berbicara sebagai sistem operasi yang cerdas dan solutif.
+      6. Verifikasi WhatsApp (waVerified) sangat penting untuk akses fitur premium.
       
-      User: ${input}`;
+      ROLE USER: ${user?.role || 'Guest'}
+      TIER USER: ${user?.tier || 'prospect'}
+      
+      User Message: ${input}`;
 
-      let response;
+      let contents: any[] = [{ text: promptText }];
       if (userMessage.image) {
         const imageData = userMessage.image.split(",")[1];
-        const imagePart = {
+        contents.push({
           inlineData: {
             data: imageData,
             mimeType: "image/jpeg"
           }
-        };
-        const textPart = { text: promptText };
-        response = await ai.models.generateContent({
-          model: "gemini-2.5-flash-image",
-          contents: { parts: [imagePart, textPart] }
-        });
-      } else {
-        response = await ai.models.generateContent({
-          model: "gemini-flash-latest",
-          contents: promptText
         });
       }
 
-      const responseText = response.text || "Maaf, saya tidak bisa memberikan jawaban saat ini.";
+      const result = await ai.models.generateContent({
+        model: modelName,
+        contents: [{ parts: contents }]
+      });
+
+      const responseText = result.text || "Maaf, saya tidak bisa memberikan jawaban saat ini.";
       setMessages(prev => [...prev, { role: "assistant", content: responseText }]);
+      
+      // Update quota in Firestore
+      if (user && user.uid && !user.uid.startsWith("guest-")) {
+        try {
+          const { updateDoc, doc } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+          await updateDoc(doc(db, "users", user.uid), {
+            aiUsageCount: (user.aiUsageCount || 0) + 1
+          });
+        } catch (e) {
+          console.error("Failed to update AI quota:", e);
+        }
+      }
     } catch (error) {
       console.error("AI Agent Error:", error);
       toast.error("Maaf, terjadi kesalahan saat menghubungi AI Agent.");
