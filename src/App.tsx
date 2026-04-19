@@ -7,6 +7,7 @@ import { BrowserRouter as Router, Routes, Route, useNavigate, useParams, Link } 
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import ErrorBoundary from "@/components/ErrorBoundary.tsx";
+import { Analytics } from '@vercel/analytics/react';
 import Layout from "@/components/Layout.tsx";
 import { useState, useEffect, useMemo } from "react";
 import { useAuth, useProjects, useProjectDetails, useProperties, useMasterData, useCMSConfig, useSystemConfig, incrementAIUsage } from "@/lib/hooks";
@@ -2760,6 +2761,7 @@ export default function App() {
           </Routes>
         </Layout>
         <Toaster />
+        <Analytics />
       </Router>
     </ErrorBoundary>
   );
