@@ -49,7 +49,7 @@ export default function Ticker() {
   }, [transactions, projects, cmsConfig]);
 
   return (
-    <div className="bg-[#FF8C00] text-white py-2 overflow-hidden border-b border-black/10 relative flex items-center">
+    <div className="bg-[#FF6B00] text-white py-2 overflow-hidden border-b border-black/10 relative flex items-center">
       <div className="flex whitespace-nowrap animate-ticker">
         {/* Repeating for continuous loop */}
         {[...activities, ...activities, ...activities].map((text, idx) => (
