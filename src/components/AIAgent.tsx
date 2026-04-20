@@ -63,25 +63,8 @@ export default function AIAgent() {
   const handleSend = async () => {
     if (!input.trim() && !selectedImage) return;
 
-    // Guardrail: WA Verification for Clients (Prospect)
-    if (user && user.role === "user" && user.tier === "prospect" && !user.waVerified) {
-      toast.error("Akses Dibatasi! Silakan lakukan verifikasi WhatsApp terlebih dahulu di menu Profil.");
-      setMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: "Maaf, akses analisis AI dibatasi. Demi keamanan data, silakan lakukan verifikasi nomor WhatsApp Anda di halaman Profil terlebih dahulu untuk melanjutkan konsultasi." 
-      }]);
-      return;
-    }
-
-    // Guardrail: AI Quota for Clients (Prospect)
-    if (user && user.role === "user" && user.tier === "prospect" && (user.aiUsageCount || 0) >= 1) {
-      toast.error("Kuota Terlampaui!");
-      setMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: "Anda telah menggunakan kuota 1x analisis AI gratis untuk Tier 1. Silakan hubungi Admin untuk meningkatkan paket Anda atau melakukan Digital Assessment (Survey) berbayar." 
-      }]);
-      return;
-    }
+    // Guardrail: Removed WA/Tier restrictions as per user request to let everyone use AI AGENT
+    const isStaff = user?.role === "admin" || user?.role === "pm";
 
     const userMessage: Message = { 
       role: "user", 
@@ -96,7 +79,7 @@ export default function AIAgent() {
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-      const modelName = userMessage.image ? "gemini-2.5-flash-image" : "gemini-3-flash-preview";
+      const modelName = userMessage.image ? "gemini-1.5-flash" : "gemini-1.5-flash"; // Standard models for better compatibility
 
       const masterDataSample = masterData.slice(0, 50).map(item => `- ${item.name}: Rp ${item.price.toLocaleString('id-ID')} (${item.unit})`).join('\n');
 

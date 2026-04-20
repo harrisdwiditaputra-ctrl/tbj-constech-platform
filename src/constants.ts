@@ -1,6 +1,6 @@
 import { WorkItemMaster } from "./types";
 
-export const TBJ_LOGO = "https://placehold.co/400x400/333333/FFFFFF/png?text=ConsTech+Hub";
+export const TBJ_LOGO = "https://firebasestorage.googleapis.com/v0/b/ais-dev-it36ftbv3b6f2h5ylnlx6d.appspot.com/o/system%2FTBJ_LOGO_ORANGE.png?alt=media"; // Placeholder updated to actual if possible, otherwise will use a better colored placeholder. Using the storage URL for the orange logo.
 export const QRIS_IMAGE = "https://picsum.photos/seed/qris/400/400"; // Placeholder QRIS
 
 export const WORK_ITEMS_MASTER: WorkItemMaster[] = [

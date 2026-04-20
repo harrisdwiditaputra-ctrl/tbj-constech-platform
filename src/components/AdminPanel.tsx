@@ -1311,13 +1311,13 @@ export default function AdminPanel() {
                                           Base: {formatRupiah(editForm.price || 0)}
                                         </div>
                                         <div className="text-[9px] text-accent font-bold uppercase text-right">
-                                          Marked Up: {formatRupiah(calculateAdminPrice(editForm.price || 0))}
+                                          Marked Up: {formatRupiah(calculateAdminPrice(editForm.price || 0, systemConfig?.globalMarkup))}
                                         </div>
                                       </div>
                                     ) : (
                                       <div className="flex flex-col items-end">
                                         <span className="font-mono text-[11px] font-black text-black">
-                                          {formatRupiah(calculateAdminPrice(item.price))}
+                                          {formatRupiah(calculateAdminPrice(item.price, systemConfig?.globalMarkup))}
                                         </span>
                                         <span className="text-[9px] text-neutral-400 font-bold uppercase">
                                           Base: {formatRupiah(item.price)}
@@ -2089,8 +2089,23 @@ export default function AdminPanel() {
                       <Input value={cmsForm?.heroSubtitle} onChange={e => setCmsForm({ ...cmsForm, heroSubtitle: e.target.value })} />
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <label className="uppercase-soft text-[10px]">Promo Ticker Text</label>
-                      <Input value={cmsForm?.promoText} onChange={e => setCmsForm({ ...cmsForm, promoText: e.target.value })} />
+                      <div className="flex justify-between items-center">
+                        <label className="uppercase-soft text-[10px]">Promo Ticker Text (Gunakan | untuk pisahkan baris)</label>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-6 text-[8px] font-black uppercase border-black/10"
+                          onClick={() => setCmsForm({ ...cmsForm, promoText: cmsForm?.promoText ? `${cmsForm.promoText} | ` : "" })}
+                        >
+                          <Plus className="w-3 h-3 mr-1" /> Add Row
+                        </Button>
+                      </div>
+                      <Textarea 
+                        value={cmsForm?.promoText} 
+                        onChange={e => setCmsForm({ ...cmsForm, promoText: e.target.value })} 
+                        placeholder="Contoh: Promo Diskon 10% | Gratis Survey Jabodetabek"
+                        className="bg-white/50"
+                      />
                     </div>
                   </div>
                   <div className="flex justify-end">
@@ -2722,14 +2737,21 @@ export default function AdminPanel() {
                       <Textarea value={newGallery.description} onChange={e => setNewGallery({...newGallery, description: e.target.value})} />
                     </div>
                   </div>
-                  <div className="flex justify-end gap-4 mt-6">
-                    <Button variant="ghost" onClick={() => setShowAddGallery(false)}>Cancel</Button>
-                    <Button className="btn-sleek px-8" onClick={async () => {
-                      await addGalleryItem(newGallery as any);
-                      setShowAddGallery(false);
-                      setNewGallery({ title: "", description: "", imageUrl: "", category: "project" });
-                    }}>Save Item</Button>
-                  </div>
+                    <div className="flex justify-end gap-4 mt-6">
+                      <Button variant="ghost" onClick={() => setShowAddGallery(false)}>Cancel</Button>
+                      <Button className="btn-sleek px-8" onClick={async () => {
+                        const galleryPayload = {
+                          ...newGallery,
+                          images: [newGallery.imageUrl], // Map to expected images array
+                          date: new Date().toISOString(),
+                          value: 0
+                        };
+                        await addGalleryItem(galleryPayload as any);
+                        setShowAddGallery(false);
+                        setNewGallery({ title: "", description: "", imageUrl: "", category: "project" });
+                        toast.success("Project Gallery updated successfully");
+                      }}>Save Item</Button>
+                    </div>
                 </Card>
               )}
 
@@ -2776,13 +2798,12 @@ export default function AdminPanel() {
                     </div>
                     <div className="space-y-2">
                       <label className="uppercase-soft text-[10px]">Type / Category</label>
-                      <select className="w-full h-10 rounded-md border border-black/10 px-3 text-sm" value={newProperty.type} onChange={e => setNewProperty({...newProperty, type: e.target.value as any})}>
-                        <option value="lahan">LAHAN STRATEGIS</option>
-                        <option value="kerjasama">KERJASAMA ASET</option>
-                        <option value="revitalisasi">REVITALISASI</option>
-                        <option value="sewa">SEWA & PERMIT</option>
-                        <option value="bangun">TITIP BANGUN</option>
-                      </select>
+                        <select className="w-full h-10 rounded-md border border-black/10 px-3 text-sm" value={newProperty.type} onChange={e => setNewProperty({...newProperty, type: e.target.value as any})}>
+                          <option value="kerjasama">SYNERGY LAB</option>
+                          <option value="bangun">TITIP BANGUN</option>
+                          <option value="jual">JUAL & SEWA</option>
+                          <option value="legal">LEGAL & PERIZINAN</option>
+                        </select>
                     </div>
                     <div className="space-y-2">
                       <label className="uppercase-soft text-[10px]">Price (Rp)</label>
@@ -2881,7 +2902,7 @@ export default function AdminPanel() {
                     <div className="h-48 relative">
                       <img src={getDriveImageUrl(p.photos[0]) || "https://picsum.photos/seed/prop/400/300"} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       <Badge className="absolute top-4 left-4 bg-black text-white uppercase-soft">
-                        {p.type === 'lahan' ? 'Lahan Strategis' : p.type === 'kerjasama' ? 'Strategic Partnership' : p.type === 'revitalisasi' ? 'Revitalisasi' : p.type === 'bangun' ? 'Titip Bangun' : p.type === 'sewa' ? 'Sewa & Permit' : p.type}
+                        {p.type === 'kerjasama' ? 'Synergy Lab' : p.type === 'bangun' ? 'Titip Bangun' : p.type === 'jual' ? 'Jual & Sewa' : p.type === 'legal' ? 'Legal & Perizinan' : p.type}
                       </Badge>
                       <Button variant="destructive" size="icon" className="absolute top-4 right-4 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteProperty(p.id)}>
                         <Trash2 className="w-4 h-4" />

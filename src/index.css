@@ -19,11 +19,13 @@
 
     --color-background: #F9F9F8; 
     --color-foreground: #2D2D2D; 
-    --color-primary: #2D2D2D;
-    --color-primary-foreground: #F9F9F8;
-    --color-accent: #FF4500; /* Cosmic Orange */
+    --color-primary: #FF6B00; /* Cosmic Orange as Primary */
+    --color-primary-foreground: #FFFFFF;
+    --color-accent: #FF6B00; /* Cosmic Orange */
     --color-titanium: #3C3C3C; /* Titanium Grey */
-    --color-border: rgba(0, 0, 0, 0.05);
+    --color-space-grey: #4A4A4A; /* Space Grey */
+    --color-dark-grey: #1A1A1A; /* Dark Grey */
+    --color-border: rgba(0, 0, 0, 0.1);
 }
 
 :root {
@@ -33,18 +35,20 @@
     --card-foreground: #2D2D2D;
     --popover: #FFFFFF;
     --popover-foreground: #2D2D2D;
-    --primary: #2D2D2D;
-    --primary-foreground: #F9F9F8;
+    --primary: #FF6B00;
+    --primary-foreground: #FFFFFF;
     --secondary: #F1F1F0;
     --secondary-foreground: #2D2D2D;
     --muted: #F1F1F0;
     --muted-foreground: #717171;
-    --accent: #FF4500;
+    --accent: #FF6B00;
     --accent-foreground: #FFFFFF;
+    --space-grey: #4A4A4A;
+    --dark-grey: #1A1A1A;
     --destructive: #A65D5D;
     --border: rgba(0, 0, 0, 0.05);
     --input: rgba(0, 0, 0, 0.05);
-    --ring: #FF4500;
+    --ring: #FF6B00;
     --radius: 4px;
 }
 
@@ -76,7 +80,19 @@
   }
 
   .btn-accent {
-    @apply rounded-none px-6 py-3 text-xs font-bold uppercase tracking-[0.2em] transition-all duration-500 border border-accent bg-accent text-white hover:bg-titanium hover:text-white hover:border-titanium;
+    @apply rounded-none px-6 py-3 text-xs font-bold uppercase tracking-[0.2em] transition-all duration-500 border border-accent bg-accent text-white hover:bg-space-grey hover:text-white hover:border-space-grey;
+  }
+
+  .btn-orange {
+    @apply bg-accent text-white hover:bg-[#E65F00] transition-colors border-none rounded-xl font-black uppercase tracking-tighter;
+  }
+
+  .box-thin {
+    @apply border border-dark-grey/20 rounded-2xl transition-all hover:border-dark-grey;
+  }
+
+  .heading-edge {
+    @apply font-heading font-black text-space-grey tracking-tighter;
   }
 
   .input-sleek {

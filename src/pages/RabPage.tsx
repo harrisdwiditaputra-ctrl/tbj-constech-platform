@@ -248,6 +248,29 @@ export default function RabPage({ user }: { user: any }) {
 
       {activeTab === "archive" ? (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+          <div className="flex justify-between items-center mb-8 bg-neutral-50 p-8 rounded-[32px] border border-black/5">
+            <div className="space-y-1">
+              <h2 className="text-3xl font-black uppercase tracking-tighter">Arsip Estimasi</h2>
+              <p className="uppercase-soft text-[10px] text-neutral-400">Kelola dan tinjau kembali draf project Anda</p>
+            </div>
+            <Button 
+              className="btn-orange h-14 px-10 rounded-full text-[11px] uppercase font-black tracking-[0.2em] shadow-xl shadow-accent/20 hover:scale-105 transition-transform"
+              onClick={() => {
+                setRabItems([]);
+                setProjectInfo({
+                  clientName: user?.displayName || "",
+                  projectName: "Proyek Konstruksi & Interior TBJ",
+                  address: "Lokasi Proyek",
+                  date: new Date().toLocaleDateString('id-ID'),
+                  contact: user?.whatsapp || "",
+                });
+                setActiveTab("editor");
+                toast.success("Mulai membuat RAB baru.");
+              }}
+            >
+              <Plus className="w-5 h-5 mr-3" /> Buat RAB Baru
+            </Button>
+          </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {estimates.map((est) => (
               <Card key={est.id} className="border border-neutral-100 rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all group">

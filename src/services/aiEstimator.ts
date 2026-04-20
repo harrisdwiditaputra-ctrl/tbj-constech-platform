@@ -3,7 +3,7 @@ import { WORK_ITEMS_MASTER } from "../constants";
 import { AIEstimateResponse } from "../types";
 import { calculateAdminPrice, calculateClientPrice } from "../lib/utils";
 
-export async function getAIEstimation(userProblem: string, category: string, masterData?: any[], userRole: string = 'user'): Promise<AIEstimateResponse> {
+export async function getAIEstimation(userProblem: string, category: string, masterData?: any[], userRole: string = 'user', globalMarkup: number = 20): Promise<AIEstimateResponse> {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
   
   const dataToUse = masterData && masterData.length > 0 ? masterData : WORK_ITEMS_MASTER;
@@ -11,8 +11,8 @@ export async function getAIEstimation(userProblem: string, category: string, mas
   
   const masterDataString = limitedData.map(item => {
     const finalPrice = userRole === 'admin' || userRole === 'pm' 
-      ? calculateAdminPrice(item.price) 
-      : calculateClientPrice(item.price);
+      ? calculateAdminPrice(item.price, globalMarkup) 
+      : calculateClientPrice(item.price, globalMarkup);
     
     return `- [${item.code || 'N/A'}] ${item.name} (${item.unit}): Rp ${finalPrice.toLocaleString('id-ID')}`;
   }).join('\n');

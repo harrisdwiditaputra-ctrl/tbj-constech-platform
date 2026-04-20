@@ -12,7 +12,10 @@ export default function Ticker() {
     
     // Add promos from CMS
     if (cmsConfig?.promoActive && cmsConfig?.promoText) {
-      list.push(`🔥 Promo: ${cmsConfig.promoText}`);
+      const promoRows = cmsConfig.promoText.split('|').map(r => r.trim()).filter(Boolean);
+      promoRows.forEach(row => {
+        list.push(`🔥 Promo: ${row}`);
+      });
     }
 
     // Add recent transactions (deals)
@@ -46,7 +49,7 @@ export default function Ticker() {
   }, [transactions, projects, cmsConfig]);
 
   return (
-    <div className="bg-black text-white py-2 overflow-hidden border-b border-white/10 relative flex items-center">
+    <div className="bg-[#FF6B00] text-white py-2 overflow-hidden border-b border-black/10 relative flex items-center">
       <div className="flex whitespace-nowrap animate-ticker">
         {/* Repeating for continuous loop */}
         {[...activities, ...activities, ...activities].map((text, idx) => (
