@@ -32,8 +32,8 @@ export default function RabPage({ user }: { user: any }) {
   const { masterData } = useMasterData(user?.role);
   const { assets: systemAssets } = useMediaAssets('system');
   const { estimates, saveEstimate, deleteEstimate, loading: estimatesLoading } = useSavedEstimates(user?.uid);
-  const headerLogo = systemAssets.find(a => a.name.toLowerCase().includes('header'))?.url || systemAssets[0]?.url || TBJ_LOGO;
-  const pdfLogo = systemAssets.find(a => a.name.toLowerCase().includes('pdf'))?.url || systemAssets[0]?.url || TBJ_LOGO;
+  const headerLogo = systemAssets.find(a => a.name.toLowerCase().includes('header'))?.url || systemAssets[0]?.url || "/57.jpg";
+  const pdfLogo = systemAssets.find(a => a.name.toLowerCase().includes('pdf'))?.url || systemAssets[0]?.url || "/57.jpg";
 
   const [activeTab, setActiveTab] = useState<"editor" | "archive">("editor");
   const [rabItems, setRabItems] = useState<RabItem[]>([]);
