@@ -180,7 +180,7 @@ export default function PMDashboard() {
   return (
     <div className="space-y-8 py-8">
       {/* PM Header */}
-      <div className="flex justify-between items-end border-b-2 border-black pb-8">
+      <div className="flex justify-between items-end border-b-2 border-dark-grey/20 pb-8">
         <div className="space-y-2">
           <h1 className="text-5xl font-black uppercase tracking-tighter">PM Dashboard</h1>
           <p className="uppercase-soft text-neutral-500">Autonomous Project Management & Site Monitoring.</p>
@@ -189,7 +189,7 @@ export default function PMDashboard() {
           <Button 
             variant="outline"
             onClick={() => navigate("/assistant")}
-            className="h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] border-2 border-black"
+            className="h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] border-2 border-space-grey/20 hover:border-accent"
           >
             <Zap className="w-4 h-4 mr-2 text-accent" />
             AI Estimator
@@ -200,13 +200,13 @@ export default function PMDashboard() {
               "h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all",
               attendance.find(a => a.userId === user?.uid && !a.checkOut) 
                 ? "bg-red-500 hover:bg-red-600 text-white" 
-                : "bg-green-500 hover:bg-green-600 text-white"
+                : "bg-accent hover:bg-space-grey text-white"
             )}
           >
             <Clock className="w-4 h-4 mr-2" />
             {attendance.find(a => a.userId === user?.uid && !a.checkOut) ? "Check Out (Site Exit)" : "Check In (Site Entry)"}
           </Button>
-          <div className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-xl">
+          <div className="flex items-center gap-2 bg-space-grey text-white px-4 py-2 rounded-xl">
             <HardHat className="w-5 h-5 text-accent" />
             <span className="text-xs font-black uppercase tracking-widest">PM: {user?.displayName}</span>
           </div>

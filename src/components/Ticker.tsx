@@ -49,12 +49,12 @@ export default function Ticker() {
   }, [transactions, projects, cmsConfig]);
 
   return (
-    <div className="bg-[#FF6B00] text-white py-2 overflow-hidden border-b border-black/10 relative flex items-center">
+    <div className="bg-[#FF6B00] text-white py-2 overflow-hidden border-b border-dark-grey/10 relative flex items-center">
       <div className="flex whitespace-nowrap animate-ticker">
         {/* Repeating for continuous loop */}
         {[...activities, ...activities, ...activities].map((text, idx) => (
-          <div key={idx} className="flex items-center mx-12 text-[10px] font-black uppercase tracking-[0.2em] opacity-80 hover:opacity-100 transition-opacity">
-            <span className="text-accent mr-3">
+          <div key={idx} className="flex items-center mx-12 text-[10px] font-black uppercase tracking-[0.2em] opacity-90 hover:opacity-100 transition-opacity">
+            <span className="text-white mr-3 opacity-60">
               {text.includes('Deal') ? <Zap className="w-3 h-3" /> : 
                text.includes('Assessment') ? <Search className="w-3 h-3" /> :
                text.includes('Promo') ? <Sparkles className="w-3 h-3" /> :

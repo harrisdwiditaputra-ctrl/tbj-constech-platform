@@ -36,3 +36,9 @@ export function getDriveImageUrl(url: string) {
   }
   return url;
 }
+
+export function shareByWA(phoneNumber: string, message: string) {
+  const cleanPhone = phoneNumber.replace(/[^0-9]/g, "");
+  const finalPhone = cleanPhone.startsWith("0") ? "62" + cleanPhone.slice(1) : cleanPhone;
+  window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`, "_blank");
+}

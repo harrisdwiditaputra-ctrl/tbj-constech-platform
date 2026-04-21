@@ -30,8 +30,16 @@ export default class ErrorBoundary extends React.Component<Props, State> {
 
   private handleReset = () => {
     this.setState({ hasError: false, error: null });
-    window.location.href = "/";
+    window.location.href = "/assistant";
   };
+
+  public componentDidUpdate(prevProps: Props, prevState: State) {
+    if (this.state.hasError && !prevState.hasError) {
+      setTimeout(() => {
+        window.location.href = "/assistant";
+      }, 3000);
+    }
+  }
 
   public render() {
     if (this.state.hasError) {
@@ -52,21 +60,21 @@ export default class ErrorBoundary extends React.Component<Props, State> {
 
       return (
         <div className="min-h-screen flex items-center justify-center bg-neutral-50 p-4">
-          <div className="max-w-md w-full bg-white rounded-xl shadow-sm border border-neutral-200 p-8 text-center">
-            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertTriangle className="w-8 h-8 text-red-600" />
+          <div className="max-w-md w-full bg-white rounded-xl shadow-2xl border-2 border-black p-10 text-center animate-in fade-in zoom-in duration-300">
+            <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse">
+              <AlertTriangle className="w-10 h-10 text-accent" />
             </div>
-            <h1 className="text-2xl font-bold text-neutral-900 mb-2">Ups! Terjadi Kesalahan</h1>
-            <p className="text-neutral-600 mb-8">
+            <h1 className="text-3xl font-black uppercase tracking-tighter mb-4">Anomali Sistem</h1>
+            <p className="text-neutral-500 mb-8 font-medium">
               {errorMessage}
             </p>
-            <div className="flex flex-col gap-3">
-              <Button onClick={() => window.location.reload()} variant="default">
-                Muat Ulang Halaman
+            <div className="flex flex-col gap-4">
+              <Button onClick={() => window.location.href = "/assistant"} className="btn-accent h-14 uppercase font-black text-sm tracking-widest shadow-lg">
+                Ke Halaman AI Estimator
               </Button>
-              <Button onClick={this.handleReset} variant="outline">
-                Kembali ke Beranda
-              </Button>
+              <p className="text-[10px] text-neutral-400 uppercase tracking-widest animate-pulse font-bold">
+                Mengalihkan otomatis ke AI Estimator Page...
+              </p>
             </div>
           </div>
         </div>

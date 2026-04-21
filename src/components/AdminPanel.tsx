@@ -23,7 +23,7 @@ import MediaWarehouse from "./MediaWarehouse";
 import { cn, getDriveImageUrl, formatRupiah, calculateAdminPrice } from "@/lib/utils";
 import { toast } from "sonner";
 import { WorkItemMaster, UserProfile, Project, Workforce, MaterialRequest, Property, Campaign, SystemConfig, CMSConfig, Vendor, GalleryItem } from "@/types";
-import { generateRABPDF, generatePOPDF } from "@/lib/pdfUtils";
+import { generateRABPDF, generatePOPDF, generateInvoicePDF } from "@/lib/pdfUtils";
 import { ImageUpload } from "@/components/ImageUpload";
 import { WORK_ITEMS_MASTER, TBJ_LOGO } from "@/constants";
 import { nuclearWipe } from "@/lib/database";
@@ -102,9 +102,8 @@ export default function AdminPanel() {
   const { transactions, addTransaction } = useFinance();
   const { wages, updateWageStatus } = useWorkerWages();
   const { pms } = usePMs();
-  const { assets: systemAssets } = useMediaAssets('system');
   const { estimates: savedEstimates, deleteEstimate } = useSavedEstimates();
-  const pdfLogo = systemAssets.find(a => a.name.toLowerCase().includes('pdf'))?.url || systemAssets[0]?.url || "";
+  const pdfLogo = TBJ_LOGO;
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "clients" | "projects" | "workforce" | "cms" | "finance" | "marketing" | "management" | "materials" | "attendance" | "gallery" | "properties" | "vendors" | "payments" | "media">("dashboard");
   const [isNavOpen, setIsNavOpen] = useState(false);
@@ -1167,11 +1166,11 @@ export default function AdminPanel() {
               )}
 
               <div className="space-y-4">
-                <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-2xl bg-white">
+                <Card className="border-2 border-space-grey/20 rounded-3xl overflow-hidden shadow-2xl bg-white">
                   <div className="overflow-x-auto w-full max-w-full">
                     <Table className="min-w-[800px] md:min-w-full">
                       <TableHeader>
-                        <TableRow className="bg-black hover:bg-black border-none">
+                        <TableRow className="bg-space-grey hover:bg-space-grey/90 border-none">
                           <TableHead className="w-12 text-center text-white uppercase font-black text-[9px]">No.</TableHead>
                           <TableHead className="w-24 text-white uppercase font-black text-[9px]">Kode ID</TableHead>
                           <TableHead className="text-white uppercase font-black text-[9px]">Uraian Pekerjaan</TableHead>
@@ -2616,11 +2615,15 @@ export default function AdminPanel() {
                                   <Button variant="outline" size="sm" className="h-8 text-[9px] font-black uppercase border-black/10" onClick={() => {
                                     const vendor = vendors.find(v => v.id === r.vendorId);
                                     if (vendor) {
-                                      generatePOPDF(r, vendor, pdfLogo);
-                                      const itemSummary = r.items && r.items.length > 0 
-                                        ? r.items.map((it: any) => `${it.name} (${it.quantity} ${it.unit})`).join(', ')
-                                        : `${r.itemName} (${r.quantity} ${r.unit})`;
-                                      const msg = `Halo ${vendor.name}, ini adalah Purchase Order dari TBJ Constech untuk proyek ${r.projectName}. Item: ${itemSummary}. Silakan cek lampiran PO yang kami kirimkan.`;
+                                      const project = projects.find(p => p.id === r.projectId);
+                                      const msg = `Halo ${vendor.name},\n\nIni adalah Purchase Order dari TBJ Constech untuk proyek *${r.projectName}*.\n\n📍 *Lokasi Pengiriman:* ${project?.location || "Gudang Proyek TBJ Constech"}\n👤 *Penerima:* ${r.requesterName}\n📞 *WA Penerima:* 081213496672\n\nSilakan cek lampiran PO yang kami kirimkan. Terima kasih.`;
+                                      
+                                      generatePOPDF(r, vendor, TBJ_LOGO, {
+                                        name: r.requesterName || "TIM LOGISTIK TBJ",
+                                        phone: "081213496672",
+                                        address: project?.location || "Gudang Proyek TBJ Constech"
+                                      });
+                                      
                                       window.open(`https://wa.me/${vendor.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
                                     }
                                   }}>
@@ -3015,7 +3018,7 @@ export default function AdminPanel() {
                   <p className="text-4xl font-black text-orange-500">{projects.filter(p => p.status === 'active').length}</p>
                   <p className="text-[10px] uppercase font-bold text-neutral-400 mt-2">Milestones awaiting client approval</p>
                 </Card>
-                <Card className="border-2 border-black rounded-2xl p-6 bg-black text-white">
+                <Card className="border-2 border-space-grey/20 rounded-2xl p-6 bg-space-grey text-white">
                   <h3 className="text-lg font-black uppercase tracking-tighter mb-2">Revenue Forecast</h3>
                   <p className="text-4xl font-black text-green-400">Rp 12.4B</p>
                   <p className="text-[10px] uppercase font-bold text-white/40 mt-2">Projected from active contracts</p>
@@ -3060,6 +3063,59 @@ export default function AdminPanel() {
                       <div className="space-y-3">
                         {selectedProjectFinance ? (
                           <>
+                            <div className="flex justify-between items-center mb-4">
+                              <h4 className="text-[10px] font-black uppercase">Termin Pembayaran</h4>
+                              <Button 
+                                size="sm" 
+                                className="btn-orange h-8 text-[9px] font-black uppercase"
+                                onClick={async () => {
+                                  // Fetch items for the project
+                                  const itemsRef = collection(db, "budget_items");
+                                  const q = query(itemsRef, where("projectId", "==", selectedProjectFinance.id));
+                                  const snap = await getDocs(q);
+                                  const projectItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+                                  
+                                  const client = users.find(u => u.uid === selectedProjectFinance.clientId);
+                                  
+                                  generateInvoicePDF({
+                                    number: `INV/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}/${Math.floor(1000 + Math.random() * 9000)}`,
+                                    date: new Date().toLocaleDateString('id-ID'),
+                                    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('id-ID'),
+                                    clientName: client?.displayName || "Klien Terhormat",
+                                    clientPhone: client?.whatsapp || "081213496672",
+                                    projectName: selectedProjectFinance.name,
+                                    items: projectItems.map(it => ({
+                                      desc: it.name,
+                                      qty: it.quantity,
+                                      unit: it.unit,
+                                      price: it.pricePerUnit,
+                                      total: it.totalPrice
+                                    })),
+                                    total: selectedProjectFinance.totalBudget,
+                                    bankInfo: {
+                                      bank: "Bank BRI",
+                                      accNo: "1234-5678-9012-34-5",
+                                      accName: "TBJ CONSTECH"
+                                    }
+                                  });
+                                  toast.success("Invoice Generated Succesfully");
+                                }}
+                              >
+                                <Download className="w-3 h-3 mr-2" /> Generate Invoice
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                className="border-2 border-black h-8 text-[9px] font-black uppercase"
+                                onClick={() => {
+                                  const message = `*OFFICIAL INVOICE - TBJ CONSTECH*%0A%0AProyek: ${selectedProjectFinance.name}%0ATotal Tagihan: Rp ${selectedProjectFinance.totalBudget.toLocaleString('id-ID')}%0A%0AMohon segera melakukan pembayaran ke Bank BRI: 1234-5678-9012-34-5 (a/n TBJ CONSTECH).%0A%0A_Dibuat via TBJ Constech OS_`;
+                                  const client = users.find(u => u.uid === selectedProjectFinance.clientId);
+                                  window.open(`https://wa.me/${client?.whatsapp || '081213496672'}?text=${encodeURIComponent(message)}`, "_blank");
+                                }}
+                              >
+                                <Phone className="w-3 h-3 mr-2 text-green-500" /> Share via WA
+                              </Button>
+                            </div>
                             {(selectedProjectFinance.paymentMilestones || []).map((m, i) => (
                               <div key={i} className="flex justify-between items-center p-3 border-2 border-black rounded-xl bg-white">
                                 <div className="space-y-1">
@@ -3294,12 +3350,23 @@ export default function AdminPanel() {
                             )}
                           </div>
                           <div className="space-y-2">
-                            <label className="uppercase-soft text-[10px]">AI Free Limit (Tier 1)</label>
+                            <label className="uppercase-soft text-[10px]">AI Free Limit (Unverified)</label>
                             {systemConfig && (
                               <Input 
                                 type="number"
                                 defaultValue={systemConfig.aiFreeLimit} 
                                 onBlur={(e) => updateSystem({ aiFreeLimit: Number(e.target.value) })}
+                                className="font-mono font-bold" 
+                              />
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <label className="uppercase-soft text-[10px]">AI Verified Limit (WhatsApp Verified)</label>
+                            {systemConfig && (
+                              <Input 
+                                type="number"
+                                defaultValue={systemConfig.aiVerifiedLimit || 5} 
+                                onBlur={(e) => updateSystem({ aiVerifiedLimit: Number(e.target.value) })}
                                 className="font-mono font-bold" 
                               />
                             )}

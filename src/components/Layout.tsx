@@ -18,10 +18,9 @@ interface LayoutProps {
 export default function Layout({ children, user, onLogout, onLogin }: LayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
-  const { assets: systemAssets } = useMediaAssets('system');
 
-  const headerLogo = "/57.jpg";
-  const footerLogo = "/57.jpg";
+  const headerLogo = TBJ_LOGO;
+  const footerLogo = TBJ_LOGO;
 
   const isAdmin = user?.role === "admin";
   const isPM = user?.role === "pm";
@@ -67,7 +66,7 @@ export default function Layout({ children, user, onLogout, onLogin }: LayoutProp
                   />
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-black text-2xl tracking-tighter uppercase leading-none text-black">TBJ</span>
+                  <span className="font-black text-2xl tracking-tighter uppercase leading-none text-accent">TBJ</span>
                   <span className="text-[9px] font-black uppercase tracking-[0.3em] text-accent">Constech Hub</span>
                 </div>
               </Link>

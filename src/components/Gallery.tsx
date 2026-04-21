@@ -5,7 +5,7 @@ import { handleFirestoreError, OperationType } from "@/lib/firebase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Calendar, Tag, DollarSign, Quote, ChevronLeft, ChevronRight, Play } from "lucide-react";
+import { Loader2, Calendar, Tag, DollarSign, Quote, ChevronLeft, ChevronRight, Play, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { getDriveImageUrl } from "@/lib/utils";
 import { useMediaAssets } from "@/lib/hooks";
@@ -88,6 +88,26 @@ export default function Gallery() {
   }, []);
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
+
+  // Maintenance Mode Toggle
+  const isMaintenance = true; 
+
+  if (isMaintenance) {
+    return (
+      <div className="flex flex-col items-center justify-center py-40 space-y-8 animate-in fade-in zoom-in">
+        <div className="w-32 h-32 bg-accent/10 text-accent rounded-full flex items-center justify-center animate-pulse shadow-2xl shadow-accent/10 border-4 border-accent/20">
+          <Clock className="w-16 h-16" />
+        </div>
+        <div className="text-center space-y-4 max-w-xl">
+          <h2 className="text-4xl font-black uppercase tracking-tighter text-black">Project Gallery <br/> <span className="text-accent underline decoration-4 underline-offset-8">Under Maintenance</span></h2>
+          <p className="uppercase-soft text-neutral-500 leading-relaxed px-8">
+            Fitur Galeri & Portfolio sedang dalam tahap sinkronisasi data proyek terbaru TBJ Constech. 
+            Layanan ini akan aktif sepenuhnya segera setelah fase pembaruan sistem selesai.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-12 py-8">

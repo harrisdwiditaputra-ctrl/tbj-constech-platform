@@ -25,7 +25,7 @@
     --color-titanium: #3C3C3C; /* Titanium Grey */
     --color-space-grey: #4A4A4A; /* Space Grey */
     --color-dark-grey: #1A1A1A; /* Dark Grey */
-    --color-border: rgba(0, 0, 0, 0.1);
+    --color-border: rgba(26, 26, 26, 0.1); /* Dark grey thin border default */
 }
 
 :root {
@@ -46,8 +46,8 @@
     --space-grey: #4A4A4A;
     --dark-grey: #1A1A1A;
     --destructive: #A65D5D;
-    --border: rgba(0, 0, 0, 0.05);
-    --input: rgba(0, 0, 0, 0.05);
+    --border: rgba(26, 26, 26, 0.1);
+    --input: rgba(26, 26, 26, 0.05);
     --ring: #FF6B00;
     --radius: 4px;
 }
@@ -88,7 +88,7 @@
   }
 
   .box-thin {
-    @apply border border-dark-grey/20 rounded-2xl transition-all hover:border-dark-grey;
+    @apply border border-dark-grey/10 rounded-2xl transition-all hover:border-dark-grey;
   }
 
   .heading-edge {
@@ -100,7 +100,7 @@
   }
   
   .heading-sleek {
-    @apply font-heading font-extrabold text-foreground leading-tight tracking-tighter text-4xl md:text-6xl;
+    @apply font-heading font-black text-space-grey leading-tight tracking-tighter text-4xl md:text-6xl;
   }
 
   .tag-sleek {

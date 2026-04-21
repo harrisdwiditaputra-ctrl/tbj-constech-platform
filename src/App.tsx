@@ -25,7 +25,7 @@ import { WorkItemMaster, Property, AIEstimateResponse } from "@/types";
 import { cn, getDriveImageUrl, calculateAdminPrice, calculateClientPrice, formatRupiah } from "@/lib/utils";
 import { getAIEstimation } from "./services/aiEstimator";
 import { generateAIPDF, generateRABPDF } from "@/lib/pdfUtils";
-import { Plus, Trash2, ChevronRight, Loader2, Calculator, Search, CheckCircle2, Phone, Mail, Lock, CreditCard, Image as ImageIcon, Calendar, FileCheck, Clock, ExternalLink, ChevronDown, ChevronUp, Home, Wrench, PenTool, Building2, MapPin, Ruler, Layers, FileText, Gavel, Key, Camera, Upload, UserCheck, Map as MapIcon, Share2, Instagram, Download, Star, Settings, User, MessageSquare, ShieldCheck, Sparkles, Minus, Brain, Quote } from "lucide-react";
+import { Plus, Trash2, ChevronRight, Loader2, Calculator, Search, CheckCircle2, Phone, Mail, Lock, CreditCard, Image as ImageIcon, Calendar, FileCheck, Clock, ExternalLink, ChevronDown, ChevronUp, Home, Wrench, PenTool, Building2, MapPin, Ruler, Layers, FileText, Gavel, Key, Camera, Upload, UserCheck, Map as MapIcon, Share2, Instagram, Download, Star, Settings, User, MessageSquare, ShieldCheck, Sparkles, Minus, Brain, Quote, Zap } from "lucide-react";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import Gallery from "./components/Gallery";
@@ -153,7 +153,8 @@ const Dashboard = ({ user }: { user: any }) => {
 };
 
 const ProjectsPage = ({ user }: { user: any }) => {
-  const { projects, loading, createProject } = useProjects(user?.uid);
+  const { projects, loading, createProject, deleteProject } = useProjects(user?.uid);
+  const { config } = useSystemConfig();
   const { updateProfile } = useAuth();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -170,51 +171,51 @@ const ProjectsPage = ({ user }: { user: any }) => {
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
 
-  const aiLimitReached = (user?.aiUsageCount || 0) >= 1 && user?.tier === "prospect";
+  const aiLimitReached = (user?.aiUsageCount || 0) >= (user?.waVerified ? (config?.aiVerifiedLimit || 5) : (config?.aiFreeLimit || 1)) && user?.tier === "prospect";
 
   return (
     <div className="space-y-12">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="heading-sleek">Proyek Saya</h1>
+          <h1 className="heading-sleek uppercase">Arsip Estimasi</h1>
           <p className="text-neutral-500 font-light">Kelola estimasi dan proyek konstruksi Anda.</p>
         </div>
-        {(user?.role === "admin" || user?.role === "pm") && (
-          <div className="flex gap-4">
-            <Button 
-              variant="outline" 
-              className="btn-sleek gap-2"
-              onClick={() => window.open(`https://wa.me/62821942016509?text=Halo%20TBJ%20Architect,%20saya%20ingin%20konsultasi%20desain.`, "_blank")}
-            >
-              <Phone className="w-4 h-4" /> Chat Architect
-            </Button>
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-              <DialogTrigger render={<Button className="btn-accent gap-2" />}>
-                <Plus className="w-4 h-4" /> Proyek Baru
-              </DialogTrigger>
-              <DialogContent className="rounded-2xl border-none shadow-2xl">
-                <DialogHeader>
-                  <DialogTitle className="font-heading text-2xl">Buat Proyek Baru</DialogTitle>
-                  <DialogDescription>Mulai estimasi mandiri untuk proyek Anda.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-6 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name" className="text-xs uppercase tracking-widest opacity-60">Nama Proyek</Label>
-                    <Input id="name" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Contoh: Renovasi Rumah Minimalis" className="input-sleek" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="desc" className="text-xs uppercase tracking-widest opacity-60">Deskripsi Singkat</Label>
-                    <Input id="desc" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Misal: Perbaikan atap dan cat dinding" className="input-sleek" />
-                  </div>
+        <div className="flex gap-4">
+          <Button 
+            variant="outline" 
+            className="btn-sleek gap-2"
+            onClick={() => window.open(`https://wa.me/62821942016509?text=Halo%20TBJ%20Architect,%20saya%20ingin%20konsultasi%20desain.`, "_blank")}
+          >
+            <Phone className="w-4 h-4" /> Chat Architect
+          </Button>
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger render={
+              <Button className="btn-accent gap-2">
+                <Plus className="w-4 h-4" /> Buat RAB Baru
+              </Button>
+            } />
+            <DialogContent className="rounded-2xl border-none shadow-2xl">
+              <DialogHeader>
+                <DialogTitle className="font-heading text-2xl uppercase tracking-tighter">Buat Proyek / RAB Baru</DialogTitle>
+                <DialogDescription className="uppercase-soft">Mulai estimasi mandiri untuk proyek Anda.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-6 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-[10px] font-black uppercase tracking-widest opacity-60">Nama Proyek</Label>
+                  <Input id="name" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Contoh: Renovasi Rumah Minimalis" className="input-sleek" />
                 </div>
-                <DialogFooter>
-                  <Button variant="ghost" onClick={() => setIsCreateOpen(false)} className="text-xs uppercase tracking-widest">Batal</Button>
-                  <Button onClick={handleCreate} className="btn-accent">Simpan Proyek</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        )}
+                <div className="space-y-2">
+                  <Label htmlFor="desc" className="text-[10px] font-black uppercase tracking-widest opacity-60">Deskripsi Singkat</Label>
+                  <Input id="desc" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Misal: Perbaikan atap dan cat dinding" className="input-sleek" />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setIsCreateOpen(false)} className="text-[10px] font-black uppercase tracking-widest">Batal</Button>
+                <Button onClick={handleCreate} className="btn-accent uppercase font-black text-[10px]">Simpan Proyek</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {aiLimitReached && (
@@ -222,16 +223,16 @@ const ProjectsPage = ({ user }: { user: any }) => {
           <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="space-y-2 text-center md:text-left">
               <Badge className="tag-sleek bg-accent text-white border-none">AI Limit Reached</Badge>
-              <h3 className="text-2xl font-heading">Digital Assessment Selesai</h3>
-              <p className="text-sm text-neutral-600 max-w-md">
-                Anda telah menggunakan batas 1x analisa AI gratis. Untuk mendapatkan estimasi detail, validasi teknis, dan RAB Final, silakan booking survey lokasi.
+              <h3 className="text-2xl font-heading uppercase tracking-tighter">Digital Assessment Selesai</h3>
+              <p className="text-sm text-neutral-600 max-w-md uppercase-soft">
+                Anda telah menggunakan batas analisa AI gratis. Untuk mendapatkan estimasi detail, validasi teknis, dan RAB Final, silakan booking survey lokasi.
               </p>
             </div>
             <Button 
-              className="btn-accent h-14 px-10"
+              className="btn-accent h-14 px-10 uppercase font-black text-xs"
               onClick={() => navigate("/assistant")}
             >
-              Booking Survey (Rp 399.000)
+              Booking Survey (Rp {(config?.surveyFee || 399000).toLocaleString()})
             </Button>
           </div>
           <div className="absolute -right-20 -bottom-20 w-64 h-64 bg-accent/10 rounded-full blur-3xl" />
@@ -242,10 +243,10 @@ const ProjectsPage = ({ user }: { user: any }) => {
         <Table>
           <TableHeader className="bg-neutral-50/50">
             <TableRow className="hover:bg-transparent border-b border-black/5">
-              <TableHead className="text-[10px] uppercase tracking-[0.2em] font-medium py-6">Nama Proyek</TableHead>
-              <TableHead className="text-[10px] uppercase tracking-[0.2em] font-medium">Tanggal</TableHead>
-              <TableHead className="text-[10px] uppercase tracking-[0.2em] font-medium text-right">Estimasi Anggaran</TableHead>
-              <TableHead className="w-[50px]"></TableHead>
+              <TableHead className="text-[10px] uppercase tracking-[0.2em] font-black py-6">Nama Proyek</TableHead>
+              <TableHead className="text-[10px] uppercase tracking-[0.2em] font-black">Tanggal</TableHead>
+              <TableHead className="text-[10px] uppercase tracking-[0.2em] font-black text-right">Estimasi Anggaran</TableHead>
+              <TableHead className="w-[100px] text-right font-black uppercase tracking-widest text-[10px]">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -257,18 +258,34 @@ const ProjectsPage = ({ user }: { user: any }) => {
               >
                 <TableCell className="py-6">
                   <div>
-                    <p className="font-medium text-sm group-hover:text-accent transition-colors">{project.name}</p>
-                    <p className="text-xs text-neutral-400 font-light">{project.description}</p>
+                    <p className="font-bold text-sm uppercase tracking-tight group-hover:text-accent transition-colors">{project.name}</p>
+                    <p className="text-[10px] text-neutral-400 font-medium uppercase-soft">{project.description}</p>
                   </div>
                 </TableCell>
-                <TableCell className="text-xs text-neutral-500 font-light">
+                <TableCell className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">
                   {new Date(project.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </TableCell>
-                <TableCell className="text-right font-mono text-xs">
+                <TableCell className="text-right font-mono text-xs font-black text-black">
                   Rp {project.totalBudget.toLocaleString('id-ID')}
                 </TableCell>
                 <TableCell className="text-right">
-                  <ChevronRight className="inline w-4 h-4 text-neutral-300 group-hover:text-accent transition-all group-hover:translate-x-1" />
+                  <div className="flex justify-end items-center gap-4" onClick={e => e.stopPropagation()}>
+                    {(user?.role === 'admin' || user?.role === 'pm' || project.ownerId === user?.uid) && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-neutral-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        onClick={() => {
+                          if (window.confirm("Hapus proyek/estimasi ini secara permanen?")) {
+                            deleteProject(project.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-accent transition-all group-hover:translate-x-1" />
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -279,7 +296,7 @@ const ProjectsPage = ({ user }: { user: any }) => {
                     <div className="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center mx-auto">
                       <Layers className="w-6 h-6 text-neutral-300" />
                     </div>
-                    <p className="text-sm text-neutral-400 font-light">Belum ada proyek. Mulai dengan membuat proyek baru.</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Belum ada proyek. Mulai dengan membuat RAB baru.</p>
                   </div>
                 </TableCell>
               </TableRow>
@@ -297,8 +314,7 @@ const ProjectDetail = () => {
   const { config: sysConfig } = useSystemConfig();
   const { masterData } = useMasterData(user?.role);
   const { project, categories, items, loading, addCategory, addItem, updateItem, deleteCategory, deleteItem, updateProjectStatus, updateItemProgress, updateTimelineEvent, addTimelineEvent } = useProjectDetails(id);
-  const { assets: systemAssets } = useMediaAssets('system');
-  const pdfLogo = systemAssets.find(a => a.name.toLowerCase().includes('pdf'))?.url || systemAssets[0]?.url || TBJ_LOGO;
+  const pdfLogo = TBJ_LOGO;
   
   const { assets: projectMedia, addAsset: addMedia, deleteAsset: deleteMedia } = useMediaAssets(undefined, id);
   const [newMediaUrl, setNewMediaUrl] = useState("");
@@ -896,8 +912,8 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
   const { assets: systemAssets } = useMediaAssets('system');
   const { assets: financeAssets } = useMediaAssets('finance');
   
-  const assistantLogo = systemAssets.find(a => a.name.toLowerCase().includes('assistant'))?.url || systemAssets[0]?.url || TBJ_LOGO;
-  const pdfLogo = systemAssets.find(a => a.name.toLowerCase().includes('pdf'))?.url || systemAssets[0]?.url || TBJ_LOGO;
+  const assistantLogo = TBJ_LOGO;
+  const pdfLogo = TBJ_LOGO;
   const qrisImage = financeAssets.find(a => a.name.toLowerCase().includes('qris'))?.url || QRIS_IMAGE;
 
   const [step, setStep] = useState(1);
@@ -929,6 +945,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
     email: user.email || "",
   });
   const [projectData, setProjectData] = useState({
+    name: "",
     area: "" as any,
     location: "",
     type: "Renovasi", // Default
@@ -945,7 +962,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
   }>({});
   const [expandedRoom, setExpandedRoom] = useState<string | null>(null);
   const [expandedFurniture, setExpandedFurniture] = useState<string | null>(null);
-  const [propFilter, setPropFilter] = useState<"lahan" | "bangun" | "sewa" | "perizinan" | "jual" | null>(null);
+  const [propFilter, setPropFilter] = useState<Property["type"] | null>(null);
   const { properties } = useProperties();
 
   const [mapPosition, setMapPosition] = useState<[number, number]>([-6.2088, 106.8456]); // Jakarta
@@ -979,10 +996,12 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
     { id: "Renovasi", label: "Renovasi", icon: Wrench, desc: "Perbaikan & upgrade bangunan" },
     { id: "Interior", label: "Desain & Interior", icon: PenTool, desc: "Layanan Desain Interior & Furniture" },
     { id: "Arsitektur", label: "Arsitektur & Perencanaan", icon: Building2, desc: "Layanan Perencanaan & Bangun Baru" },
+    { id: "Exterior", label: "Exterior & Lanskap", icon: MapIcon, desc: "Taman, Pagar, & Area Luar" },
     { id: "Maintenance", label: "Maintenance", icon: Clock, desc: "Perawatan rutin & perbaikan minor" },
     { id: "Property", label: "TBJ Property Hub", icon: Home, desc: "Jual & Sewa Properti Serta Legalitas IMB/PBG" },
     { id: "Gallery", label: "Project Gallery", icon: ImageIcon, desc: "Lihat Portfolio & Inspirasi Proyek" },
     { id: "AIAgent", label: "Chat AI Agent", icon: MessageSquare, desc: "Konsultasi Langsung via Chat & Gambar", cosmic: true },
+    { id: "Lain-lain", label: "Lain-lain", icon: Plus, desc: "Kebutuhan proyek lainnya" },
   ];
 
   const INTERIOR_ROOMS = ["Kamar Tidur", "Ruang Tamu", "Kitchen Set", "Walk-in Closet", "Ruang Kerja"];
@@ -998,7 +1017,10 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
     const isAIRequired = 
       (step === 2 && (
         projectData.type === "Maintenance" || 
-        (projectData.type === "Arsitektur" && projectData.subType === "bangun-baru") ||
+        projectData.type === "Renovasi" ||
+        projectData.type === "Arsitektur" ||
+        projectData.type === "Exterior" ||
+        projectData.type === "Lain-lain" ||
         (projectData.type === "Interior" && projectData.subType === "jasa-desain") ||
         selectedCategories.includes("Lain-lain")
       ));
@@ -1007,20 +1029,28 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
       // Tier 1 AI Analysis Limit Check
       const isStaff = user?.role === "admin" || user?.role === "pm";
       const isPro = user?.tier === "survey" || user?.tier === "deal";
-      const freeLimit = systemConfig?.aiFreeLimit || 1;
+      // Limit 5x if waVerified, else 1x (or following systemConfig if exists)
+      const freeLimit = user?.waVerified ? (systemConfig?.aiVerifiedLimit || 5) : (systemConfig?.aiFreeLimit || 1);
       
       setIsAnalyzing(true);
       try {
-        let prompt = userProblem;
+        let prompt = userProblem || `Konsultasi & Estimasi untuk proyek ${projectData.type} ${projectData.subType ? `(${projectData.subType})` : ""} di ${projectData.location || "lokasi strategis"}.`;
+        
         if (projectData.type === "Arsitektur") {
-          prompt = `Proyek Bangun Baru: ${userProblem}, Luas: ${projectData.area}m2, Lantai: ${projectData.floors}, Finishing: ${projectData.finishing}`;
+          const area = projectData.area || 0;
+          prompt = `Proyek Bangun Baru / Arsitektur: ${userProblem || "Perencanaan bangun baru"}, Luas: ${area}m2, Lantai: ${projectData.floors}, Finishing: ${projectData.finishing}`;
+        } else if (projectData.type === "Renovasi") {
+          const area = projectData.area || 0;
+          const categoriesStr = selectedCategories.join(", ");
+          prompt = `Proyek Renovasi: ${userProblem || "Renovasi bangunan"}, Fokus Kategori: ${categoriesStr}, Luas Area: ${area}m2`;
         }
+
         const result = await getAIEstimation(prompt, projectData.type, masterData, user?.role, systemConfig?.globalMarkup);
         setAiEstimation(result);
         
         if (!isStaff && !isPro && (user?.aiUsageCount || 0) >= freeLimit) {
-          toast.info("Analisa AI selesai. Silakan verifikasi WhatsApp untuk melihat detail lengkap.");
-          setStep(6); // Redirect to survey booking & summary
+          toast.info("Limit Analisa AI Tercapai.", { description: "Silakan hubungi Admin atau booking survey untuk melanjutkan." });
+          setStep(6); 
           return;
         }
 
@@ -1029,7 +1059,12 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
           await incrementAIUsage();
         }
         
-        setStep(4); // Skip volume input, go to verification
+        // If already verified, go straight to result (Step 5), else go to verification (Step 4)
+        if (user?.waVerified) {
+          setStep(5);
+        } else {
+          setStep(4);
+        }
       } catch (error) {
         console.error("AI Estimation failed", error);
         toast.error("Gagal melakukan analisa AI. Silakan coba lagi.");
@@ -1538,6 +1573,72 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                     </div>
                   )}
 
+                  {(projectData.type === "Exterior" || projectData.type === "Lain-lain") && (
+                    <div className="space-y-6">
+                      <div className="space-y-4">
+                        <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
+                          <Calculator className="w-6 h-6 text-accent" /> AI Project Analysis
+                        </h3>
+                        <p className="uppercase-soft text-neutral-400">Jelaskan kebutuhan proyek Anda untuk estimasi AI instan.</p>
+                      </div>
+                      
+                      <div className="space-y-6 p-8 border-2 border-black rounded-2xl animate-in fade-in slide-in-from-top-4">
+                        <div className="space-y-2">
+                          <label className="uppercase-soft text-neutral-400">Detail Pekerjaan / Deskripsi</label>
+                          <Textarea 
+                            placeholder="Jelaskan secara detail apa yang ingin Anda bangun atau perbaiki..." 
+                            value={userProblem}
+                            onChange={e => setUserProblem(e.target.value)}
+                            className="min-h-[150px] border-black/10 focus:border-black rounded-md resize-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="uppercase-soft text-neutral-400">Luas Area (Opsional, m2)</label>
+                          <Input 
+                            type="number" 
+                            value={projectData.area} 
+                            onChange={e => setProjectData({...projectData, area: e.target.value === "" ? "" : Number(e.target.value)})}
+                            placeholder="0"
+                            className="input-sleek"
+                          />
+                        </div>
+                        <div className="space-y-4">
+                          <label className="uppercase-soft text-neutral-400">Upload Foto Pendukung (Opsional)</label>
+                          <div className="flex flex-wrap gap-4">
+                            {problemPhotos.map((p, i) => (
+                              <div key={i} className="w-24 h-24 border-2 border-black overflow-hidden relative group rounded-xl">
+                                <img src={p} className="w-full h-full object-cover" />
+                                <button 
+                                  onClick={() => setProblemPhotos(prev => prev.filter((_, idx) => idx !== i))}
+                                  className="absolute inset-0 bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                >
+                                  <Trash2 className="w-6 h-6" />
+                                </button>
+                              </div>
+                            ))}
+                            <label className="w-24 h-24 border-2 border-dashed border-neutral-300 flex flex-col items-center justify-center cursor-pointer hover:border-black transition-colors rounded-xl">
+                              <Camera className="w-8 h-8 text-neutral-400" />
+                              <span className="uppercase-soft mt-2">Add Photo</span>
+                              <input 
+                                type="file" 
+                                className="hidden" 
+                                accept="image/*" 
+                                onChange={e => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onload = (ev) => setProblemPhotos(prev => [...prev, ev.target?.result as string]);
+                                    reader.readAsDataURL(file);
+                                  }
+                                }} 
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {projectData.type === "Interior" && (
                     <div className="space-y-6">
                       <label className="uppercase-soft text-neutral-400">Pilih Layanan Desain</label>
@@ -1783,17 +1884,30 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                       </div>
                     </div>
                   </div>
-                  <div className="pt-8 flex flex-col gap-4">
-                    <Button className="w-full btn-orange h-16 text-lg" onClick={handleNext} disabled={isAnalyzing}>
-                      {isAnalyzing ? (
-                        <>
-                          <Loader2 className="mr-3 h-5 w-5 animate-spin" />
-                          Analyzing...
-                        </>
-                      ) : (
-                        <>Analyze Project <ChevronRight className="ml-2 w-5 h-5" /></>
-                      )}
-                    </Button>
+                      <div className="pt-8 flex flex-col gap-4">
+                        <Button 
+                          className="w-full btn-orange h-20 text-xl font-black uppercase tracking-widest shadow-xl shadow-accent/20 transition-all active:scale-[0.98]" 
+                          onClick={() => {
+                            if (projectData.type === "Renovasi" && !userProblem) {
+                              toast.warning("Mohon jelaskan detail renovasi", { description: "Sedikit cerita membantu AI memberikan estimasi lebih akurat." });
+                              return;
+                            }
+                            handleNext();
+                          }} 
+                          disabled={isAnalyzing}
+                        >
+                          {isAnalyzing ? (
+                            <div className="flex items-center gap-4">
+                              <Loader2 className="h-6 w-6 animate-spin" />
+                              <span>Mempersiapkan Analisa AI...</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-4">
+                              <span>PROSES ESTIMASI AI</span>
+                              <Zap className="w-6 h-6 fill-current" />
+                            </div>
+                          )}
+                        </Button>
                     <Button 
                       variant="ghost" 
                       className="w-full text-[10px] font-bold uppercase tracking-widest text-neutral-400 hover:text-black" 
@@ -1980,25 +2094,25 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                   <p className="text-neutral-500 uppercase-soft text-xs">Generated by TBJ Constech AI System OS v2.0</p>
                 </div>
                 <div className="text-left md:text-right bg-black text-white p-6 rounded-2xl shadow-xl shadow-black/10 min-w-[300px]">
-                  <p className="uppercase-soft text-white/60 text-[10px] mb-1 text-white">Estimasi Total Anggaran</p>
+                  <p className="uppercase-soft text-white/60 text-[10px] mb-1 text-white">Total Biaya</p>
                   <p className="text-5xl font-black tracking-tighter text-primary">Rp {totalEstimate.toLocaleString('id-ID')}</p>
                   <div className="mt-4 pt-4 border-t border-white/10 flex justify-between items-center text-white">
-                    <span className="text-[8px] font-black uppercase tracking-widest text-white/40">Market Price Accuracy: 94%</span>
-                    <Badge className="bg-green-500 text-[8px] uppercase font-black border-none text-white">Verified AI</Badge>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-white/40">Accuracy: 94% | QA/QC Verified</span>
+                    <Badge className="bg-green-500 text-[8px] uppercase font-black border-none text-white">TBJ OS v2.4</Badge>
                   </div>
                 </div>
               </div>
 
               <div className="grid gap-12 md:grid-cols-12">
                 <div className="md:col-span-8 space-y-12">
-                  {aiEstimation && (
+                  {aiEstimation ? (
                     <div className="border-4 border-black p-8 md:p-12 space-y-10 relative overflow-hidden bg-white shadow-[20px_20px_0px_0px_rgba(0,0,0,1)] rounded-3xl group" id="ai-result-card">
                       {/* Document Elements */}
                       <div className="absolute top-0 right-0 bg-black text-white px-8 py-3 text-[12px] font-black uppercase tracking-[0.4em] rotate-0">OFFICIAL REPORT</div>
                       
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
+                          <div className="w-16 h-16 bg-accent text-white rounded-2xl flex items-center justify-center shadow-lg shadow-accent/20">
                             <Brain className="w-8 h-8" />
                           </div>
                           <div>
@@ -2010,7 +2124,18 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                           <Button 
                             variant="outline" 
                             size="icon" 
-                            className="h-12 w-12 rounded-xl border-2 border-black hover:bg-black hover:text-white transition-all shadow-md active:translate-y-1"
+                            className="h-12 w-12 rounded-xl border-2 border-black hover:border-green-500 hover:text-green-500 transition-all shadow-md active:translate-y-1"
+                            onClick={() => {
+                              const message = `*ESTIMASI RAB - TBJ CONSTECH*%0AProyek: ${projectData.name || projectData.type}%0ATotal Biaya: Rp ${totalEstimate.toLocaleString('id-ID')}%0A%0AInformasi lebih lanjut hubungi: 081213496672%0A_Dibuat via TBJ Constech OS_`;
+                              window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
+                            }}
+                          >
+                            <Phone className="w-5 h-5 text-green-500" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            className="h-12 w-12 rounded-xl border-2 border-black hover:border-accent hover:text-accent transition-all shadow-md active:translate-y-1"
                             onClick={() => {
                               navigator.share?.({
                                 title: 'Estimasi Proyek TBJ Constech',
@@ -2038,9 +2163,9 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         </div>
                       </div>
 
-                      <div className="bg-neutral-50 p-8 border-l-8 border-primary rounded-r-3xl relative">
-                        <Quote className="absolute -top-4 -left-4 w-12 h-12 text-primary/5 rotate-12" />
-                        <h4 className="text-xs font-black uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+                      <div className="bg-neutral-50 p-8 border-l-8 border-accent rounded-r-3xl relative">
+                        <Quote className="absolute -top-4 -left-4 w-12 h-12 text-accent/5 rotate-12" />
+                        <h4 className="text-xs font-black uppercase tracking-widest text-accent mb-4 flex items-center gap-2">
                           <Sparkles className="w-4 h-4" /> Strategic AI Summary
                         </h4>
                         <p className="text-lg text-neutral-700 leading-relaxed font-medium italic">"{aiEstimation.analysis}"</p>
@@ -2056,14 +2181,14 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                             <div key={idx} className="flex justify-between items-start border-b-2 border-neutral-100 pb-6 last:border-0 group/item">
                               <div className="space-y-2">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-2 h-2 rounded-full bg-primary opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                                  <p className="font-black text-sm uppercase tracking-widest leading-none group-hover/item:text-primary transition-colors text-black">{item.name}</p>
+                                  <div className="w-2 h-2 rounded-full bg-accent opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                                  <p className="font-black text-sm uppercase tracking-widest leading-none group-hover/item:text-accent transition-colors text-black">{item.name}</p>
                                 </div>
                                 <p className="text-[11px] text-neutral-500 leading-relaxed max-w-lg font-medium">{item.reasoning}</p>
                               </div>
                               <div className="text-right">
                                 <p className="font-mono text-xs font-black bg-neutral-100 px-3 py-1 rounded-md mb-2">{item.quantity} {item.unit}</p>
-                                {(user?.role === 'admin' || user?.role === 'pm' || user?.tier === 'deal') && (
+                                {(user?.role === 'admin' || user?.role === 'pm' || (user?.tier === 'deal' && user?.waVerified)) && (
                                   <p className="text-[10px] font-black text-neutral-400">Rp {item.totalPrice.toLocaleString('id-ID')}</p>
                                 )}
                               </div>
@@ -2076,7 +2201,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                       <div className="pt-10 border-t-4 border-black flex flex-col md:flex-row justify-between items-center gap-6">
                         <div className="flex items-center gap-4">
                           <div className="w-12 h-12 bg-black flex items-center justify-center rounded-xl">
-                            <ShieldCheck className="w-6 h-6 text-primary" />
+                            <ShieldCheck className="w-6 h-6 text-accent" />
                           </div>
                           <div>
                             <p className="text-[10px] font-black uppercase leading-none text-black">AI Verified Security</p>
@@ -2089,13 +2214,21 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         </div>
                       </div>
                     </div>
+                  ) : (
+                    <div className="border-4 border-black border-dashed p-12 text-center rounded-3xl space-y-4 bg-white">
+                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto">
+                        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                      </div>
+                      <h3 className="text-xl font-black uppercase tracking-tighter">Mempersiapkan Analisa AI...</h3>
+                      <p className="uppercase-soft text-neutral-400">Harap tunggu sebentar, Chief Estimator sedang menghitung volume dan harga teknis proyek Anda.</p>
+                    </div>
                   )}
 
                   {/* RAB Detail for Privileged Tiers */}
                   {(user?.tier === "deal" || user?.role === "admin") && aiEstimation && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8">
                        <div className="flex items-center gap-3 border-b-2 border-black pb-4">
-                         <FileText className="w-6 h-6 text-primary" />
+                         <FileText className="w-6 h-6 text-accent" />
                          <h3 className="text-xl font-black uppercase tracking-tighter text-black">Detailed RAB Preview (Tier 3)</h3>
                        </div>
                        <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-lg">
@@ -2135,23 +2268,23 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
 
                 <div className="md:col-span-4 space-y-8">
                   {/* Payment Instructions Card */}
-                  <Card className="border-4 border-primary rounded-3xl bg-primary/5 p-8 space-y-6 shadow-xl shadow-primary/5 relative overflow-hidden">
-                    <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary opacity-5 rotate-45" />
+                  <Card className="border-4 border-accent rounded-3xl bg-accent/5 p-8 space-y-6 shadow-xl shadow-accent/5 relative overflow-hidden">
+                    <div className="absolute -top-12 -right-12 w-32 h-32 bg-accent opacity-5 rotate-45" />
                     <div className="space-y-2">
-                      <Badge className="bg-primary text-white uppercase text-[10px] font-black px-3 py-1 rounded-md border-none">Next Step: Assessment</Badge>
+                      <Badge className="bg-accent text-white uppercase text-[10px] font-black px-3 py-1 rounded-md border-none">Next Step: Assessment</Badge>
                       <h3 className="text-2xl font-black uppercase tracking-tighter text-black leading-tight">Mulai Digital Assessment Spesifik</h3>
                     </div>
                     
-                    <div className="bg-white p-6 rounded-2xl border-2 border-primary/20 space-y-4">
+                    <div className="bg-white p-6 rounded-2xl border-2 border-accent/20 space-y-4">
                       <div className="flex justify-between items-center text-sm font-black uppercase tracking-tight">
                         <span className="text-neutral-400">Total Biaya Survey</span>
-                        <span className="text-primary text-2xl font-black">Rp {(systemConfig?.surveyFee || 399000).toLocaleString('id-ID')}</span>
+                        <span className="text-accent text-2xl font-black">Rp {(systemConfig?.surveyFee || 399000).toLocaleString('id-ID')}</span>
                       </div>
                     </div>
 
                     <div className="space-y-4">
                       <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-400 flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-primary" /> Key Benefits:
+                        <CheckCircle2 className="w-4 h-4 text-accent" /> Key Benefits:
                       </h4>
                       <ul className="space-y-3">
                         {[
@@ -2160,7 +2293,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                           "Prioritas Jadwal Pelaksanaan"
                         ].map((benefit, i) => (
                           <li key={i} className="flex items-center gap-3 text-[10px] font-bold uppercase text-neutral-600">
-                            <div className="w-1.5 h-1.5 rounded-full bg-primary" /> {benefit}
+                            <div className="w-1.5 h-1.5 rounded-full bg-accent" /> {benefit}
                           </li>
                         ))}
                       </ul>
@@ -2181,8 +2314,8 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                   {/* Testimonial / Social Proof */}
                   <Card className="border-2 border-black rounded-3xl p-8 space-y-6 bg-neutral-50 relative">
                      <Quote className="absolute top-4 right-4 w-8 h-8 text-black/5" />
-                     <div className="flex gap-1 text-primary">
-                       {[1,2,3,4,5].map(s => <Star key={s} className="w-3 h-3 fill-primary text-primary" />)}
+                     <div className="flex gap-1 text-accent">
+                       {[1,2,3,4,5].map(s => <Star key={s} className="w-3 h-3 fill-accent text-accent" />)}
                      </div>
                      <p className="text-[11px] font-medium leading-relaxed italic text-neutral-600">
                        "AI Estimator TBJ sangat akurat dibandingkan vendor lain. Sangat menghemat waktu perencanaan saya."
@@ -2267,187 +2400,32 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
           )}
 
           {step === 10 && (
-            <div className="p-8 md:p-12 space-y-12">
-              <div className="flex justify-between items-center border-b-2 border-black pb-8">
+            <div className="flex flex-col items-center justify-center py-40 space-y-10 animate-in fade-in zoom-in-95 duration-500">
+              <div className="relative">
+                <div className="absolute inset-0 bg-accent/20 blur-3xl rounded-full scale-150 animate-pulse" />
+                <div className="relative w-32 h-32 bg-titanium text-accent rounded-full flex items-center justify-center border-4 border-accent/30 shadow-[0_0_50px_rgba(255,107,0,0.2)]">
+                  <Home className="w-16 h-16" />
+                </div>
+              </div>
+              <div className="text-center space-y-6 max-w-2xl px-6">
                 <div className="space-y-2">
-                  <h2 className="text-4xl font-black uppercase tracking-tighter italic">TBJ Property Hub</h2>
-                  <p className="uppercase-soft text-neutral-500">Solusi Terintegrasi: Jual, Beli, Titip Bangun & Legalitas Properti (IMB/PBG/SLF)</p>
+                  <Badge variant="outline" className="border-accent text-accent uppercase font-black tracking-[0.2em] px-4 py-1">Phase: Integration</Badge>
+                  <h2 className="text-5xl font-black uppercase tracking-tighter text-black leading-tight">
+                    TBJ Property Hub <br/> 
+                    <span className="text-accent underline decoration-8 underline-offset-[12px]">Under Maintenance</span>
+                  </h2>
                 </div>
-                <Button variant="outline" className="border-black rounded-xl uppercase-soft px-6" onClick={() => setStep(1)}>
-                  &larr; Kembali
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                {[
-                  { label: "Synergy Lab", icon: PenTool, color: "bg-[#FF6B00]/10 text-[#FF6B00]", type: "kerjasama" },
-                  { label: "Titip Bangun", icon: Building2, color: "bg-orange-50 text-orange-600", type: "bangun" },
-                  { label: "Jual & Sewa", icon: Key, color: "bg-green-50 text-green-600", type: "jual" },
-                  { label: "Legal & Perizinan", icon: ShieldCheck, color: "bg-purple-50 text-purple-600", type: "legal" },
-                ].map((svc, idx) => (
-                  <div 
-                    key={idx} 
-                    className="p-8 border-2 border-black/5 rounded-3xl text-center space-y-4 hover:bg-neutral-50 cursor-pointer transition-all group box-thin"
-                    onClick={() => setPropFilter(svc.type as any)}
-                  >
-                    <div className={cn("w-16 h-16 mx-auto rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110", svc.color)}>
-                      <svc.icon className="w-8 h-8" />
-                    </div>
-                    <p className="text-xs font-black uppercase tracking-widest">{svc.label}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
-                    <MapPin className="w-5 h-5 text-accent" /> Lokasi Properti & Area
-                  </h3>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="border-black rounded-xl uppercase-soft text-[10px]"
-                      onClick={() => setShowPropMap(!showPropMap)}
-                    >
-                      {showPropMap ? "Hide Map" : "View Map Search"}
-                    </Button>
-                  </div>
-                </div>
-                
-                {showPropMap && (
-                  <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                    <div className="flex gap-2">
-                      <Input 
-                        placeholder="Ketik alamat atau area untuk mencari titik..." 
-                        className="border-2 border-black rounded-2xl h-12 px-6"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            searchLocation(e.currentTarget.value);
-                          }
-                        }}
-                      />
-                      <Button 
-                        className="btn-accent h-12 w-12 rounded-2xl shrink-0"
-                        onClick={(e) => {
-                          const input = e.currentTarget.previousElementSibling as HTMLInputElement;
-                          searchLocation(input.value);
-                        }}
-                      >
-                        {isSearchingLocation ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                      </Button>
-                    </div>
-                    <MapPicker position={mapPosition} setPosition={setMapPosition} />
-                    <div className="p-4 bg-accent/5 border-2 border-accent/20 rounded-2xl">
-                      <p className="text-[10px] uppercase font-black tracking-widest text-accent mb-1">Koordinat Terdeteksi:</p>
-                      <p className="text-xs font-mono">{mapPosition[0].toFixed(6)}, {mapPosition[1].toFixed(6)}</p>
-                      <p className="text-[8px] text-neutral-400 mt-2 italic">*Titik ini akan digunakan Tim TBJ untuk verifikasi Lahan Strategis atau Titip Bangun.</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-8">
-                <div className="flex justify-between items-end">
-                  <h3 className="text-2xl font-black uppercase tracking-tighter">Featured Listings</h3>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge 
-                      className={cn("rounded-md cursor-pointer", !propFilter ? "bg-black text-white" : "bg-neutral-100 text-neutral-600")}
-                      onClick={() => setPropFilter(null)}
-                    >
-                      Semua
-                    </Badge>
-                    <Badge 
-                      className={cn("rounded-md cursor-pointer", propFilter === "kerjasama" ? "bg-black text-white" : "bg-neutral-100 text-neutral-600")}
-                      onClick={() => setPropFilter("kerjasama")}
-                    >
-                      Synergy Lab
-                    </Badge>
-                    <Badge 
-                      className={cn("rounded-md cursor-pointer", propFilter === "bangun" ? "bg-black text-white" : "bg-neutral-100 text-neutral-600")}
-                      onClick={() => setPropFilter("bangun")}
-                    >
-                      Titip Bangun
-                    </Badge>
-                    <Badge 
-                      className={cn("rounded-md cursor-pointer", propFilter === "jual" ? "bg-black text-white" : "bg-neutral-100 text-neutral-600")}
-                      onClick={() => setPropFilter("jual")}
-                    >
-                      Jual & Sewa
-                    </Badge>
-                    <Badge 
-                      className={cn("rounded-md cursor-pointer", propFilter === "legal" ? "bg-black text-white" : "bg-neutral-100 text-neutral-600")}
-                      onClick={() => setPropFilter("legal")}
-                    >
-                      Legal & Perizinan
-                    </Badge>
-                  </div>
-                </div>
-
-                <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-                  {properties.filter(p => !propFilter || p.type === propFilter).length > 0 ? properties.filter(p => !propFilter || p.type === propFilter).map((p) => (
-                    <div key={p.id} className="group cursor-pointer border border-black/10 rounded-3xl overflow-hidden hover:shadow-xl transition-all duration-500">
-                      <div className="aspect-[4/3] bg-neutral-100 relative overflow-hidden">
-                        <img src={getDriveImageUrl(p.photos[0]) || `https://picsum.photos/seed/${p.id}/800/600`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
-                        <Badge className="absolute top-4 left-4 bg-black text-white px-4 py-1.5 rounded-full uppercase text-[10px] font-black tracking-widest">
-                          {p.type === "kerjasama" ? "Synergy Lab" : p.type === "bangun" ? "Titip Bangun" : p.type === "jual" ? "Jual & Sewa" : p.type === "legal" ? "Legal & Perizinan" : "Listing"}
-                        </Badge>
-                        {p.coordinates && (
-                          <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm p-1.5 rounded-full border border-black/10 text-accent">
-                            <MapPin className="w-3 h-3" />
-                          </div>
-                        )}
-                        <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-md border border-black/10 text-[10px] font-black uppercase">
-                          {p.area} m2
-                        </div>
-                      </div>
-                      <div className="p-6 space-y-4">
-                        <div className="space-y-1">
-                          <h3 className="text-xl font-black uppercase tracking-tighter group-hover:text-accent transition-colors">{p.title}</h3>
-                          <p className="text-[10px] text-neutral-500 flex items-center gap-1 font-bold uppercase tracking-widest"><MapPin className="w-3 h-3 text-accent" /> {p.location}</p>
-                        </div>
-                        <div className="flex justify-between items-center pt-2 border-t border-black/5">
-                          <p className="text-xl font-black tracking-tighter">Rp {p.price.toLocaleString('id-ID')}{p.type === 'sewa' ? '/thn' : ''}</p>
-                          <Button size="sm" className="rounded-xl btn-orange h-9 px-4 text-[10px] uppercase font-black" onClick={() => {
-                            const message = `Halo TBJ Property, saya tertarik dengan properti: ${p.title} (${p.location}). Mohon info lebih lanjut.`;
-                            window.open(`https://wa.me/62821942016509?text=${encodeURIComponent(message)}`, "_blank");
-                          }}>Hubungi</Button>
-                        </div>
-                      </div>
-                    </div>
-                  )) : (
-                    <div className="col-span-full py-20 text-center border-2 border-dashed border-black/10 rounded-3xl">
-                      <p className="uppercase-soft text-neutral-400">Belum ada listing properti tersedia.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="bg-neutral-900 rounded-[2rem] p-12 text-white grid md:grid-cols-2 gap-12 items-center">
-                <div className="space-y-6">
-                  <Badge className="bg-accent text-white rounded-md uppercase-soft">Legal Service</Badge>
-                  <h3 className="text-4xl font-black uppercase tracking-tighter leading-none">Urus Perizinan<br/>Tanpa Ribet.</h3>
-                  <p className="text-white/60 text-sm leading-relaxed">
-                    Kami melayani pengurusan IMB/PBG, SLF, hingga sertifikasi tanah. Tim legal kami memastikan aset Anda aman dan sesuai regulasi.
-                  </p>
-                  <div className="flex flex-wrap gap-4">
-                    <div className="flex items-center gap-2 text-xs font-bold uppercase">
-                      <CheckCircle2 className="w-4 h-4 text-accent" /> PBG / IMB
-                    </div>
-                    <div className="flex items-center gap-2 text-xs font-bold uppercase">
-                      <CheckCircle2 className="w-4 h-4 text-accent" /> SLF
-                    </div>
-                    <div className="flex items-center gap-2 text-xs font-bold uppercase">
-                      <CheckCircle2 className="w-4 h-4 text-accent" /> Sertifikat
-                    </div>
-                  </div>
-                  <Button className="btn-orange h-14 px-8 rounded-xl text-xs font-black uppercase">Konsultasi Legal Gratis</Button>
-                </div>
-                <div className="relative aspect-square rounded-3xl overflow-hidden border-2 border-white/10">
-                  <img src="https://picsum.photos/seed/legal/800/800" className="w-full h-full object-cover opacity-60" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Gavel className="w-32 h-32 text-white/20" />
-                  </div>
+                <p className="uppercase-soft text-neutral-500 leading-relaxed text-sm md:text-base">
+                  Layanan Jual, Sewa, Titip Bangun, dan Konsultasi Legalitas sedang dalam proses migrasi database ke sistem Synergy Lab yang baru. 
+                  Fitur ini akan segera aktif dalam beberapa hari ke depan.
+                </p>
+                <div className="pt-10 flex flex-col sm:flex-row justify-center gap-4">
+                  <Button className="btn-accent h-14 px-10 uppercase font-black tracking-widest text-xs" onClick={() => setStep(1)}>
+                    &larr; Kembali ke Layanan
+                  </Button>
+                  <Button variant="ghost" className="h-14 px-10 uppercase font-black tracking-widest text-xs text-neutral-400 hover:text-black" onClick={() => window.open('https://wa.me/6281213496672', '_blank')}>
+                    Hubungi Admin
+                  </Button>
                 </div>
               </div>
             </div>

@@ -20,8 +20,7 @@ interface Message {
 export default function AIAgent() {
   const { user } = useAuth();
   const { masterData } = useMasterData();
-  const { assets: systemAssets } = useMediaAssets('system');
-  const assistantLogo = systemAssets.find(a => a.name.toLowerCase().includes('assistant'))?.url || systemAssets.find(a => a.name.toLowerCase().includes('logo'))?.url || TBJ_LOGO;
+  const assistantLogo = TBJ_LOGO;
 
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: "Halo! Saya TBJ AI Agent. Ada yang bisa saya bantu terkait proyek konstruksi, renovasi, atau desain interior Anda hari ini? Anda juga bisa mengirimkan foto area yang ingin dikonsultasikan." }

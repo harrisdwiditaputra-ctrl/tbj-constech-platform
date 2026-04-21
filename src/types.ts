@@ -95,7 +95,7 @@ export interface Property {
   title: string;
   description: string;
   price: number;
-  type: "jual" | "lahan" | "bangun" | "sewa" | "perizinan" | "kerjasama" | "revitalisasi";
+  type: "jual" | "lahan" | "bangun" | "sewa" | "perizinan" | "kerjasama" | "revitalisasi" | "legal";
   location: string;
   coordinates?: { lat: number; lng: number };
   area: number;
@@ -240,6 +240,7 @@ export interface Campaign {
 export interface SystemConfig {
   surveyFee: number;
   aiFreeLimit: number;
+  aiVerifiedLimit?: number;
   globalMarkup: number;
   autoNotificationWA: boolean;
   aiAnalysisMode: boolean;
