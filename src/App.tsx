@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import ErrorBoundary from "@/components/ErrorBoundary.tsx";
 import Layout from "@/components/Layout.tsx";
 import { useState, useEffect, useMemo } from "react";
-import { useAuth, useProjects, useProjectDetails, useProperties, useMasterData, useCMSConfig, useSystemConfig, useMediaAssets, incrementAIUsage } from "@/lib/hooks";
+import { useAuth, useProjects, useProjectDetails, useProperties, useMasterData, useCMSConfig, useSystemConfig, useMediaAssets, useCampaigns, incrementAIUsage } from "@/lib/hooks";
 import { WORK_ITEMS_MASTER, QRIS_IMAGE, TBJ_LOGO } from "@/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-import { WorkItemMaster, Property, AIEstimateResponse } from "@/types";
+import { WorkItemMaster, Property, AIEstimateResponse, BudgetItem, TimelineEvent } from "@/types";
 import { cn, getDriveImageUrl, calculateAdminPrice, calculateClientPrice, formatRupiah } from "@/lib/utils";
 import { getAIEstimation } from "./services/aiEstimator";
 import { generateAIPDF, generateRABPDF } from "@/lib/pdfUtils";
@@ -329,6 +329,7 @@ const ProjectDetail = () => {
   const [newItemQty, setNewItemQty] = useState(1);
   const [newItemUnit, setNewItemUnit] = useState("m2");
   const [newItemPrice, setNewItemPrice] = useState(0);
+  const [newItemPriority, setNewItemPriority] = useState<BudgetItem["priority"]>("Medium");
   const [selectedCatId, setSelectedCatId] = useState("");
   
   // Editing individual item specs
@@ -369,6 +370,8 @@ const ProjectDetail = () => {
   const totalWeight = items.reduce((sum, i) => sum + (i.totalPrice / (project.totalBudget || 1)) * 100, 0);
   const currentProgress = items.reduce((sum, i) => sum + ((i.progress || 0) * (i.totalPrice / (project.totalBudget || 1))), 0);
 
+  const canEdit = user?.role === "admin" || user?.role === "pm";
+
   if (loading || !project) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
 
   return (
@@ -389,7 +392,8 @@ const ProjectDetail = () => {
             <div className="flex items-center gap-2">
               <Label className="text-[10px] uppercase font-bold">Status:</Label>
               <select 
-                className="text-[10px] p-1 border-2 border-black rounded-md font-bold uppercase"
+                disabled={!canEdit}
+                className="text-[10px] p-1 border-2 border-black rounded-md font-bold uppercase disabled:opacity-50"
                 value={project.status}
                 onChange={(e) => updateProjectStatus(e.target.value as any)}
               >
@@ -443,7 +447,7 @@ const ProjectDetail = () => {
              {(user?.role === 'admin' || user?.role === 'pm') && (
                <Dialog>
                  <DialogTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8 rounded-full border border-black"><Plus className="w-4 h-4" /></Button>} />
-                 <DialogContent className="rounded-3xl border-2 border-black">
+                 <DialogContent className="sm:max-w-md">
                    <DialogHeader>
                      <DialogTitle className="font-black uppercase tracking-tighter">Add Timeline Event</DialogTitle>
                    </DialogHeader>
@@ -486,7 +490,7 @@ const ProjectDetail = () => {
           <div className="max-h-[300px] overflow-y-auto pr-2 no-scrollbar">
             <ProjectTimeline 
               events={project.timeline || []} 
-              onUpdateStatus={updateTimelineEvent} 
+              onUpdateEvent={updateTimelineEvent} 
               isAdmin={user?.role === 'admin' || user?.role === 'pm'} 
             />
           </div>
@@ -506,7 +510,7 @@ const ProjectDetail = () => {
                 <Upload className="w-3 h-3 mr-2" /> Upload Photo
               </Button>
             } />
-            <DialogContent className="rounded-3xl border-2 border-black">
+            <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle className="font-black uppercase tracking-tighter">Upload Progress Photo</DialogTitle>
                 <DialogDescription>Tambahkan foto terbaru terkait progres proyek ini.</DialogDescription>
@@ -590,7 +594,7 @@ const ProjectDetail = () => {
         </CardContent>
       </Card>
 
-      {(user?.role === "admin" || user?.role === "pm") && (
+      {canEdit && (
         <div className="flex gap-4">
           <Dialog>
             <DialogTrigger render={
@@ -707,6 +711,20 @@ const ProjectDetail = () => {
                     onChange={e => setNewItemPrice(Math.max(0, Number(e.target.value)))} 
                   />
                 </div>
+
+                <div className="space-y-2">
+                  <Label>Prioritas Pekerjaan</Label>
+                  <select 
+                    className="w-full p-2 border rounded-md"
+                    value={newItemPriority}
+                    onChange={e => setNewItemPriority(e.target.value as any)}
+                  >
+                    <option value="Low">Low (Pekerjaan Minor)</option>
+                    <option value="Medium">Medium (Standar)</option>
+                    <option value="High">High (Krusal/Struktur)</option>
+                    <option value="Urgent">Urgent (Darurat)</option>
+                  </select>
+                </div>
                 
                 <div className="p-3 bg-neutral-50 rounded-lg border border-neutral-200">
                   <div className="flex justify-between items-center">
@@ -718,11 +736,12 @@ const ProjectDetail = () => {
               <DialogFooter>
                 <Button onClick={() => { 
                   if(selectedCatId && newItemName) {
-                    addItem(selectedCatId, newItemName, newItemQty, newItemUnit, newItemPrice, newItemSpecs);
+                    addItem(selectedCatId, newItemName, newItemQty, newItemUnit, newItemPrice, newItemSpecs, newItemPriority);
                     setNewItemName("");
                     setNewItemSpecs("");
                     setNewItemQty(1);
                     setNewItemPrice(0);
+                    setNewItemPriority("Medium");
                     setSearchQuery("");
                   }
                 }}>Simpan ke RAB</Button>
@@ -738,18 +757,20 @@ const ProjectDetail = () => {
             <div className="flex justify-between items-center border-b pb-2">
               <div className="flex items-center gap-4">
                 <h3 className="text-xl font-bold">{category.name}</h3>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50"
-                  onClick={() => {
-                    if(confirm(`Hapus kategori "${category.name}" dan semua item di dalamnya?`)) {
-                      deleteCategory(category.id);
-                    }
-                  }}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                {canEdit && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50"
+                    onClick={() => {
+                      if(confirm(`Hapus kategori "${category.name}" dan semua item di dalamnya?`)) {
+                        deleteCategory(category.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
               <Badge variant="outline">
                 {formatRupiah(user?.role === "admin" || user?.role === "pm" 
@@ -766,6 +787,7 @@ const ProjectDetail = () => {
                     <TableHead className="text-center">Satuan</TableHead>
                     <TableHead className="text-right">Harga Satuan</TableHead>
                     <TableHead className="text-right">Jumlah Harga</TableHead>
+                    <TableHead className="w-[80px] text-center">Prioritas</TableHead>
                     <TableHead className="w-[100px] text-center">Bobot (%)</TableHead>
                     <TableHead className="w-[100px] text-center">Progress (%)</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
@@ -804,13 +826,33 @@ const ProjectDetail = () => {
                       <TableCell className="text-right font-mono font-bold text-[10px]">
                         {formatRupiah(user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(item.totalPrice, sysConfig?.globalMarkup) : calculateClientPrice(item.totalPrice, sysConfig?.globalMarkup))}
                       </TableCell>
+                      <TableCell className="text-center">
+                        <select 
+                          disabled={!canEdit}
+                          className={cn(
+                            "text-[8px] p-1 border-2 border-black rounded-md font-bold uppercase disabled:opacity-50",
+                            item.priority === "Urgent" ? "bg-red-50 text-red-600 border-red-200" :
+                            item.priority === "High" ? "bg-orange-50 text-orange-600 border-orange-200" :
+                            item.priority === "Low" ? "bg-blue-50 text-blue-600 border-blue-200" :
+                            "bg-white"
+                          )}
+                          value={item.priority || "Medium"}
+                          onChange={(e) => updateItem(item.id, { priority: e.target.value as any })}
+                        >
+                          <option value="Low">Low</option>
+                          <option value="Medium">Medium</option>
+                          <option value="High">High</option>
+                          <option value="Urgent">Urgent</option>
+                        </select>
+                      </TableCell>
                       <TableCell className="text-center text-[10px] font-bold">
                         {((item.totalPrice / (project.totalBudget || 1)) * 100).toFixed(2)}%
                       </TableCell>
                       <TableCell className="text-center">
                         <Input 
+                          disabled={!canEdit}
                           type="number" 
-                          className="w-16 h-8 text-center mx-auto rounded-md border-black/20" 
+                          className="w-16 h-8 text-center mx-auto rounded-md border-black/20 disabled:opacity-50" 
                           value={item.progress || 0}
                           onChange={(e) => {
                             updateItemProgress(item.id, Math.max(0, Math.min(100, Number(e.target.value))));
@@ -818,14 +860,16 @@ const ProjectDetail = () => {
                         />
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-neutral-400 hover:text-red-600"
-                          onClick={() => deleteItem(item.id, item.totalPrice)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {canEdit && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-neutral-400 hover:text-red-600"
+                            onClick={() => deleteItem(item.id, item.totalPrice)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -880,7 +924,7 @@ const ProjectDetail = () => {
       </div>
 
       <Dialog open={!!editingItemSpecs} onOpenChange={(open) => !open && setEditingItemSpecs(null)}>
-        <DialogContent className="rounded-3xl border-2 border-black">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-black uppercase tracking-tighter">Edit Spesifikasi Teknis</DialogTitle>
             <DialogDescription>Input Merk, Tipe, atau Material khusus untuk item: {editingItemSpecs?.name}</DialogDescription>
@@ -1009,7 +1053,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
     { id: "Arsitektur", label: "Arsitektur & Perencanaan", icon: Building2, desc: "Bangun Baru, Gambar Kerja, & Strategi Konstruksi" },
     { id: "Property", label: "Property Hub", icon: Home, desc: "Jual/Sewa Properti & Solusi Legalitas IMB/PBG" },
     { id: "Gallery", label: "Projects Gallery", icon: ImageIcon, desc: "Portfolio & Inspirasi Karya Terbaik TBJ Constech" },
-    { id: "Lain-lain", label: "Lain-Lain", icon: Sparkles, desc: "Landscape, Event Setup, Exhibition Booth, & Lainnya" },
+    { id: "Lain-Lain", label: "Lain-Lain", icon: Sparkles, desc: "Landscape, Event, Exhibition Booth, & Lainnya" },
     { id: "AIAgent", label: "AI Agent", icon: MessageSquare, desc: "Konsultasi Cerdas 24/7 via Chat & Analisis Gambar", cosmic: true },
   ];
 
@@ -1045,11 +1089,14 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
         
         if (projectData.type === "Arsitektur") {
           const area = projectData.area || 0;
-          prompt = `Proyek Bangun Baru / Arsitektur: ${userProblem || "Perencanaan bangun baru"}, Luas: ${area}m2, Lantai: ${projectData.floors}, Finishing: ${projectData.finishing}`;
+          prompt = `PROYEK ARSITEKTUR & BANGUN BARU:\nAnalisis: ${userProblem || "Perencanaan bangun baru"}\nLuas Area: ${area}m2\nJumlah Lantai: ${projectData.floors}\nTipe Finishing: ${projectData.finishing}`;
         } else if (projectData.type === "Renovasi") {
           const area = projectData.area || 0;
           const categoriesStr = selectedCategories.join(", ");
-          prompt = `Proyek Renovasi: ${userProblem || "Renovasi bangunan"}, Fokus Kategori: ${categoriesStr}, Luas Area: ${area}m2`;
+          prompt = `PROYEK RENOVASI & MAINTENANCE:\nAnalisis: ${userProblem || "Renovasi bangunan"}\nKategori: ${categoriesStr}\nLuas Area: ${area}m2`;
+        } else if (projectData.type === "Lain-Lain" || projectData.type === "Lain-lain") {
+          const area = projectData.area || 0;
+          prompt = `PROYEK KHUSUS (LAIN-LAIN):\nDeskripsi: ${userProblem || "Pekerjaan konstruksi khusus"}\nLuas Area Estimasi: ${area}m2`;
         }
 
         const result = await getAIEstimation(prompt, projectData.type, masterData, user?.role, systemConfig?.globalMarkup);
@@ -2214,7 +2261,19 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                               <div className="space-y-2">
                                 <div className="flex items-center gap-3">
                                   <div className="w-2 h-2 rounded-full bg-accent opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                                  <p className="font-black text-sm uppercase tracking-widest leading-none group-hover/item:text-accent transition-colors text-black">{item.name}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-black text-sm uppercase tracking-widest leading-none group-hover/item:text-accent transition-colors text-black">{item.name}</p>
+                                    {item.priority && (
+                                      <Badge variant="outline" className={cn(
+                                        "text-[7px] uppercase border-black/10 py-0 h-4",
+                                        item.priority === "Urgent" ? "bg-red-50 text-red-600" :
+                                        item.priority === "High" ? "bg-orange-50 text-orange-600" :
+                                        item.priority === "Low" ? "bg-blue-50 text-blue-600" : "bg-neutral-50"
+                                      )}>
+                                        {item.priority}
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </div>
                                 <p className="text-[11px] text-neutral-500 leading-relaxed max-w-lg font-medium">{item.reasoning}</p>
                               </div>
@@ -2276,7 +2335,19 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                               {aiEstimation.items.map((item, idx) => (
                                 <tr key={idx} className="hover:bg-neutral-50/50 transition-colors">
                                   <td className="p-6">
-                                    <p className="text-xs font-black uppercase tracking-widest text-black">{item.name}</p>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-xs font-black uppercase tracking-widest text-black">{item.name}</p>
+                                      {item.priority && (
+                                        <Badge variant="outline" className={cn(
+                                          "text-[7px] uppercase border-black/10 py-0 h-4",
+                                          item.priority === "Urgent" ? "bg-red-50 text-red-600" :
+                                          item.priority === "High" ? "bg-orange-50 text-orange-600" :
+                                          item.priority === "Low" ? "bg-blue-50 text-blue-600" : "bg-neutral-50"
+                                        )}>
+                                          {item.priority}
+                                        </Badge>
+                                      )}
+                                    </div>
                                     <p className="text-[9px] text-neutral-400 mt-1 uppercase-soft">{item.reasoning}</p>
                                   </td>
                                   <td className="p-6 text-center text-xs font-bold font-mono">{item.quantity} {item.unit}</td>
@@ -2526,7 +2597,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
       </Card>
       
       <Dialog open={showOtpDialog} onOpenChange={setShowOtpDialog}>
-        <DialogContent className="max-w-sm rounded-3xl border-2 border-black p-8">
+        <DialogContent className="sm:max-w-sm p-8">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-center">Verifikasi WhatsApp</DialogTitle>
             <DialogDescription className="text-center uppercase-soft">
@@ -3139,7 +3210,9 @@ export default function App() {
     <p className="text-xs font-black uppercase tracking-[0.3em] animate-pulse">Loading TBJ Ecosystem...</p>
   </div>;
 
-  const isAdmin = user?.role === "admin" || user?.role === "pm";
+  const isAdmin = user?.role === "admin";
+  const isPM = user?.role === "pm";
+  const isManagerial = isAdmin || isPM;
   const isClient = user?.role === "user";
 
   return (
@@ -3153,17 +3226,23 @@ export default function App() {
               <Route path="*" element={<LoginPage onLogin={login} onGuestLogin={loginAsGuest} cmsConfig={cmsConfig} />} />
             ) : (
               <>
-                {/* Admin Routes */}
-                {isAdmin && (
+                {/* Managerial Routes */}
+                {isManagerial && (
                   <>
-                    <Route path="/admin" element={<AdminPanel />} />
+                    {isAdmin && <Route path="/admin" element={<AdminPanel />} />}
                     <Route path="/pm" element={<PMDashboard />} />
-                    <Route path="/projects" element={<ProjectsPage user={user} />} />
-                    <Route path="/projects/:id" element={<ProjectDetail />} />
-                    <Route path="/master" element={<AdminMasterPage />} />
-                    <Route path="/import" element={<ImportPage />} />
                     <Route path="/ai-agent" element={<AIAgent />} />
                   </>
+                )}
+                
+                <Route path="/projects" element={<ProjectsPage user={user} />} />
+                <Route path="/projects/:id" element={<ProjectDetail />} />
+
+                {isAdmin && (
+                   <>
+                    <Route path="/master" element={<AdminMasterPage />} />
+                    <Route path="/import" element={<ImportPage />} />
+                   </>
                 )}
 
                 {/* Client Routes */}

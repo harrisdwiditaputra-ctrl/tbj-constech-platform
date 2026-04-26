@@ -52,6 +52,7 @@ export interface ProjectRequest {
   unit: string;
   price: number;
   tag: "client" | "pm" | "system";
+  priority?: "Low" | "Medium" | "High" | "Urgent";
   photoUrl?: string;
   createdAt: string;
 }
@@ -62,6 +63,7 @@ export interface TimelineEvent {
   date: string;
   dueDate?: string; // Added for task tracking
   status: "pending" | "ongoing" | "completed";
+  priority?: "Low" | "Medium" | "High" | "Urgent";
 }
 
 export interface BudgetCategory {
@@ -90,6 +92,7 @@ export interface BudgetItem {
   progress?: number; // 0 to 100
   startDate?: string;
   endDate?: string;
+  priority?: "Low" | "Medium" | "High" | "Urgent";
 }
 
 export interface Property {
@@ -143,6 +146,7 @@ export interface MaterialRequest {
   quantity: number;
   unit: string;
   note: string;
+  priority?: "Low" | "Medium" | "High" | "Urgent";
   status: "pending" | "approved" | "rejected" | "purchased" | "ordered" | "delivered";
   vendorId?: string;
   vendorName?: string;
@@ -194,6 +198,7 @@ export interface AIEstimateItem {
   pricePerUnit: number;
   totalPrice: number;
   reasoning: string;
+  priority?: "Low" | "Medium" | "High" | "Urgent";
 }
 
 export interface AIEstimateResponse {
@@ -240,12 +245,15 @@ export interface Campaign {
   id: string;
   name: string;
   status: "Active" | "Draft" | "Paused";
+  category?: "Promo" | "Information" | "Launch" | "Maintenance" | string;
   reach: string;
   conversion: string;
   content: string;
   locations: string[];
   createdAt: string;
   scheduledDeleteDate?: string;
+  scheduleType?: "Once" | "Daily" | "Weekly" | "Monthly";
+  scheduledDate?: string;
 }
 
 export interface SystemConfig {

@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMasterData, useAuth, useUsers, useProjects, useWorkforce, useMaterialRequests, useProperties, useCMSConfig, useCampaigns, useSystemConfig, useGallery, useVendors, useAttendance, useFinance, useWorkerWages, useMasterCategories, usePMs, useMediaAssets, useSavedEstimates, saveImageToGudang, useMaterialSuggestions } from "@/lib/hooks";
+import { 
+  useMasterData, useAuth, useUsers, useProjects, 
+  useWorkforce, useMaterialRequests, useProperties, 
+  useCMSConfig, useCampaigns, useSystemConfig, 
+  useGallery, useVendors, useAttendance, 
+  useFinance, useWorkerWages, useMasterCategories, 
+  usePMs, useMediaAssets, useSavedEstimates, 
+  saveImageToGudang, useMaterialSuggestions,
+  useProjectDetails
+} from "@/lib/hooks";
+import { ProjectAIHealth } from "./ProjectAIHealth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -69,6 +79,11 @@ const MapPicker = ({ position, setPosition }: { position: [number, number], setP
   );
 };
 
+const AIHealthWrapper = ({ project, masterData, onClose }: { project: Project; masterData: any[]; onClose: () => void }) => {
+  const { items } = useProjectDetails(project.id);
+  return <ProjectAIHealth project={project} items={items} masterData={masterData} onClose={onClose} />;
+};
+
 export default function AdminPanel() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -91,19 +106,27 @@ export default function AdminPanel() {
   const { users, loading: usersLoading, updateUser } = useUsers(user?.role);
   const { projects, loading: projectsLoading, updateProject, deleteProject, fixProjectMilestones } = useProjects(undefined, user?.role);
   const [projectSearch, setProjectSearch] = useState("");
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
+  const [projectStatus, setProjectStatus] = useState("all");
   const [projectCategory, setProjectCategory] = useState("all");
   const [materialSearch, setMaterialSearch] = useState("");
+  const [materialCategory, setMaterialCategory] = useState("all");
+  const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
+  const [clientSearch, setClientSearch] = useState("");
+  const [estimatesSearch, setEstimatesSearch] = useState("");
+  const [estimatesCategory, setEstimatesCategory] = useState("all");
+  const [selectedEstimates, setSelectedEstimates] = useState<string[]>([]);
   const [campaignSearch, setCampaignSearch] = useState("");
   const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
   const { workforce, loading: workforceLoading, addWorkforce, updateWorkforce, deleteWorkforce } = useWorkforce(user?.role);
-  const { requests, loading: requestsLoading, updateRequestStatus, assignVendor, addRequest, deleteRequest } = useMaterialRequests(user?.role);
+  const { requests, loading: requestsLoading, updateRequest, updateRequestStatus, assignVendor, addRequest, deleteRequest } = useMaterialRequests(user?.role);
   const { suggestions: materialSuggestions, addSuggestion } = useMaterialSuggestions();
   const { properties, loading: propertiesLoading, addProperty, updateProperty, deleteProperty } = useProperties();
   const { gallery, addGalleryItem, deleteGalleryItem, updateGalleryItem } = useGallery();
   const { vendors, addVendor, deleteVendor, updateVendor } = useVendors();
   const { attendance, loading: attendanceLoading } = useAttendance(user?.role);
   const { config: cmsConfig, updateConfig: updateCMS } = useCMSConfig();
-  const { campaigns, addCampaign, updateCampaign, deleteCampaign } = useCampaigns();
+  const { campaigns, addCampaign, updateCampaign, deleteCampaign, cleanExpiredCampaigns } = useCampaigns();
   const { config: systemConfig, updateConfig: updateSystem } = useSystemConfig();
   const { transactions, addTransaction } = useFinance();
   const { wages, updateWageStatus } = useWorkerWages();
@@ -111,7 +134,7 @@ export default function AdminPanel() {
   const { estimates: savedEstimates, deleteEstimate } = useSavedEstimates();
   const pdfLogo = TBJ_LOGO;
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "clients" | "projects" | "workforce" | "cms" | "finance" | "marketing" | "management" | "materials" | "attendance" | "gallery" | "properties" | "vendors" | "payments" | "media">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "clients" | "projects" | "workforce" | "cms" | "finance" | "marketing" | "management" | "materials" | "attendance" | "gallery" | "properties" | "vendors" | "payments" | "media" | "estimates">("dashboard");
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [clearProgress, setClearProgress] = useState(0);
@@ -625,23 +648,24 @@ export default function AdminPanel() {
           </div>
           
           {[
-            { id: "dashboard", label: "Insights", icon: LayoutDashboard },
-            { id: "products", label: "Products (AHSP)", icon: Database },
-            { id: "projects", label: "Projects", icon: Briefcase },
-            { id: "clients", label: "Clients", icon: Users },
-            { id: "materials", label: "Materials", icon: Package },
-            { id: "attendance", label: "Attendance", icon: Clock },
-            { id: "workforce", label: "Workforce", icon: HardHat },
-            { id: "gallery", label: "Gallery", icon: ImageIcon },
-            { id: "properties", label: "Property Hub", icon: MapPin },
-            { id: "vendors", label: "Vendors", icon: Package },
-            { id: "payments", label: "Payments", icon: DollarSign },
-            { id: "media", label: "Gudang Gambar", icon: HardDrive },
-            { id: "cms", label: "CMS Content", icon: ImageIcon },
-            { id: "finance", label: "Finance", icon: DollarSign },
-            { id: "marketing", label: "Marketing", icon: TrendingUp },
-            { id: "management", label: "Management", icon: Settings },
-          ].map((tab) => (
+            { id: "dashboard", label: "Insights", icon: LayoutDashboard, roles: ["admin", "pm"] },
+            { id: "products", label: "Products (AHSP)", icon: Database, roles: ["admin", "pm"] },
+            { id: "projects", label: "Projects", icon: Briefcase, roles: ["admin", "pm"] },
+            { id: "clients", label: "Clients", icon: Users, roles: ["admin"] },
+            { id: "materials", label: "Materials", icon: Package, roles: ["admin", "pm"] },
+            { id: "attendance", label: "Attendance", icon: Clock, roles: ["admin", "pm"] },
+            { id: "workforce", label: "Workforce", icon: HardHat, roles: ["admin", "pm"] },
+            { id: "gallery", label: "Gallery", icon: ImageIcon, roles: ["admin", "pm"] },
+            { id: "properties", label: "Property Hub", icon: MapPin, roles: ["admin", "pm"] },
+            { id: "vendors", label: "Vendors", icon: Package, roles: ["admin", "pm"] },
+            { id: "payments", label: "Payments", icon: DollarSign, roles: ["admin"] },
+            { id: "media", label: "Gudang Gambar", icon: HardDrive, roles: ["admin", "pm"] },
+            { id: "cms", label: "CMS Content", icon: ImageIcon, roles: ["admin"] },
+            { id: "finance", label: "Finance", icon: DollarSign, roles: ["admin"] },
+            { id: "marketing", label: "Marketing", icon: TrendingUp, roles: ["admin"] },
+            { id: "estimates", label: "Arsip Estimasi", icon: FileText, roles: ["admin", "pm"] },
+            { id: "management", label: "Management", icon: Settings, roles: ["admin"] },
+          ].filter(tab => tab.roles.includes(user?.role || "")).map((tab) => (
             <button
               key={tab.id}
               onClick={() => {
@@ -658,15 +682,17 @@ export default function AdminPanel() {
             </button>
           ))}
           
-          <div className="pt-8 mt-8 border-t border-black/5">
-            <Button 
-              variant="destructive" 
-              className="w-full gap-2 rounded-xl h-12 uppercase font-black text-[10px]"
-              onClick={resetDatabase}
-            >
-              <RefreshCw className="w-4 h-4" /> Reset System
-            </Button>
-          </div>
+          {user?.role === "admin" && (
+            <div className="pt-8 mt-8 border-t border-black/5">
+              <Button 
+                variant="destructive" 
+                className="w-full gap-2 rounded-xl h-12 uppercase font-black text-[10px]"
+                onClick={resetDatabase}
+              >
+                <RefreshCw className="w-4 h-4" /> Reset System
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="flex-grow space-y-8">
@@ -685,6 +711,7 @@ export default function AdminPanel() {
                 {activeTab === "vendors" && "Vendor Database"}
                 {activeTab === "payments" && "Payment & Assessment Management"}
                 {activeTab === "media" && "Gudang Gambar & Assets"}
+                {activeTab === "estimates" && "Arsip Estimasi (Saved RAB)"}
                 {activeTab === "management" && "System Management"}
                 {activeTab === "properties" && "Property & Permit Hub"}
               </h1>
@@ -721,7 +748,7 @@ export default function AdminPanel() {
                     <span className="absolute -top-1 -right-1 w-3 h-3 bg-accent rounded-full border-2 border-white animate-pulse" />
                   </Button>
                 } />
-                <DialogContent className="max-w-md rounded-3xl border-2 border-black">
+                <DialogContent className="sm:max-w-md">
                   <DialogHeader>
                     <DialogTitle className="text-xl font-black uppercase tracking-tighter">Recent Activities</DialogTitle>
                   </DialogHeader>
@@ -1011,7 +1038,7 @@ export default function AdminPanel() {
               </div>
 
               <Dialog open={showVersionHistory} onOpenChange={setShowVersionHistory}>
-                <DialogContent className="max-w-3xl rounded-3xl border-2 border-black max-h-[80vh] overflow-auto">
+                <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-auto">
                   <DialogHeader>
                     <DialogTitle className="font-black uppercase tracking-tighter">Master Data History</DialogTitle>
                     <DialogDescription>Daftar snapshot master data yang telah disimpan. Klik "Activate" untuk memulihkan versi tersebut.</DialogDescription>
@@ -1510,13 +1537,27 @@ export default function AdminPanel() {
 
           {activeTab === "clients" && (
             <div className="space-y-8">
-              <div className="flex justify-between items-center">
-                <div className="relative w-96">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
-                  <Input 
-                    placeholder="Search clients by name or email..." 
-                    className="pl-10 h-10 border-2 border-black rounded-xl"
-                  />
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                  <div className="relative w-full md:w-96">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                    <Input 
+                      placeholder="Search clients by name or email..." 
+                      className="pl-10 h-10 border-2 border-black rounded-xl"
+                      value={clientSearch}
+                      onChange={e => setClientSearch(e.target.value)}
+                    />
+                  </div>
+                  <select 
+                    className="h-10 border-2 border-black rounded-xl px-4 text-[10px] font-black uppercase"
+                    value={projectCategory}
+                    onChange={e => setProjectCategory(e.target.value)}
+                  >
+                    <option value="all">ALL TIERS</option>
+                    <option value="prospect">TIER 1 (LEAD)</option>
+                    <option value="survey">TIER 2 (SILVER)</option>
+                    <option value="deal">TIER 3 (GOLD)</option>
+                  </select>
                 </div>
                 <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl" onClick={exportClients}>
                   <Download className="w-4 h-4 mr-2" /> Export to Excel
@@ -1536,7 +1577,14 @@ export default function AdminPanel() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {users.map((u) => (
+                    {users.filter(u => {
+                      const matchesSearch = 
+                        (u.displayName || "").toLowerCase().includes(clientSearch.toLowerCase()) || 
+                        (u.email || "").toLowerCase().includes(clientSearch.toLowerCase()) ||
+                        (u.whatsapp || "").toLowerCase().includes(clientSearch.toLowerCase());
+                      const matchesTier = projectCategory === "all" || u.tier === projectCategory;
+                      return matchesSearch && matchesTier;
+                    }).map((u) => (
                       <TableRow key={u.uid}>
                         <TableCell>
                           <div className="flex items-center gap-3">
@@ -1573,7 +1621,7 @@ export default function AdminPanel() {
                                   {u.tier === 'deal' ? "Tier 3 (Gold)" : u.tier === 'survey' ? "Tier 2 (Silver)" : "Tier 1 (Lead)"}
                                 </Badge>
                               } />
-                              <DialogContent className="max-w-2xl rounded-3xl border-2 border-black">
+                              <DialogContent className="sm:max-w-2xl">
                                 <DialogHeader>
                                   <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Client Dossier: {u.displayName}</DialogTitle>
                                 </DialogHeader>
@@ -1665,7 +1713,7 @@ export default function AdminPanel() {
 
               {isEditingClient && (
                 <Dialog open={isEditingClient} onOpenChange={setIsEditingClient}>
-                  <DialogContent className="max-w-md rounded-3xl border-2 border-black">
+                  <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                       <DialogTitle className="text-xl font-black uppercase tracking-tighter">Edit Client Info</DialogTitle>
                     </DialogHeader>
@@ -1702,6 +1750,18 @@ export default function AdminPanel() {
                             <option value="prospect">Tier 1 (Lead)</option>
                             <option value="survey">Tier 2 (Silver)</option>
                             <option value="deal">Tier 3 (Gold)</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="uppercase-soft text-[10px]">Role</label>
+                          <select 
+                            className="w-full h-10 rounded-md border border-black/10 px-3 text-sm"
+                            value={clientEditForm.role || "user"}
+                            onChange={e => setClientEditForm({...clientEditForm, role: e.target.value as any})}
+                          >
+                            <option value="user">CLIENT / USER</option>
+                            <option value="pm">PROJECT MANAGER</option>
+                            <option value="admin">ADMINISTRATOR</option>
                           </select>
                         </div>
                       </div>
@@ -1779,6 +1839,18 @@ export default function AdminPanel() {
                 <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
                   <select 
                     className="h-10 px-4 border-2 border-black/10 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none bg-neutral-50 w-full md:w-40"
+                    value={projectStatus}
+                    onChange={e => setProjectStatus(e.target.value)}
+                  >
+                    <option value="all">ANY STATUS</option>
+                    <option value="active">ACTIVE</option>
+                    <option value="survey">SURVEY</option>
+                    <option value="deal">DEAL / GOLD</option>
+                    <option value="completed">COMPLETED</option>
+                    <option value="pending">PENDING</option>
+                  </select>
+                  <select 
+                    className="h-10 px-4 border-2 border-black/10 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none bg-neutral-50 w-full md:w-40"
                     value={projectCategory}
                     onChange={e => setProjectCategory(e.target.value)}
                   >
@@ -1809,14 +1881,32 @@ export default function AdminPanel() {
                   const matchesSearch = p.name.toLowerCase().includes(projectSearch.toLowerCase()) || 
                                         p.location.toLowerCase().includes(projectSearch.toLowerCase());
                   const matchesCategory = projectCategory === "all" || p.category === projectCategory || p.type === projectCategory;
-                  return matchesSearch && matchesCategory;
+                  const matchesStatus = projectStatus === "all" || p.status === projectStatus;
+                  return matchesSearch && matchesCategory && matchesStatus;
                 }).map(p => (
-                  <Card key={p.id} className="border-2 border-black rounded-3xl overflow-hidden shadow-sm group hover:border-accent transition-all">
+                  <Card key={p.id} className={cn(
+                    "border-2 rounded-3xl overflow-hidden shadow-sm group transition-all relative",
+                    selectedProjects.includes(p.id) ? "border-accent bg-accent/5" : "border-black hover:border-accent"
+                  )}>
                     <div className="h-48 bg-neutral-100 relative">
+                      <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+                        <Checkbox 
+                          checked={selectedProjects.includes(p.id)}
+                          onCheckedChange={() => {
+                            setSelectedProjects(prev => 
+                              prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                            );
+                          }}
+                          className="bg-white border-2 border-black"
+                        />
+                      </div>
                       <img src={getDriveImageUrl(p.imageUrl) || `https://picsum.photos/seed/${p.id}/400/300`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       <Badge className={cn(
                         "absolute top-4 right-4 uppercase-soft",
-                        p.status === 'active' ? "bg-green-500" : "bg-blue-500"
+                        p.status === 'active' ? "bg-green-500 text-white" : 
+                        p.status === 'survey' ? "bg-blue-500 text-white" :
+                        p.status === 'completed' ? "bg-purple-500 text-white" :
+                        "bg-neutral-500 text-white"
                       )}>{p.status}</Badge>
                     </div>
                     <CardContent className="p-6 space-y-4">
@@ -1840,6 +1930,19 @@ export default function AdminPanel() {
                         </Button>
                         <Button 
                           variant="outline" 
+                          className="h-10 w-10 border-2 border-red-50 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl flex items-center justify-center p-0"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (confirm(`Hapus proyek ${p.name}?`)) {
+                              await deleteProject(p.id);
+                              toast.success("Proyek dihapus.");
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
                           className="flex-grow border-2 border-black h-10 text-[10px] bg-black text-white hover:bg-neutral-800"
                           onClick={() => setSelectedProjectAI(p)}
                         >
@@ -1853,7 +1956,7 @@ export default function AdminPanel() {
 
               {showManageTeam && selectedProjectTeam && (
                 <Dialog open={showManageTeam} onOpenChange={setShowManageTeam}>
-                  <DialogContent className="max-w-2xl rounded-3xl border-2 border-black p-8">
+                  <DialogContent className="sm:max-w-2xl p-8">
                     <DialogHeader>
                       <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Manage Project Team</DialogTitle>
                       <DialogDescription className="uppercase-soft">Assign Project Manager and Workforce for {selectedProjectTeam.name}</DialogDescription>
@@ -1922,62 +2025,11 @@ export default function AdminPanel() {
               {selectedProjectAI && (
                 <Dialog open={!!selectedProjectAI} onOpenChange={() => setSelectedProjectAI(null)}>
                   <DialogContent className="max-w-3xl rounded-3xl border-2 border-black p-0 overflow-hidden bg-white shadow-2xl">
-                    <div className="bg-black text-white p-8 relative">
-                      <div className="absolute top-0 right-0 p-8 opacity-10">
-                        <Brain className="w-32 h-32" />
-                      </div>
-                      <div className="relative z-10 space-y-1">
-                        <div className="flex items-center gap-2 text-accent">
-                          <Zap className="w-4 h-4" />
-                          <span className="text-[8px] font-black uppercase tracking-widest">Project AI Health Monitor</span>
-                        </div>
-                        <h2 className="text-2xl font-black uppercase tracking-tighter">{selectedProjectAI.name}</h2>
-                        <p className="text-white/60 text-[10px] uppercase-soft">Real-time Backend Intelligence System</p>
-                      </div>
-                    </div>
-                    <div className="p-6 space-y-6">
-                      <div className="grid md:grid-cols-3 gap-4">
-                        <div className="p-3 bg-green-100 rounded-xl border-2 border-green-300">
-                          <p className="uppercase-soft text-green-700 text-[8px]">Financial Health</p>
-                          <p className="text-xl font-black text-green-800">EXCELLENT</p>
-                          <p className="text-[8px] text-green-700 mt-1">Margin aman di 18.4%</p>
-                        </div>
-                        <div className="p-3 bg-blue-100 rounded-xl border-2 border-blue-300">
-                          <p className="uppercase-soft text-blue-700 text-[8px]">Progress Health</p>
-                          <p className="text-xl font-black text-blue-800">ON TRACK</p>
-                          <p className="text-[8px] text-blue-700 mt-1">Deviasi: -0.2% (Normal)</p>
-                        </div>
-                        <div className="p-3 bg-accent/20 rounded-xl border-2 border-accent/40">
-                          <p className="uppercase-soft text-accent text-[8px]">Worker Progress</p>
-                          <p className="text-xl font-black text-accent">OPTIMAL</p>
-                          <p className="text-[8px] text-accent mt-1">Bobot harian: 1.2%</p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
-                          <AlertCircle className="w-4 h-4 text-accent" /> AI Strategic Recommendations
-                        </h4>
-                        <div className="grid md:grid-cols-2 gap-4">
-                          <div className="p-4 border-2 border-black rounded-xl space-y-2">
-                            <p className="text-[10px] font-black uppercase text-neutral-400">Material Control</p>
-                            <p className="text-xs leading-relaxed">
-                              "Stok semen menipis. AI mengingatkan untuk re-order 50 sak besok pagi agar tidak menghambat pengecoran plat lantai."
-                            </p>
-                          </div>
-                          <div className="p-4 border-2 border-black rounded-xl space-y-2">
-                            <p className="text-[10px] font-black uppercase text-neutral-400">Workforce Efficiency</p>
-                            <p className="text-xs leading-relaxed">
-                              "Produktivitas tukang batu di zona A sangat baik. Pertimbangkan untuk memindahkan 2 orang ke zona B untuk mengejar target minggu ini."
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end">
-                        <Button className="btn-sleek px-8" onClick={() => setSelectedProjectAI(null)}>Close Monitor</Button>
-                      </div>
-                    </div>
+                    <AIHealthWrapper 
+                      project={selectedProjectAI} 
+                      masterData={masterData}
+                      onClose={() => setSelectedProjectAI(null)} 
+                    />
                   </DialogContent>
                 </Dialog>
               )}
@@ -2420,7 +2472,7 @@ export default function AdminPanel() {
             <div className="space-y-8">
               {/* Record Payment Dialog */}
               <Dialog open={showRecordPayment} onOpenChange={setShowRecordPayment}>
-                <DialogContent className="max-w-md rounded-3xl border-2 border-black">
+                <DialogContent className="sm:max-w-md">
                   <DialogHeader>
                     <DialogTitle className="text-xl font-black uppercase tracking-tighter">Record Client Payment</DialogTitle>
                   </DialogHeader>
@@ -2628,9 +2680,17 @@ export default function AdminPanel() {
 
               <Card className="border-2 border-black rounded-2xl overflow-hidden">
                 <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-col md:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <CardTitle className="text-xl font-black uppercase tracking-tighter">Marketing Campaigns</CardTitle>
-                    {selectedCampaigns.length > 0 && (
+                    <div className="flex items-center gap-4">
+                      <CardTitle className="text-xl font-black uppercase tracking-tighter">Marketing Campaigns</CardTitle>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 rounded-full text-[8px] uppercase font-black border-black/10"
+                        onClick={cleanExpiredCampaigns}
+                      >
+                        <RefreshCw className="w-3 h-3 mr-2" /> Clean Expired
+                      </Button>
+                      {selectedCampaigns.length > 0 && (
                       <Button 
                         variant="destructive" 
                         size="sm" 
@@ -2648,6 +2708,22 @@ export default function AdminPanel() {
                     )}
                   </div>
                   <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+                    {selectedProjects.length > 0 && (
+                      <Button 
+                        variant="destructive" 
+                        size="sm" 
+                        className="h-10 px-6 rounded-xl text-[10px] font-black uppercase"
+                        onClick={async () => {
+                          if (confirm(`Hapus ${selectedProjects.length} proyek terpilih?`)) {
+                            for (const id of selectedProjects) await deleteProject(id);
+                            setSelectedProjects([]);
+                            toast.success("Bulk delete complete.");
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" /> Bulk Delete ({selectedProjects.length})
+                      </Button>
+                    )}
                     <div className="relative w-full md:w-64">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                       <Input 
@@ -2665,74 +2741,110 @@ export default function AdminPanel() {
                     </Button>
                   </div>
                 </CardHeader>
-                <CardContent className="p-8 space-y-6 max-h-[600px] overflow-y-auto custom-scrollbar">
-                  {campaigns.filter(c => 
-                    c.name.toLowerCase().includes(campaignSearch.toLowerCase()) || 
-                    c.content.toLowerCase().includes(campaignSearch.toLowerCase())
-                  ).map((c) => (
-                    <div 
-                      key={c.id} 
-                      className={cn(
-                        "flex items-center justify-between p-6 border-2 border-black rounded-2xl hover:bg-neutral-50 transition-colors cursor-pointer group",
-                        selectedCampaigns.includes(c.id) ? "border-accent bg-accent/5" : "border-black"
-                      )}
-                    >
-                      <div className="flex items-center gap-4 flex-grow">
-                        <Checkbox 
-                          checked={selectedCampaigns.includes(c.id)}
-                          onCheckedChange={() => {
-                            setSelectedCampaigns(prev => 
-                              prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
-                            );
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <div className="space-y-1" onClick={() => {
-                          setEditingCampaign(c);
-                          setShowEditCampaign(true);
-                        }}>
-                          <p className="font-black text-sm uppercase tracking-widest">{c.name}</p>
-                          <div className="flex items-center gap-3">
-                            <p className="text-[10px] text-neutral-400">Reach: {c.reach} | Conv: {c.conversion}</p>
-                            {c.scheduledDeleteDate && (
-                              <Badge className="bg-red-50 text-red-500 text-[8px] border-none uppercase font-black">
-                                <Clock className="w-2 h-2 mr-1" /> Scheduled: {new Date(c.scheduledDeleteDate).toLocaleDateString()}
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-[10px] italic text-neutral-500 line-clamp-1">{c.content}</p>
+                <CardContent className="p-8 space-y-6 max-h-[700px] overflow-y-auto custom-scrollbar">
+                  {["Active", "Draft", "Archived"].map(statusGroup => {
+                    const groupCampaigns = campaigns.filter(c => 
+                      c.status === statusGroup && (
+                        c.name.toLowerCase().includes(campaignSearch.toLowerCase()) || 
+                        c.content.toLowerCase().includes(campaignSearch.toLowerCase())
+                      )
+                    );
+                    
+                    if (groupCampaigns.length === 0) return null;
+
+                    return (
+                      <div key={statusGroup} className="space-y-4">
+                        <div className="flex items-center gap-4">
+                          <h4 className="text-xs font-black uppercase tracking-[0.3em] text-neutral-400">{statusGroup} Campaigns</h4>
+                          <span className="h-[1px] flex-grow bg-neutral-100" />
+                          <Badge className={cn(
+                            "text-[8px] font-black uppercase border-none",
+                            statusGroup === "Active" ? "bg-green-500" : statusGroup === "Draft" ? "bg-blue-500" : "bg-neutral-300"
+                          )}>{groupCampaigns.length}</Badge>
+                        </div>
+                        <div className="grid gap-4">
+                          {groupCampaigns.map((c) => (
+                            <div 
+                              key={c.id} 
+                              className={cn(
+                                "flex flex-col gap-4 p-6 border-2 border-black rounded-3xl hover:bg-neutral-50 transition-all cursor-pointer group relative",
+                                selectedCampaigns.includes(c.id) ? "border-accent bg-accent/5" : "border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:translate-x-1 hover:translate-y-1 hover:shadow-none",
+                                statusGroup === "Active" ? "bg-white" : "bg-neutral-50/50"
+                              )}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <div className="flex items-center gap-4 flex-grow">
+                                  <Checkbox 
+                                    checked={selectedCampaigns.includes(c.id)}
+                                    onCheckedChange={() => {
+                                      setSelectedCampaigns(prev => 
+                                        prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
+                                      );
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                  <div className="space-y-1" onClick={() => {
+                                    setEditingCampaign(c);
+                                    setShowEditCampaign(true);
+                                  }}>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-black text-sm uppercase tracking-widest">{c.name}</p>
+                                      {c.category && (
+                                        <Badge variant="outline" className="text-[8px] font-bold uppercase border-black/20 text-neutral-500">{c.category}</Badge>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">Reach: {c.reach} | Conv: {c.conversion}</p>
+                                      {c.scheduledDeleteDate && (
+                                        <Badge className="bg-red-50 text-red-500 text-[8px] border-none uppercase font-black">
+                                          <Clock className="w-3 h-3 mr-1" /> Expired: {new Date(c.scheduledDeleteDate).toLocaleDateString()}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <div className="flex gap-2">
+                                    <Button 
+                                      variant="outline" 
+                                      size="icon" 
+                                      className="h-8 w-8 border-2 border-black/10 rounded-xl hover:bg-black hover:text-white transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingCampaign(c);
+                                        setShowEditCampaign(true);
+                                      }}
+                                    >
+                                      <Settings className="w-4 h-4" />
+                                    </Button>
+                                    <Button 
+                                      variant="outline" 
+                                      size="icon" 
+                                      className="h-8 w-8 text-red-500 border-2 border-red-100 rounded-xl hover:bg-red-50"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (confirm(`Hapus campaign ${c.name}?`)) deleteCampaign(c.id);
+                                      }}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="bg-neutral-50 p-4 rounded-xl border border-black/5">
+                                <p className="text-xs font-medium text-neutral-600 italic">"{c.content}"</p>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <Badge className={cn("uppercase-soft", c.status === "Active" ? "bg-green-500 text-white" : "bg-neutral-200")}>{c.status}</Badge>
-                        <div className="flex gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-neutral-300 hover:text-black"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingCampaign(c);
-                              setShowEditCampaign(true);
-                            }}
-                          >
-                            <Settings className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-neutral-300 hover:text-red-500"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if(confirm("Hapus campaign ini?")) deleteCampaign(c.id);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
+                    );
+                  })}
+                  {campaigns.length === 0 && (
+                    <div className="py-20 text-center border-2 border-dashed border-neutral-200 rounded-3xl">
+                      <p className="uppercase-soft text-neutral-400">Belum ada campaign marketing.</p>
                     </div>
-                  ))}
+                  )}
                 </CardContent>
               </Card>
 
@@ -2745,7 +2857,7 @@ export default function AdminPanel() {
                       </DialogTitle>
                     </DialogHeader>
                     <div className="space-y-6 py-4">
-                      <div className="grid md:grid-cols-2 gap-6">
+                    <div className="grid md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                           <label className="uppercase-soft text-[10px]">Campaign Name</label>
                           <Input 
@@ -2753,6 +2865,19 @@ export default function AdminPanel() {
                             onChange={e => setEditingCampaign({...editingCampaign, name: e.target.value})}
                             placeholder="e.g. Promo Lebaran" 
                           />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="uppercase-soft text-[10px]">Category</label>
+                          <select 
+                            className="w-full h-10 rounded-md border border-black/10 px-3 text-sm font-bold uppercase" 
+                            value={editingCampaign.category || ""}
+                            onChange={e => setEditingCampaign({...editingCampaign, category: e.target.value as any})}
+                          >
+                            <option value="Promo">Promo</option>
+                            <option value="Information">Information</option>
+                            <option value="Launch">Launch</option>
+                            <option value="Maintenance">Maintenance</option>
+                          </select>
                         </div>
                         <div className="space-y-2">
                           <label className="uppercase-soft text-[10px]">Status</label>
@@ -2765,6 +2890,14 @@ export default function AdminPanel() {
                             <option value="Draft">Draft</option>
                             <option value="Paused">Paused</option>
                           </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="uppercase-soft text-[10px]">Auto Delete Date (Optional)</label>
+                          <Input 
+                            type="date"
+                            value={editingCampaign.scheduledDeleteDate || ""} 
+                            onChange={e => setEditingCampaign({...editingCampaign, scheduledDeleteDate: e.target.value})}
+                          />
                         </div>
                       </div>
                       <div className="space-y-2">
@@ -2808,6 +2941,29 @@ export default function AdminPanel() {
                           />
                         </div>
                         <div className="space-y-2">
+                          <label className="uppercase-soft text-[10px]">Schedule Frequency</label>
+                          <select 
+                            className="w-full h-10 rounded-md border border-black/10 px-3 text-sm" 
+                            value={editingCampaign.scheduleType || "Once"}
+                            onChange={e => setEditingCampaign({...editingCampaign, scheduleType: e.target.value as any})}
+                          >
+                            <option value="Once">Once (No Repeat)</option>
+                            <option value="Daily">Daily</option>
+                            <option value="Weekly">Weekly</option>
+                            <option value="Monthly">Monthly</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="uppercase-soft text-[10px]">Scheduled Start Date</label>
+                          <Input 
+                            type="date"
+                            value={editingCampaign.scheduledDate || ""} 
+                            onChange={e => setEditingCampaign({...editingCampaign, scheduledDate: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-2">
                           <label className="uppercase-soft text-[10px] text-red-500">Scheduled Auto-Delete (Optional)</label>
                           <Input 
                             type="date" 
@@ -2833,10 +2989,39 @@ export default function AdminPanel() {
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 border-2 border-black rounded-3xl">
                 <div className="space-y-1">
                   <h2 className="text-2xl font-black uppercase tracking-tighter">Material Procurement Hub</h2>
-                  <p className="text-[10px] uppercase font-bold text-neutral-400">Total Requests: {requests.length}</p>
+                  <div className="flex items-center gap-4">
+                    <p className="text-[10px] uppercase font-bold text-neutral-400">Total Requests: {requests.length}</p>
+                    {selectedMaterials.length > 0 && (
+                      <Button 
+                        variant="destructive" 
+                        size="sm" 
+                        className="h-8 rounded-full text-[8px] uppercase font-black px-4"
+                        onClick={async () => {
+                          if (confirm(`Hapus ${selectedMaterials.length} request terpilih?`)) {
+                            for (const id of selectedMaterials) await deleteRequest(id);
+                            setSelectedMaterials([]);
+                            toast.success("Bulk delete complete.");
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3 mr-2" /> Bulk Delete ({selectedMaterials.length})
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 
-                <div className="flex items-center gap-3 w-full md:w-auto">
+                <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+                  <select 
+                    className="h-10 border-2 border-black/10 rounded-xl px-4 text-[10px] font-black uppercase"
+                    value={materialCategory}
+                    onChange={e => setMaterialCategory(e.target.value)}
+                  >
+                    <option value="all">ANY STATUS</option>
+                    <option value="pending">PENDING</option>
+                    <option value="approved">APPROVED</option>
+                    <option value="rejected">REJECTED</option>
+                    <option value="delivered">DELIVERED</option>
+                  </select>
                   <div className="relative w-full md:w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                     <Input 
@@ -2944,20 +3129,43 @@ export default function AdminPanel() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-neutral-50">
+                      <TableHead className="w-10">
+                        <Checkbox 
+                          checked={selectedMaterials.length === requests.length && requests.length > 0}
+                          onCheckedChange={(checked) => {
+                            if (checked) setSelectedMaterials(requests.map(r => r.id));
+                            else setSelectedMaterials([]);
+                          }}
+                        />
+                      </TableHead>
                       <TableHead className="uppercase-soft">Project & Requester</TableHead>
                       <TableHead className="uppercase-soft">Material Item</TableHead>
                       <TableHead className="uppercase-soft">Quantity</TableHead>
+                      <TableHead className="uppercase-soft">Prioritas</TableHead>
                       <TableHead className="uppercase-soft">Status</TableHead>
                       <TableHead className="uppercase-soft text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {requests.filter(req => 
-                      req.itemName.toLowerCase().includes(materialSearch.toLowerCase()) || 
-                      req.projectName.toLowerCase().includes(materialSearch.toLowerCase()) ||
-                      (req.note && req.note.toLowerCase().includes(materialSearch.toLowerCase()))
-                    ).map((r) => (
+                    {requests.filter(req => {
+                      const matchesSearch = 
+                        req.itemName.toLowerCase().includes(materialSearch.toLowerCase()) || 
+                        req.projectName.toLowerCase().includes(materialSearch.toLowerCase()) ||
+                        (req.note && req.note.toLowerCase().includes(materialSearch.toLowerCase()));
+                      const matchesCategory = materialCategory === "all" || req.status === materialCategory;
+                      return matchesSearch && matchesCategory;
+                    }).map((r) => (
                       <TableRow key={r.id}>
+                        <TableCell>
+                          <Checkbox 
+                            checked={selectedMaterials.includes(r.id)}
+                            onCheckedChange={() => {
+                              setSelectedMaterials(prev => 
+                                prev.includes(r.id) ? prev.filter(id => id !== r.id) : [...prev, r.id]
+                              );
+                            }}
+                          />
+                        </TableCell>
                         <TableCell>
                           <div className="space-y-1">
                             <p className="font-black text-xs uppercase tracking-widest">{r.projectName}</p>
@@ -2966,6 +3174,23 @@ export default function AdminPanel() {
                         </TableCell>
                         <TableCell className="text-xs font-bold uppercase">{r.itemName}</TableCell>
                         <TableCell className="text-xs font-bold uppercase">{r.quantity} {r.unit}</TableCell>
+                        <TableCell>
+                          <select 
+                            className={cn(
+                              "text-[8px] p-1 border border-black/10 rounded font-bold uppercase outline-none",
+                              r.priority === "Urgent" ? "bg-red-50 text-red-600" :
+                              r.priority === "High" ? "bg-orange-50 text-orange-600" :
+                              r.priority === "Low" ? "bg-blue-50 text-blue-600" : "bg-white"
+                            )}
+                            value={r.priority || "Medium"}
+                            onChange={(e) => updateRequest(r.id, { priority: e.target.value as any })}
+                          >
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                            <option value="Urgent">Urgent</option>
+                          </select>
+                        </TableCell>
                         <TableCell>
                           <Badge className={cn(
                             "uppercase-soft text-[9px] rounded-md",
@@ -3598,6 +3823,118 @@ export default function AdminPanel() {
             </div>
           )}
 
+          {activeTab === "estimates" && (
+            <div className="space-y-8">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 border-2 border-black rounded-3xl">
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-black uppercase tracking-tighter">Arsip Estimasi (Saved RAB)</h2>
+                  <div className="flex items-center gap-4">
+                    <p className="text-[10px] uppercase font-bold text-neutral-400">Total Saved: {savedEstimates.length}</p>
+                    {selectedEstimates.length > 0 && (
+                      <Button 
+                        variant="destructive" 
+                        size="sm" 
+                        className="h-8 rounded-full text-[8px] uppercase font-black px-4"
+                        onClick={async () => {
+                          if (confirm(`Hapus ${selectedEstimates.length} estimasi terpilih?`)) {
+                            for (const id of selectedEstimates) await deleteEstimate(id);
+                            setSelectedEstimates([]);
+                            toast.success("Bulk delete complete.");
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3 mr-2" /> Bulk Delete ({selectedEstimates.length})
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+                   <div className="relative w-full md:w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                    <Input 
+                      placeholder="Search projects..." 
+                      className="pl-10 h-10 rounded-xl border-2 border-black/10 text-xs font-bold bg-white"
+                      value={estimatesSearch}
+                      onChange={e => setEstimatesSearch(e.target.value)}
+                    />
+                  </div>
+                  <Button className="btn-orange h-10 px-6 rounded-xl" onClick={() => navigate('/rab')}>
+                    <Plus className="w-4 h-4 mr-2" /> New Estimate
+                  </Button>
+                </div>
+              </div>
+
+              <Card className="border-2 border-black rounded-2xl overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-neutral-50">
+                      <TableHead className="w-10">
+                        <Checkbox 
+                          checked={selectedEstimates.length === savedEstimates.length && savedEstimates.length > 0}
+                          onCheckedChange={(checked) => {
+                            if (checked) setSelectedEstimates(savedEstimates.map(e => e.id));
+                            else setSelectedEstimates([]);
+                          }}
+                        />
+                      </TableHead>
+                      <TableHead className="uppercase-soft">Project Name</TableHead>
+                      <TableHead className="uppercase-soft">Category</TableHead>
+                      <TableHead className="uppercase-soft">Client</TableHead>
+                      <TableHead className="uppercase-soft">Total Budget</TableHead>
+                      <TableHead className="uppercase-soft">Date Saved</TableHead>
+                      <TableHead className="uppercase-soft text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {savedEstimates.filter(est => 
+                      est.projectName.toLowerCase().includes(estimatesSearch.toLowerCase())
+                    ).map((est) => (
+                      <TableRow key={est.id}>
+                        <TableCell>
+                          <Checkbox 
+                            checked={selectedEstimates.includes(est.id)}
+                            onCheckedChange={() => {
+                              setSelectedEstimates(prev => 
+                                prev.includes(est.id) ? prev.filter(id => id !== est.id) : [...prev, est.id]
+                              );
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="font-black text-xs uppercase tracking-widest">{est.projectName}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-[9px] font-black uppercase border-black/10">
+                            {est.category || "General"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-[10px] font-bold text-neutral-500 uppercase">{est.clientName || "Guest User"}</TableCell>
+                        <TableCell className="text-xs font-black">Rp {(est.totalBudget || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-[10px] text-neutral-400">{new Date(est.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/rab?load=${est.id}`)}>
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => {
+                              if(confirm("Hapus estimasi ini?")) deleteEstimate(est.id);
+                            }}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {savedEstimates.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-20 text-neutral-400 italic">No saved estimates found.</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </Card>
+            </div>
+          )}
+
           {activeTab === "management" && (
             <div className="space-y-8">
               <div className="grid md:grid-cols-2 gap-8">
@@ -3714,7 +4051,7 @@ export default function AdminPanel() {
                     </div>
                     <Dialog>
                       <DialogTrigger render={<Button variant="outline" className="w-full border-2 border-black h-12 rounded-xl uppercase font-black text-[10px]">Advanced Configuration</Button>} />
-                      <DialogContent className="max-w-md rounded-3xl border-2 border-black">
+                      <DialogContent className="sm:max-w-md">
                         <DialogHeader>
                           <DialogTitle className="text-xl font-black uppercase tracking-tighter">System Config</DialogTitle>
                         </DialogHeader>
@@ -3815,7 +4152,7 @@ export default function AdminPanel() {
 
       {/* Quick Edit Specs Master Dialog */}
       <Dialog open={!!editingMasterSpecs} onOpenChange={(open) => !open && setEditingMasterSpecs(null)}>
-        <DialogContent className="max-w-md rounded-3xl border-2 border-black">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-black uppercase tracking-tighter">Edit Spesifikasi Teknis</DialogTitle>
             <DialogDescription className="text-[10px] font-bold uppercase text-neutral-500">

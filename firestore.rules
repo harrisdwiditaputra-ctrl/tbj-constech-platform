@@ -153,14 +153,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       match /categories/{categoryId} {
-        allow read, write: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
+        allow read: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
+        allow write: if isStaff() && isValidId(categoryId);
       }
       match /items/{itemId} {
-        allow read, write: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
+        allow read: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
+        allow write: if isStaff() && isValidId(itemId);
       }
       match /site_logs/{logId} {
         allow read: if isAuthenticated() && (get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isStaff());
-        allow write: if isStaff();
+        allow write: if isStaff() && isValidId(logId);
       }
     }
 

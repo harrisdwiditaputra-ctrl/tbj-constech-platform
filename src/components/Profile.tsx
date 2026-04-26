@@ -151,8 +151,12 @@ export default function Profile() {
 
         <div className="grid gap-8">
           {projects.map((project) => (
-            <div key={project.id} className="space-y-6">
-              <Card className="border-2 border-black rounded-3xl overflow-hidden hover:shadow-xl transition-all duration-500">
+            <div 
+              key={project.id} 
+              className="space-y-6 cursor-pointer group/project"
+              onClick={() => navigate(`/projects/${project.id}`)}
+            >
+              <Card className="border-2 border-black rounded-3xl overflow-hidden hover:shadow-xl transition-all duration-500 group-hover/project:border-accent">
                 <div className="grid md:grid-cols-4">
                   <div className="p-8 md:col-span-3 space-y-8">
                     <div className="flex items-center justify-between">

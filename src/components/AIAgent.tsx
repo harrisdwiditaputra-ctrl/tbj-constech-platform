@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Send, Image as ImageIcon, Loader2, User, Bot, Sparkles, X, ChevronRight } from "lucide-react";
-import { GoogleGenAI } from "@google/genai";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { TBJ_LOGO } from "@/constants";
@@ -79,15 +78,7 @@ export default function AIAgent() {
     setIsLoading(true);
 
     try {
-      const apiKey = (process.env as any).GEMINI_API_KEY || "";
-      if (!apiKey) {
-        console.error("An API Key must be set when running in a browser (GEMINI_API_KEY).");
-        toast.error("An API Key must be set when running in a browser / API Key Gemini tidak ditemukan (GEMINI_API_KEY). Silakan periksa konfigurasi environment.");
-        setIsLoading(false);
-        return;
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
+      const imageData = selectedImage ? selectedImage.split(",")[1] : null;
 
       const markupFactor = 1.2; // 20% Markup
       const masterDataSample = masterData.slice(0, 100).map(item => {
@@ -117,23 +108,24 @@ export default function AIAgent() {
       
       User Message: ${input}`;
 
-      let contents: any[] = [{ text: promptText }];
-      if (userMessage.image) {
-        const imageData = userMessage.image.split(",")[1];
-        contents.push({
-          inlineData: {
-            data: imageData,
-            mimeType: "image/jpeg"
-          }
-        });
-      }
-
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: { parts: contents }
+      const response = await fetch("/api/ai-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: promptText,
+          image: imageData,
+        }),
       });
 
-      const responseText = response.text || "Maaf, saya tidak bisa memberikan jawaban saat ini.";
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Gagal menghubungi AI Agent");
+      }
+
+      const data = await response.json();
+      const responseText = data.text || "Maaf, saya tidak bisa memberikan jawaban saat ini.";
       setMessages(prev => [...prev, { role: "assistant", content: responseText }]);
       
       // Update quota in Firestore

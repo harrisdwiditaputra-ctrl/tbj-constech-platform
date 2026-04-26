@@ -6,11 +6,11 @@ import { Badge } from "@/components/ui/badge";
 
 interface ProjectTimelineProps {
   events: TimelineEvent[];
-  onUpdateStatus?: (id: string, status: TimelineEvent["status"]) => void;
+  onUpdateEvent?: (id: string, data: Partial<TimelineEvent>) => void;
   isAdmin?: boolean;
 }
 
-export default function ProjectTimeline({ events, onUpdateStatus, isAdmin }: ProjectTimelineProps) {
+export default function ProjectTimeline({ events, onUpdateEvent, isAdmin }: ProjectTimelineProps) {
   if (!events || events.length === 0) {
     return (
       <div className="py-12 text-center bg-neutral-50 rounded-2xl border-2 border-dashed border-neutral-200">
@@ -19,6 +19,13 @@ export default function ProjectTimeline({ events, onUpdateStatus, isAdmin }: Pro
       </div>
     );
   }
+
+  const priorityColors = {
+    Low: "border-blue-200 text-blue-500 bg-blue-50",
+    Medium: "border-yellow-200 text-yellow-500 bg-yellow-50",
+    High: "border-orange-200 text-orange-500 bg-orange-50",
+    Urgent: "border-red-200 text-red-500 bg-red-50"
+  };
 
   // Sort events by date
   const sortedEvents = [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -54,6 +61,14 @@ export default function ProjectTimeline({ events, onUpdateStatus, isAdmin }: Pro
                   )}>
                     {event.status}
                   </Badge>
+                  {event.priority && (
+                    <Badge variant="outline" className={cn(
+                      "text-[8px] uppercase font-bold rounded-md",
+                      priorityColors[event.priority as keyof typeof priorityColors]
+                    )}>
+                      {event.priority}
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex items-center gap-4 text-[10px] text-neutral-500 font-mono">
                   <p>Start: {new Date(event.date).toLocaleDateString()}</p>
@@ -62,25 +77,37 @@ export default function ProjectTimeline({ events, onUpdateStatus, isAdmin }: Pro
               </div>
               
               {isAdmin && (
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => onUpdateStatus?.(event.id, 'ongoing')}
-                    className={cn(
-                      "p-2 rounded-lg border-2 border-black hover:bg-black hover:text-white transition-colors",
-                      event.status === 'ongoing' && "bg-black text-white"
-                    )}
+                <div className="flex items-center gap-4">
+                  <select 
+                    className="text-[9px] uppercase font-bold border-2 border-black rounded-lg p-1 bg-white outline-none"
+                    value={event.priority || "Medium"}
+                    onChange={(e) => onUpdateEvent?.(event.id, { priority: e.target.value as any })}
                   >
-                    <PlayCircle className="w-4 h-4" />
-                  </button>
-                  <button 
-                    onClick={() => onUpdateStatus?.(event.id, 'completed')}
-                    className={cn(
-                      "p-2 rounded-lg border-2 border-black hover:bg-black hover:text-white transition-colors",
-                      event.status === 'completed' && "bg-black text-white"
-                    )}
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                  </button>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Urgent">Urgent</option>
+                  </select>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => onUpdateEvent?.(event.id, { status: 'ongoing' })}
+                      className={cn(
+                        "p-2 rounded-lg border-2 border-black hover:bg-black hover:text-white transition-colors",
+                        event.status === 'ongoing' && "bg-black text-white"
+                      )}
+                    >
+                      <PlayCircle className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => onUpdateEvent?.(event.id, { status: 'completed' })}
+                      className={cn(
+                        "p-2 rounded-lg border-2 border-black hover:bg-black hover:text-white transition-colors",
+                        event.status === 'completed' && "bg-black text-white"
+                      )}
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

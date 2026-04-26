@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Ticker from "./Ticker";
 import { TBJ_LOGO } from "@/constants";
-import { useMediaAssets } from "@/lib/hooks";
+import { useMediaAssets, useCampaigns } from "@/lib/hooks";
+import { Campaign } from "@/types";
 
 interface LayoutProps {
   children: ReactNode;
@@ -28,19 +29,17 @@ export default function Layout({ children, user, onLogout, onLogin }: LayoutProp
 
   const navigation = [
     { name: "AI Agent", href: "/ai-agent", icon: MessageSquare },
-    ...(isAdmin || isPM || user?.tier === "deal" ? [
-      { name: "RAB Master", href: "/rab", icon: Calculator },
+    ...(isAdmin || isPM || isClient ? [
+      { name: "Proyek RAB", href: "/projects", icon: FileText },
     ] : []),
     ...(isAdmin || isPM ? [
-      { name: "AI Estimator", href: "/assistant", icon: Zap },
+      { name: "Estimasi AI", href: "/assistant", icon: Zap },
     ] : []),
     ...(isAdmin ? [
-      { name: "Admin Panel", href: "/admin", icon: Shield },
-      { name: "Proyek RAB", href: "/projects", icon: FileText },
+      { name: "Sistem Admin", href: "/admin", icon: Shield },
     ] : []),
     ...(isPM ? [
-      { name: "PM Dashboard", href: "/pm", icon: Shield },
-      { name: "Proyek RAB", href: "/projects", icon: FileText },
+      { name: "Manajemen Proyek", href: "/pm", icon: Shield },
     ] : []),
     ...(isClient ? [
       { name: "Estimasi AI", href: "/assistant", icon: Calculator },
@@ -48,9 +47,29 @@ export default function Layout({ children, user, onLogout, onLogin }: LayoutProp
     ] : []),
   ];
 
+  const { campaigns } = useCampaigns();
+  const activeCampaign = campaigns.find(c => 
+    c.status === "Active" && 
+    (c.locations?.includes("Landing Page") || c.locations?.includes("User Dashboard"))
+  );
+
   return (
     <div className="min-h-screen bg-white flex flex-col sleek-grid">
       <Ticker />
+      
+      {activeCampaign && (
+        <div className="bg-accent text-white py-2 px-4 text-center overflow-hidden relative group">
+          <div className="max-w-7xl mx-auto flex items-center justify-center gap-4 animate-in slide-in-from-top duration-500">
+            <Zap className="w-3 h-3 fill-white animate-pulse" />
+            <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em]">
+              {activeCampaign.name}: {activeCampaign.content}
+            </p>
+            <Zap className="w-3 h-3 fill-white animate-pulse" />
+          </div>
+          <div className="absolute inset-0 bg-white/5 translate-x-[100%] group-hover:translate-x-[-100%] transition-transform duration-[2000ms] ease-linear" />
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-black sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

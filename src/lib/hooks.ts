@@ -314,7 +314,7 @@ export function useProjectDetails(projectId: string | undefined) {
     }
   };
 
-  const addItem = async (categoryId: string, name: string, quantity: number, unit: string, pricePerUnit: number, technicalSpecs?: string) => {
+  const addItem = async (categoryId: string, name: string, quantity: number, unit: string, pricePerUnit: number, technicalSpecs?: string, priority?: BudgetItem["priority"]) => {
     if (!projectId) return;
     try {
       const totalPrice = quantity * pricePerUnit;
@@ -327,7 +327,8 @@ export function useProjectDetails(projectId: string | undefined) {
         unit,
         pricePerUnit,
         totalPrice,
-        progress: 0
+        progress: 0,
+        priority: priority || "Medium"
       });
 
       // Update project total budget (simplified, in real app use cloud functions or transactions)
@@ -473,10 +474,10 @@ export function useProjectDetails(projectId: string | undefined) {
     }
   };
 
-  const updateTimelineEvent = async (eventId: string, status: TimelineEvent["status"]) => {
+  const updateTimelineEvent = async (eventId: string, data: Partial<TimelineEvent>) => {
     if (!projectId || !project) return;
     try {
-      const newTimeline = (project.timeline || []).map(e => e.id === eventId ? { ...e, status } : e);
+      const newTimeline = (project.timeline || []).map(e => e.id === eventId ? { ...e, ...data } : e);
       await updateDoc(doc(db, "projects", projectId), { timeline: newTimeline });
       toast.success("Timeline updated");
     } catch (error) {
@@ -1277,11 +1278,12 @@ export function useMaterialRequests(userRole?: string) {
   }, [auth.currentUser, userRole]);
 
   const addRequest = async (data: Omit<MaterialRequest, "id" | "createdAt" | "updatedAt" | "log">) => {
+    const now = new Date().toISOString();
     try {
-      const now = new Date().toISOString();
       await addDoc(collection(db, "material_requests"), {
         ...data,
         note: data.note || "",
+        priority: data.priority || "Medium",
         createdAt: now,
         updatedAt: now,
         log: [{ time: now, action: "Request created", note: data.note || "Initial request" }]
@@ -1289,6 +1291,24 @@ export function useMaterialRequests(userRole?: string) {
       toast.success("Material request sent");
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, "material_requests");
+    }
+  };
+
+  const updateRequest = async (id: string, data: Partial<MaterialRequest>) => {
+    try {
+      const now = new Date().toISOString();
+      const docRef = doc(db, "material_requests", id);
+      const snap = await getDoc(docRef);
+      const currentLog = snap.data()?.log || [];
+      
+      await updateDoc(docRef, {
+        ...data,
+        updatedAt: now,
+        log: [...currentLog, { time: now, action: data.status ? `Status changed to ${data.status}` : data.priority ? `Priority changed to ${data.priority}` : "Request updated" }]
+      });
+      toast.success("Request updated");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `material_requests/${id}`);
     }
   };
 
@@ -1339,7 +1359,7 @@ export function useMaterialRequests(userRole?: string) {
     }
   };
 
-  return { requests, loading, addRequest, updateRequestStatus, deleteRequest, assignVendor };
+  return { requests, loading, addRequest, updateRequest, updateRequestStatus, deleteRequest, assignVendor };
 }
 
 export function useMaterialSuggestions() {
@@ -1477,7 +1497,20 @@ export function useCampaigns() {
     }
   };
 
-  return { campaigns, loading, addCampaign, updateCampaign, deleteCampaign };
+  const cleanExpiredCampaigns = async () => {
+    try {
+      const now = new Date();
+      const expired = campaigns.filter(c => c.scheduledDeleteDate && new Date(c.scheduledDeleteDate) < now);
+      for (const c of expired) {
+        await deleteDoc(doc(db, "campaigns", c.id));
+      }
+      if (expired.length > 0) toast.success(`Deleted ${expired.length} expired campaigns.`);
+    } catch (error) {
+      toast.error("Failed to clean campaigns.");
+    }
+  };
+
+  return { campaigns, loading, addCampaign, updateCampaign, deleteCampaign, cleanExpiredCampaigns };
 }
 
 export function useSystemConfig() {

@@ -23,11 +23,11 @@ async function startServer() {
       
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
-        return res.status(500).json({ error: "GEMINI_API_KEY not configured on server" });
+        console.error("GEMINI_API_KEY is missing on server environment");
+        return res.status(500).json({ error: "Layanan AI sedang tidak tersedia (Konfigurasi Server Error)" });
       }
 
-      const genAI = new GoogleGenAI({ apiKey });
-      const model = (genAI as any).getGenerativeModel({ model: "gemini-1.5-flash" }); 
+      const ai = new GoogleGenAI({ apiKey });
 
       const masterDataString = (masterData || []).map((item: any) => {
         return `- [${item.code || 'N/A'}] ${item.name} (${item.unit}): Rp ${item.price?.toLocaleString('id-ID')}`;
@@ -39,15 +39,21 @@ async function startServer() {
         Kategori Proyek: ${category}
         Problem: "${userProblem}"
 
-        DATA MASTER (Markup ${globalMarkup}%):
+        DATA MASTER (Markup ${globalMarkup || 20}%):
         ${masterDataString}
 
-        Tugas: Berikan analisa teknis dan estimasi RAB dalam format JSON.
+        Tugas: Berikan analisa teknis dan estimasi RAB dalam format JSON. 
+        Tentukan urutan prioritas (priority) untuk setiap item pekerjaan:
+        - Low: Pekerjaan minor atau finishing akhir.
+        - Medium: Pekerjaan standar.
+        - High: Pekerjaan struktur inti atau fasa awal yang krusial.
+        - Urgent: Perbaikan darurat atau fasa yang menghambat fasa lainnya.
       `;
 
-      const result = await model.generateContent({
-        contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: {
+      const result = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: promptText,
+        config: {
           responseMimeType: "application/json",
           responseSchema: {
             type: GenType.OBJECT,
@@ -63,9 +69,13 @@ async function startServer() {
                     unit: { type: GenType.STRING },
                     pricePerUnit: { type: GenType.NUMBER },
                     totalPrice: { type: GenType.NUMBER },
-                    reasoning: { type: GenType.STRING }
+                    reasoning: { type: GenType.STRING },
+                    priority: { 
+                      type: GenType.STRING,
+                      description: "Prioritas pekerjaan: Low, Medium, High, Urgent"
+                    }
                   },
-                  required: ["name", "quantity", "unit", "pricePerUnit", "totalPrice", "reasoning"]
+                  required: ["name", "quantity", "unit", "pricePerUnit", "totalPrice", "reasoning", "priority"]
                 }
               },
               totalEstimatedCost: { type: GenType.NUMBER }
@@ -75,11 +85,47 @@ async function startServer() {
         }
       });
 
-      const response = JSON.parse(result.response.text());
+      const response = JSON.parse(result.text);
       res.json(response);
     } catch (error: any) {
-      console.error("AI Server Error:", error);
-      res.status(500).json({ error: error.message });
+      console.error("AI Estimation Server Error:", error);
+      res.status(500).json({ error: "Gagal memproses estimasi AI" });
+    }
+  });
+
+  // API Route for AI Chat (AIAgent)
+  app.post("/api/ai-chat", async (req, res) => {
+    try {
+      const { prompt, image, userContext } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+      
+      if (!apiKey) {
+        console.error("GEMINI_API_KEY is missing on server environment");
+        return res.status(500).json({ error: "Layanan AI sedang tidak tersedia (Konfigurasi Server Error)" });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+
+      const parts: any[] = [{ text: prompt }];
+      
+      if (image) {
+        parts.push({
+          inlineData: {
+            data: image,
+            mimeType: "image/jpeg"
+          }
+        });
+      }
+
+      const result = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: { parts }
+      });
+
+      res.json({ text: result.text });
+    } catch (error: any) {
+      console.error("AI Chat Server Error:", error);
+      res.status(500).json({ error: "Gagal memproses permintaan AI" });
     }
   });
 

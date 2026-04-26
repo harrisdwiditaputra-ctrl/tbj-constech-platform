@@ -27,7 +27,7 @@ export default function PMDashboard() {
   const { projects, loading: projectsLoading, updateProject } = useProjects(undefined, user?.role);
   const { users } = useUsers(user?.role);
   const { attendance, checkIn, checkOut } = useAttendance(user?.role);
-  const { requests, addRequest, updateRequestStatus, deleteRequest } = useMaterialRequests(user?.role);
+  const { requests, addRequest, updateRequest, updateRequestStatus, deleteRequest } = useMaterialRequests(user?.role);
   const { workforce } = useWorkforce(user?.role);
 
   const [activeTab, setActiveTab] = useState<"overview" | "projects" | "materials" | "attendance" | "cctv" | "timeline" | "safety" | "rab" | "pm-ai">("overview");
@@ -476,6 +476,7 @@ export default function PMDashboard() {
                   <TableHead className="uppercase-soft">Project</TableHead>
                   <TableHead className="uppercase-soft">Item</TableHead>
                   <TableHead className="uppercase-soft">Qty</TableHead>
+                  <TableHead className="uppercase-soft">Prioritas</TableHead>
                   <TableHead className="uppercase-soft">Status</TableHead>
                   <TableHead className="uppercase-soft">Last Update</TableHead>
                   <TableHead className="uppercase-soft text-right">Actions</TableHead>
@@ -487,6 +488,23 @@ export default function PMDashboard() {
                     <TableCell className="text-[10px] font-black uppercase tracking-widest">{r.projectName}</TableCell>
                     <TableCell className="text-[10px] font-bold uppercase">{r.itemName}</TableCell>
                     <TableCell className="text-[10px] font-bold uppercase">{r.quantity} {r.unit}</TableCell>
+                    <TableCell>
+                      <select 
+                        className={cn(
+                          "text-[8px] p-1 border border-black/10 rounded font-bold uppercase outline-none",
+                          r.priority === "Urgent" ? "bg-red-50 text-red-600" :
+                          r.priority === "High" ? "bg-orange-50 text-orange-600" :
+                          r.priority === "Low" ? "bg-blue-50 text-blue-600" : "bg-white"
+                        )}
+                        value={r.priority || "Medium"}
+                        onChange={(e) => updateRequest(r.id, { priority: e.target.value as any })}
+                      >
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Urgent">Urgent</option>
+                      </select>
+                    </TableCell>
                     <TableCell>
                       <Badge className={cn(
                         "uppercase-soft text-[9px] rounded-md",
@@ -772,7 +790,19 @@ export default function PMDashboard() {
                     )} />
                     <div className="space-y-1 flex-grow">
                       <div className="flex justify-between items-start">
-                        <p className="text-[10px] font-black uppercase tracking-widest">{event.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-[10px] font-black uppercase tracking-widest">{event.title}</p>
+                          {event.priority && (
+                            <Badge variant="outline" className={cn(
+                              "text-[7px] uppercase border-black/10",
+                              event.priority === "Urgent" ? "bg-red-50 text-red-600" :
+                              event.priority === "High" ? "bg-orange-50 text-orange-600" :
+                              event.priority === "Low" ? "bg-blue-50 text-blue-600" : "bg-neutral-50"
+                            )}>
+                              {event.priority}
+                            </Badge>
+                          )}
+                        </div>
                         <Badge variant="outline" className="text-[8px] uppercase border-black/10">{event.status}</Badge>
                       </div>
                       <div className="flex gap-4">
