@@ -8,6 +8,8 @@ export interface Project {
   pmId?: string;
   workerIds?: string[]; // Added for Tier 3 tracking
   createdAt: string;
+  startDate?: string;
+  endDate?: string;
   totalBudget: number;
   escrowBalance: number; // Total money paid by client but not yet released
   releasedAmount: number; // Total money released to company
@@ -25,7 +27,10 @@ export interface Project {
   cctvUrls?: { id: string; name: string; url: string }[];
   imageUrl?: string;
   clientId?: string;
+  clientName?: string;
   progress?: number;
+  thumbnail?: string;
+  updatedAt?: string;
 }
 
 export interface PaymentMilestone {
@@ -189,6 +194,7 @@ export interface UserProfile {
   lastPaymentStatus?: "unpaid" | "pending" | "paid";
   lifetimeAccess?: boolean; // Added for lifetime access
   waVerified?: boolean; // Added for WA OTP verification
+  assessmentBooked?: boolean;
 }
 
 export interface AIEstimateItem {
@@ -232,6 +238,7 @@ export interface CMSConfig {
   heroSubtitle: string;
   promoText: string;
   promoActive: boolean;
+  promos?: { id: string; text: string; isActive: boolean; expiresAt?: string }[];
   // Dynamic Payment & Transfer Instructions
   paymentBankName?: string;
   paymentAccountNumber?: string;
@@ -311,8 +318,12 @@ export interface FinancialTransaction {
   amount: number;
   description: string;
   date: string;
+  receiptUrl?: string;
+  itemId?: string; // Link to RAB item ID
+  method?: "Cash" | "Transfer" | "Digital Wallet";
   referenceId?: string; // ID of the related object (e.g. material request ID, worker ID)
   status: "pending" | "completed";
+  tags?: string[];
 }
 
 export interface WorkerWage {

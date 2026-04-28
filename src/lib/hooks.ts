@@ -3,7 +3,7 @@ import { auth, db, storage, handleFirestoreError, OperationType } from "@/lib/fi
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot, collection, query, where, orderBy, addDoc, updateDoc, deleteDoc, getDocs, writeBatch, limit } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { Project, BudgetCategory, BudgetItem, UserProfile, Property, WorkItemMaster, Workforce, Attendance, MaterialRequest, CMSConfig, Campaign, SystemConfig, Vendor, GalleryItem, TimelineEvent, MediaAsset, MediaCategory, MasterDataVersion } from "@/types";
+import { Project, BudgetCategory, BudgetItem, UserProfile, Property, WorkItemMaster, Workforce, Attendance, MaterialRequest, CMSConfig, Campaign, SystemConfig, Vendor, GalleryItem, TimelineEvent, MediaAsset, MediaCategory, MasterDataVersion, FinancialTransaction, WorkerWage } from "@/types";
 import { WORK_ITEMS_MASTER } from "@/constants";
 import { nuclearWipe } from "./database";
 import { toast } from "sonner";
@@ -190,7 +190,7 @@ export function useProjects(userId?: string, userRole?: string) {
   }, [auth.currentUser, userId, userRole]);
 
   const createProject = async (name: string, description: string) => {
-    if (!userId) return;
+    if (!userId) return null;
     try {
       const newProject = {
         name,
@@ -208,9 +208,11 @@ export function useProjects(userId?: string, userRole?: string) {
         ],
         status: "draft"
       };
-      await addDoc(collection(db, "projects"), newProject);
+      const docRef = await addDoc(collection(db, "projects"), newProject);
+      return docRef.id;
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, "projects");
+      return null;
     }
   };
 
@@ -250,6 +252,60 @@ export function useProjects(userId?: string, userRole?: string) {
   };
 
   return { projects, loading, createProject, updateProject, deleteProject, fixProjectMilestones };
+}
+
+export function useLeads() {
+  const [leads, setLeads] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!auth.currentUser) {
+      setLeads([]);
+      setLoading(false);
+      return;
+    }
+    const q = query(collection(db, "leads"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "leads");
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const addLead = async (data: any) => {
+    try {
+      await addDoc(collection(db, "leads"), {
+        ...data,
+        createdAt: new Date().toISOString(),
+        status: data.status || "new"
+      });
+      toast.success("Lead berhasil ditambahkan.");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, "leads");
+    }
+  };
+
+  const updateLead = async (id: string, data: Partial<any>) => {
+    try {
+      await updateDoc(doc(db, "leads", id), data);
+      toast.success("Lead diperbarui.");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `leads/${id}`);
+    }
+  };
+
+  const deleteLead = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "leads", id));
+      toast.success("Lead dihapus.");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `leads/${id}`);
+    }
+  };
+
+  return { leads, loading, addLead, updateLead, deleteLead };
 }
 
 export function useProjectDetails(projectId: string | undefined) {
@@ -314,7 +370,7 @@ export function useProjectDetails(projectId: string | undefined) {
     }
   };
 
-  const addItem = async (categoryId: string, name: string, quantity: number, unit: string, pricePerUnit: number, technicalSpecs?: string, priority?: BudgetItem["priority"]) => {
+  const addItem = async (categoryId: string, name: string, quantity: number, unit: string, pricePerUnit: number, technicalSpecs?: string, priority?: BudgetItem["priority"], progress: number = 0, endDate?: string) => {
     if (!projectId) return;
     try {
       const totalPrice = quantity * pricePerUnit;
@@ -327,11 +383,12 @@ export function useProjectDetails(projectId: string | undefined) {
         unit,
         pricePerUnit,
         totalPrice,
-        progress: 0,
-        priority: priority || "Medium"
+        progress: progress || 0,
+        priority: priority || "Medium",
+        endDate: endDate || ""
       });
 
-      // Update project total budget (simplified, in real app use cloud functions or transactions)
+      // Update project total budget
       if (project) {
         await updateDoc(doc(db, "projects", projectId), {
           totalBudget: project.totalBudget + totalPrice
@@ -485,7 +542,16 @@ export function useProjectDetails(projectId: string | undefined) {
     }
   };
 
-  return { project, categories, items, loading, addCategory, addItem, updateItem, deleteCategory, deleteItem, updateProjectStatus, updateItemProgress, releaseMilestone, addSiteLog, addTimelineEvent, updateTimelineEvent };
+  const updateProjectMetadata = async (data: Partial<Project>) => {
+    if (!projectId) return;
+    try {
+      await updateDoc(doc(db, "projects", projectId), data);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `projects/${projectId}`);
+    }
+  };
+
+  return { project, categories, items, loading, addCategory, addItem, updateItem, deleteCategory, deleteItem, updateProjectStatus, updateItemProgress, releaseMilestone, addSiteLog, addTimelineEvent, updateTimelineEvent, updateProjectMetadata };
 }
 
 export function useProperties() {
@@ -668,20 +734,26 @@ export function useMediaAssets(category?: MediaCategory, projectId?: string) {
   return { assets, loading, addAsset, deleteAsset, updateAsset };
 }
 
-export function useSavedEstimates(userId?: string) {
+export function useSavedEstimates(userId?: string, isAdmin?: boolean) {
   const [estimates, setEstimates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!userId && !auth.currentUser) {
+    if (!isAdmin && !userId && !auth.currentUser) {
       setEstimates([]);
       setLoading(false);
       return;
     }
-    const targetUserId = userId || auth.currentUser?.uid;
-    if (!targetUserId) return;
 
-    const q = query(collection(db, "saved_estimates"), where("ownerId", "==", targetUserId), orderBy("createdAt", "desc"));
+    let q;
+    if (isAdmin && !userId) {
+      q = query(collection(db, "saved_estimates"), orderBy("createdAt", "desc"));
+    } else {
+      const targetUserId = userId || auth.currentUser?.uid;
+      if (!targetUserId) return;
+      q = query(collection(db, "saved_estimates"), where("ownerId", "==", targetUserId), orderBy("createdAt", "desc"));
+    }
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setEstimates(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
@@ -689,7 +761,7 @@ export function useSavedEstimates(userId?: string) {
       handleFirestoreError(error, OperationType.LIST, "saved_estimates");
     });
     return () => unsubscribe();
-  }, [userId]);
+  }, [userId, isAdmin]);
 
   const saveEstimate = async (data: any) => {
     try {
@@ -1575,7 +1647,7 @@ export async function incrementAIUsage() {
 }
 
 export function useFinance(projectId?: string) {
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -1590,27 +1662,99 @@ export function useFinance(projectId?: string) {
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as FinancialTransaction[]);
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, "financial_transactions");
+      // Fallback if index not ready
+      if (error.code === 'failed-precondition') {
+        const simpleQ = query(collection(db, "financial_transactions"), orderBy("date", "desc"));
+        onSnapshot(simpleQ, (snap) => {
+          const d = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as FinancialTransaction[];
+          setTransactions(projectId ? d.filter(t => t.projectId === projectId) : d);
+          setLoading(false);
+        });
+      } else {
+        handleFirestoreError(error, OperationType.LIST, "financial_transactions");
+        setLoading(false);
+      }
     });
     return () => unsubscribe();
   }, [projectId]);
 
-  const addTransaction = async (data: any) => {
+  const addTransaction = async (data: Omit<FinancialTransaction, "id">) => {
     try {
       await addDoc(collection(db, "financial_transactions"), {
         ...data,
-        date: data.date || new Date().toISOString()
+        date: data.date || new Date().toISOString(),
+        status: data.status || "completed"
       });
-      toast.success("Transaksi berhasil dicatat");
+      toast.success("Transaksi berhasil dicatat ke sistem akuntansi.");
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, "financial_transactions");
     }
   };
 
-  return { transactions, loading, addTransaction };
+  const deleteTransaction = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "financial_transactions", id));
+      toast.success("Catatan transaksi telah dihapus.");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, "financial_transactions");
+    }
+  };
+
+  return { transactions, loading, addTransaction, deleteTransaction };
+}
+
+export function useProjectMaterialRequests(projectId: string) {
+  const [requests, setRequests] = useState<MaterialRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!projectId || !auth.currentUser) {
+      setRequests([]);
+      setLoading(false);
+      return;
+    }
+    const q = query(collection(db, "material_requests"), where("projectId", "==", projectId), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as MaterialRequest[]);
+      setLoading(false);
+    }, (error) => {
+      // Fallback if index not ready
+      if (error.code === 'failed-precondition') {
+        const simpleQ = query(collection(db, "material_requests"), orderBy("createdAt", "desc"));
+        onSnapshot(simpleQ, (snap) => {
+          const d = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as MaterialRequest[];
+          setRequests(d.filter(r => r.projectId === projectId));
+          setLoading(false);
+        });
+      } else {
+        handleFirestoreError(error, OperationType.LIST, "material_requests");
+        setLoading(false);
+      }
+    });
+    return () => unsubscribe();
+  }, [projectId]);
+
+  const addRequest = async (data: Omit<MaterialRequest, "id" | "createdAt" | "updatedAt" | "log">) => {
+    const now = new Date().toISOString();
+    try {
+      await addDoc(collection(db, "material_requests"), {
+        ...data,
+        note: data.note || "",
+        priority: data.priority || "Medium",
+        createdAt: now,
+        updatedAt: now,
+        log: [{ time: now, action: "Request created", note: data.note || "Initial request" }]
+      });
+      toast.success("Material request sent");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, "material_requests");
+    }
+  };
+
+  return { requests, loading, addRequest };
 }
 
 export function useWorkerWages(projectId?: string) {

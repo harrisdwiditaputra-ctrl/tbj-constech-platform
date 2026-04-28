@@ -521,8 +521,8 @@ export default function RabPage({ user }: { user: any }) {
             </div>
           </div>
 
-          <div className="border border-neutral-100 rounded-3xl overflow-hidden shadow-sm">
-            <Table>
+          <div className="border border-neutral-100 rounded-3xl overflow-hidden shadow-sm overflow-x-auto">
+            <Table className="min-w-[800px] md:min-w-full">
               <TableHeader className="bg-neutral-50/50">
                 <TableRow className="border-b border-neutral-100 hover:bg-transparent">
                   <TableHead className="w-[80px] text-[9px] font-black uppercase text-neutral-400 px-6">Code</TableHead>

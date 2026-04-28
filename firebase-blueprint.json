@@ -173,6 +173,20 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["ownerId", "name", "createdAt"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Database prospek/calon klien (CRM)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "source": { "type": "string" },
+        "status": { "type": "string", "enum": ["Lead", "Qualified", "Won", "Lost"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "whatsapp", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -223,6 +237,10 @@
     "/media_assets/{assetId}": {
       "schema": "MediaAsset",
       "description": "Koleksi aset media terpusat"
+    },
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Koleksi database CRM Prospek"
     }
   }
 }

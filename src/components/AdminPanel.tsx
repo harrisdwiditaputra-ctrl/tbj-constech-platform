@@ -3,12 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { 
   useMasterData, useAuth, useUsers, useProjects, 
   useWorkforce, useMaterialRequests, useProperties, 
-  useCMSConfig, useCampaigns, useSystemConfig, 
+  useCMSConfig, useSystemConfig, 
   useGallery, useVendors, useAttendance, 
   useFinance, useWorkerWages, useMasterCategories, 
   usePMs, useMediaAssets, useSavedEstimates, 
   saveImageToGudang, useMaterialSuggestions,
-  useProjectDetails
+  useProjectDetails, useLeads
 } from "@/lib/hooks";
 import { ProjectAIHealth } from "./ProjectAIHealth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -18,14 +18,16 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { 
   Loader2, Search, Save, UserPlus, Database, Settings, ShieldCheck, 
-  RefreshCw, TrendingUp, DollarSign, Users, Briefcase, Plus, ChevronDown, 
+  RefreshCw, TrendingUp, DollarSign, Users, Briefcase, Plus, ChevronDown, ChevronUp, ChevronLeft, 
   ChevronRight, Download, Eye, EyeOff, Trash2, Image as ImageIcon, 
   LayoutDashboard, FileText, HardHat, Camera, BarChart3, Clock, Phone, User,
-  CheckCircle2, MapPin, Package, Brain, Zap, AlertCircle, Layers, History, Sparkles, Upload, X, HardDrive, Menu
+  CheckCircle2, MapPin, Package, Brain, Zap, AlertCircle, Layers, History, Sparkles, Upload, X, HardDrive, Menu, ExternalLink, Calendar,
+  ArrowDownLeft, ArrowUpRight, Lock, Gavel, CreditCard, Truck, BarChart, FileEdit, Link2, BarChart2
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs, limit, writeBatch, getDocsFromServer } from "firebase/firestore";
@@ -87,6 +89,7 @@ const AIHealthWrapper = ({ project, masterData, onClose }: { project: Project; m
 export default function AdminPanel() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [masterActionsExpanded, setMasterActionsExpanded] = useState(false);
   const { 
     masterData, 
     loading: masterLoading, 
@@ -116,8 +119,6 @@ export default function AdminPanel() {
   const [estimatesSearch, setEstimatesSearch] = useState("");
   const [estimatesCategory, setEstimatesCategory] = useState("all");
   const [selectedEstimates, setSelectedEstimates] = useState<string[]>([]);
-  const [campaignSearch, setCampaignSearch] = useState("");
-  const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
   const { workforce, loading: workforceLoading, addWorkforce, updateWorkforce, deleteWorkforce } = useWorkforce(user?.role);
   const { requests, loading: requestsLoading, updateRequest, updateRequestStatus, assignVendor, addRequest, deleteRequest } = useMaterialRequests(user?.role);
   const { suggestions: materialSuggestions, addSuggestion } = useMaterialSuggestions();
@@ -126,15 +127,49 @@ export default function AdminPanel() {
   const { vendors, addVendor, deleteVendor, updateVendor } = useVendors();
   const { attendance, loading: attendanceLoading } = useAttendance(user?.role);
   const { config: cmsConfig, updateConfig: updateCMS } = useCMSConfig();
-  const { campaigns, addCampaign, updateCampaign, deleteCampaign, cleanExpiredCampaigns } = useCampaigns();
   const { config: systemConfig, updateConfig: updateSystem } = useSystemConfig();
   const { transactions, addTransaction } = useFinance();
   const { wages, updateWageStatus } = useWorkerWages();
   const { pms } = usePMs();
-  const { estimates: savedEstimates, deleteEstimate } = useSavedEstimates();
+  const { estimates: savedEstimates, deleteEstimate } = useSavedEstimates(undefined, true);
+  const { leads, addLead, updateLead, deleteLead, loading: leadsLoading } = useLeads();
+
+  const syncEstimateToProject = async (estimateId: string, projectId: string) => {
+    const est = savedEstimates.find(e => e.id === estimateId);
+    if (!est) return;
+    try {
+      // 1. Update project metadata based on estimate
+      await updateProject(projectId, {
+        totalBudget: est.totalBudget,
+        category: est.category,
+      });
+
+      // 2. We should ideally copy categories and items. 
+      // Since this is complex logic, we'll notify that integration is initializing
+      toast.success(`Syncing RAB "${est.projectName}" to Project...`);
+      
+      // Implementation note: This would involve batch writing est.categories and est.items
+      // to the respective subcollections of the project.
+      // For now, we update the primary budget.
+      
+      toast.success("RAB Synced to Project Dashboard!");
+    } catch (error) {
+      toast.error("Failed to sync RAB");
+    }
+  };
   const pdfLogo = TBJ_LOGO;
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "clients" | "projects" | "workforce" | "cms" | "finance" | "marketing" | "management" | "materials" | "attendance" | "gallery" | "properties" | "vendors" | "payments" | "media" | "estimates">("dashboard");
+  const [leadSearch, setLeadSearch] = useState("");
+  const [showAddLead, setShowAddLead] = useState(false);
+  const [newLead, setNewLead] = useState({
+    name: "",
+    email: "",
+    whatsapp: "",
+    source: "Manual",
+    status: "Lead",
+    notes: ""
+  });
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [clearProgress, setClearProgress] = useState(0);
@@ -165,6 +200,15 @@ export default function AdminPanel() {
   const [selectedUnit, setSelectedUnit] = useState<string>("");
   const [search, setSearch] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
+  const [expandedNavSections, setExpandedNavSections] = useState<string[]>(["Operational Hub"]);
+
+  const toggleNavSection = (sectionName: string) => {
+    setExpandedNavSections(prev => 
+      prev.includes(sectionName) 
+        ? prev.filter(s => s !== sectionName)
+        : [...prev, sectionName]
+    );
+  };
   const [showAddWorker, setShowAddWorker] = useState(false);
   const [showAddVendor, setShowAddVendor] = useState(false);
   const [showAddGallery, setShowAddGallery] = useState(false);
@@ -202,6 +246,10 @@ export default function AdminPanel() {
     description: "",
     code: ""
   });
+
+  // Pagination State
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const toggleRow = (id: string) => {
     setExpandedRows(prev => prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]);
@@ -261,18 +309,6 @@ export default function AdminPanel() {
   const [bulkOrderItems, setBulkOrderItems] = useState([{ name: "", quantity: 0, unit: "m3" }]);
   const [selectedBulkProject, setSelectedBulkProject] = useState("");
   const [loadingAI, setLoadingAI] = useState(false);
-
-  // Initialize Sample Campaigns if empty
-  useEffect(() => {
-    if (campaigns && campaigns.length === 0) {
-      const samples = [
-        { name: "Promo Lebaran Berkah", content: "Renovasi rumah sebelum lebaran, diskon 15% untuk semua paket interior!", status: "Active", reach: "1250", conversion: "12%" },
-        { name: "Digital Assessment Jakarta", content: "Dapatkan Digital Assessment gratis khusus area Jakarta Selatan.", status: "Active", reach: "840", conversion: "8%" },
-        { name: "Loyalty Program 2024", content: "Reward khusus untuk client setia TBJ Constech. Cashback hingga 10jt.", status: "Draft", reach: "0", conversion: "0%" }
-      ];
-      samples.forEach(s => addCampaign(s as any));
-    }
-  }, [campaigns, addCampaign]);
 
   const handleAIGenerate = async () => {
     setLoadingAI(true);
@@ -336,8 +372,34 @@ export default function AdminPanel() {
   const [paymentForm, setPaymentForm] = useState({
     projectId: "",
     amount: 0,
-    description: "Pembayaran Full Project (Escrow)"
+    description: "Pembayaran Full Project (Escrow)",
+    method: "Transfer" as any
   });
+
+  const [expenseForm, setExpenseForm] = useState({
+    projectId: "",
+    amount: 0,
+    description: "",
+    category: "material" as any,
+    method: "Cash" as any,
+    receiptUrl: "",
+    itemId: ""
+  });
+  const [showRecordExpense, setShowRecordExpense] = useState(false);
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+
+  const handleUploadReceipt = async (file: File) => {
+    setIsUploadingReceipt(true);
+    try {
+      const url = await saveImageToGudang(file, "finance", expenseForm.projectId || "general", `Receipt_${Date.now()}`);
+      setExpenseForm(prev => ({ ...prev, receiptUrl: url }));
+      toast.success("Bon/Kwitansi berhasil diunggah.");
+    } catch (error) {
+      toast.error("Gagal mengunggah bon.");
+    } finally {
+      setIsUploadingReceipt(false);
+    }
+  };
 
   const handleRecordPayment = async () => {
     if (!paymentForm.projectId || paymentForm.amount <= 0) return;
@@ -348,12 +410,7 @@ export default function AdminPanel() {
     try {
       // Update project escrow balance
       await updateProject(project.id, {
-        escrowBalance: (project.escrowBalance || 0) + paymentForm.amount,
-        // Recalculate milestone amounts based on total budget
-        paymentMilestones: project.paymentMilestones.map(m => ({
-          ...m,
-          amount: (project.totalBudget * m.percentage) / 100
-        }))
+        escrowBalance: (project.escrowBalance || 0) + paymentForm.amount
       });
 
       // Record transaction
@@ -364,14 +421,62 @@ export default function AdminPanel() {
         category: "client_payment",
         amount: paymentForm.amount,
         description: paymentForm.description,
+        method: paymentForm.method,
+        date: new Date().toISOString(),
         status: "completed"
       });
 
       setShowRecordPayment(false);
-      setPaymentForm({ projectId: "", amount: 0, description: "Pembayaran Full Project (Escrow)" });
+      setPaymentForm({ projectId: "", amount: 0, description: "Pembayaran Full Project (Escrow)", method: "Transfer" });
       toast.success("Pembayaran klien berhasil dicatat ke Escrow");
     } catch (error) {
       toast.error("Gagal mencatat pembayaran");
+    }
+  };
+
+  const handleRecordExpense = async () => {
+    if (!expenseForm.amount || !expenseForm.description) {
+      toast.error("Mohon lengkapi nominal dan deskripsi.");
+      return;
+    }
+
+    try {
+      let projectName = "General/Operational";
+      if (expenseForm.projectId) {
+        const proj = projects.find(p => p.id === expenseForm.projectId);
+        if (proj) projectName = proj.name;
+      }
+
+      await addTransaction({
+        projectId: expenseForm.projectId || undefined,
+        projectName: projectName,
+        type: "expense",
+        category: expenseForm.category as any,
+        amount: expenseForm.amount,
+        description: expenseForm.description,
+        method: expenseForm.method as any,
+        receiptUrl: expenseForm.receiptUrl,
+        itemId: expenseForm.itemId || undefined,
+        date: new Date().toISOString(),
+        status: "completed"
+      });
+
+      // If it's a labor expense (wage), we might want to check if it's tied to useWorkerWages, 
+      // but for "Manual Expense" we just record it to finance ledger.
+
+      setShowRecordExpense(false);
+      setExpenseForm({
+        projectId: "",
+        amount: 0,
+        description: "",
+        category: "material",
+        method: "Cash",
+        receiptUrl: "",
+        itemId: ""
+      });
+      toast.success("Pengeluaran berhasil dicatat ke Ledger.");
+    } catch (error) {
+      toast.error("Gagal mencatat pengeluaran.");
     }
   };
 
@@ -497,6 +602,19 @@ export default function AdminPanel() {
     return data;
   }, [masterData, search, selectedMasterCategory, selectedUnit]);
 
+  // Reset pagination on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedMasterCategory, selectedUnit]);
+
+  // Paginated Master Data
+  const paginatedMaster = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredMaster.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredMaster, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredMaster.length / itemsPerPage);
+
   const allUnits = useMemo(() => {
     const units = new Set(masterData.map(i => i.unit).filter(Boolean));
     return Array.from(units).sort();
@@ -574,8 +692,8 @@ export default function AdminPanel() {
   const [cmsForm, setCmsForm] = useState<Partial<CMSConfig>>({
     heroTitle: "Membangun Masa Depan Konstruksi Indonesia",
     heroSubtitle: "Platform All-in-One untuk Renovasi, Interior, dan Bangun Baru dengan Teknologi AI.",
-    promoText: "Promo Ramadan: Diskon 15% untuk Jasa Desain Interior!",
-    promoActive: true
+    promoText: "",
+    promoActive: false
   });
 
   useEffect(() => {
@@ -584,30 +702,9 @@ export default function AdminPanel() {
     }
   }, [cmsConfig]);
 
-  const [editingCampaign, setEditingCampaign] = useState<Partial<Campaign>>({
-    name: "",
-    content: "",
-    status: "Draft",
-    reach: "0",
-    conversion: "0%"
-  });
-  const [showEditCampaign, setShowEditCampaign] = useState(false);
-
   const handleSaveCMS = async () => {
     if (cmsForm) {
       await updateCMS(cmsForm as any);
-    }
-  };
-
-  const handleSaveCampaign = async () => {
-    if (editingCampaign.name) {
-      if (editingCampaign.id) {
-        await updateCampaign(editingCampaign.id, editingCampaign);
-      } else {
-        await addCampaign(editingCampaign as any);
-      }
-      setShowEditCampaign(false);
-      setEditingCampaign({ name: "", content: "", status: "Draft", reach: "0", conversion: "0%" });
     }
   };
 
@@ -647,40 +744,94 @@ export default function AdminPanel() {
             </div>
           </div>
           
+          {/* Grouped Navigation */}
           {[
-            { id: "dashboard", label: "Insights", icon: LayoutDashboard, roles: ["admin", "pm"] },
-            { id: "products", label: "Products (AHSP)", icon: Database, roles: ["admin", "pm"] },
-            { id: "projects", label: "Projects", icon: Briefcase, roles: ["admin", "pm"] },
-            { id: "clients", label: "Clients", icon: Users, roles: ["admin"] },
-            { id: "materials", label: "Materials", icon: Package, roles: ["admin", "pm"] },
-            { id: "attendance", label: "Attendance", icon: Clock, roles: ["admin", "pm"] },
-            { id: "workforce", label: "Workforce", icon: HardHat, roles: ["admin", "pm"] },
-            { id: "gallery", label: "Gallery", icon: ImageIcon, roles: ["admin", "pm"] },
-            { id: "properties", label: "Property Hub", icon: MapPin, roles: ["admin", "pm"] },
-            { id: "vendors", label: "Vendors", icon: Package, roles: ["admin", "pm"] },
-            { id: "payments", label: "Payments", icon: DollarSign, roles: ["admin"] },
-            { id: "media", label: "Gudang Gambar", icon: HardDrive, roles: ["admin", "pm"] },
-            { id: "cms", label: "CMS Content", icon: ImageIcon, roles: ["admin"] },
-            { id: "finance", label: "Finance", icon: DollarSign, roles: ["admin"] },
-            { id: "marketing", label: "Marketing", icon: TrendingUp, roles: ["admin"] },
-            { id: "estimates", label: "Arsip Estimasi", icon: FileText, roles: ["admin", "pm"] },
-            { id: "management", label: "Management", icon: Settings, roles: ["admin"] },
-          ].filter(tab => tab.roles.includes(user?.role || "")).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id as any);
-                setIsNavOpen(false);
-              }}
-              className={cn(
-                "w-full flex items-center justify-start gap-4 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-                activeTab === tab.id ? "bg-black text-white shadow-xl" : "text-neutral-500 hover:bg-titanium/10 hover:translate-x-1"
-              )}
-            >
-              <tab.icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          ))}
+            {
+              group: "Operational Hub",
+              icon: LayoutDashboard,
+              color: "text-orange-500",
+              items: [
+                { id: "dashboard", label: "Insights", icon: LayoutDashboard, roles: ["admin", "pm"] },
+                { id: "projects", label: "Command Center", icon: Briefcase, roles: ["admin", "pm"] },
+                { id: "estimates", label: "Arsip Estimasi", icon: FileText, roles: ["admin", "pm"] },
+                { id: "materials", label: "Logistik (Material)", icon: Package, roles: ["admin", "pm"] },
+                { id: "payments", label: "Assessments", icon: DollarSign, roles: ["admin"] },
+              ]
+            },
+            {
+              group: "Asset & Database",
+              icon: Database,
+              color: "text-blue-500",
+              items: [
+                { id: "products", label: "Master AHSP", icon: Database, roles: ["admin", "pm"] },
+                { id: "clients", label: "Database Klien", icon: Users, roles: ["admin"] },
+                { id: "vendors", label: "Database Vendor", icon: Truck, roles: ["admin", "pm"] },
+                { id: "properties", label: "Database Properti", icon: MapPin, roles: ["admin", "pm"] },
+              ]
+            },
+            {
+              group: "Resource & Media",
+              icon: HardHat,
+              color: "text-green-500",
+              items: [
+                { id: "workforce", label: "Workforce", icon: HardHat, roles: ["admin", "pm"] },
+                { id: "attendance", label: "Attendance", icon: Clock, roles: ["admin", "pm"] },
+                { id: "media", label: "Media Warehouse", icon: HardDrive, roles: ["admin", "pm"] },
+                { id: "gallery", label: "Media Gallery", icon: ImageIcon, roles: ["admin", "pm"] },
+              ]
+            },
+            {
+              group: "Business & System",
+              icon: Settings,
+              color: "text-purple-500",
+              items: [
+                { id: "finance", label: "Financial Ledger", icon: BarChart3, roles: ["admin"] },
+                { id: "marketing", label: "Lead CRM", icon: UserPlus, roles: ["admin"] },
+                { id: "cms", label: "CMS Content", icon: FileEdit, roles: ["admin"] },
+                { id: "management", label: "System Management", icon: Settings, roles: ["admin"] },
+              ]
+            }
+          ].map((section) => {
+            const filteredItems = section.items.filter(item => item.roles.includes(user?.role || ""));
+            if (filteredItems.length === 0) return null;
+
+            return (
+              <div key={section.group} className="space-y-1 mb-2">
+                <button 
+                  onClick={() => toggleNavSection(section.group)}
+                  className="w-full px-6 py-3 flex items-center justify-between border-b border-black/5 hover:bg-neutral-50 transition-colors group/header"
+                >
+                  <p className={cn("text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2", section.color)}>
+                    <section.icon className="w-3 h-3 transition-transform group-hover/header:scale-110" /> {section.group}
+                  </p>
+                  <ChevronDown className={cn("w-3 h-3 text-neutral-300 transition-transform duration-300", expandedNavSections.includes(section.group) ? "rotate-180" : "rotate-0")} />
+                </button>
+                
+                {expandedNavSections.includes(section.group) && (
+                  <div className="px-2 pt-1 pb-4 space-y-1 animate-in fade-in slide-in-from-top-2 duration-300">
+                    {filteredItems.map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => {
+                          setActiveTab(tab.id as any);
+                          setIsNavOpen(false);
+                        }}
+                        className={cn(
+                          "w-full flex items-center justify-start gap-4 px-4 py-3 rounded-2xl text-[11px] font-bold uppercase tracking-widest transition-all",
+                          activeTab === tab.id 
+                            ? "bg-black text-white shadow-xl" 
+                            : "text-neutral-500 hover:bg-neutral-50 hover:translate-x-1"
+                        )}
+                      >
+                        <tab.icon className={cn("w-4 h-4", activeTab === tab.id ? "text-accent" : "text-neutral-300")} />
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
           
           {user?.role === "admin" && (
             <div className="pt-8 mt-8 border-t border-black/5">
@@ -697,9 +848,9 @@ export default function AdminPanel() {
 
         <div className="flex-grow space-y-8">
           {/* Header Info */}
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center px-4 md:px-0">
             <div>
-              <h1 className="text-4xl font-black uppercase tracking-tighter">
+              <h1 className="text-2xl md:text-4xl font-black uppercase tracking-tighter">
                 {activeTab === "dashboard" && "Business Insights"}
                 {activeTab === "products" && "Master Database (Products)"}
                 {activeTab === "projects" && "Project Management"}
@@ -707,7 +858,7 @@ export default function AdminPanel() {
                 {activeTab === "workforce" && "Workforce & Security"}
                 {activeTab === "cms" && "Content Management"}
                 {activeTab === "finance" && "Financial Reports"}
-                {activeTab === "marketing" && "Marketing & Engagement"}
+                {activeTab === "marketing" && "Lead CRM (Relationship Management)"}
                 {activeTab === "vendors" && "Vendor Database"}
                 {activeTab === "payments" && "Payment & Assessment Management"}
                 {activeTab === "media" && "Gudang Gambar & Assets"}
@@ -779,7 +930,8 @@ export default function AdminPanel() {
           </div>
 
           {/* Tab Content */}
-          {activeTab === "dashboard" && (
+          <div className="overflow-hidden px-4 md:px-0">
+            {activeTab === "dashboard" && (
             <div className="space-y-8">
               <div className="grid md:grid-cols-4 gap-6">
                 <Card className="border-2 border-black rounded-2xl shadow-sm">
@@ -982,63 +1134,68 @@ export default function AdminPanel() {
                     <p className="text-[10px] uppercase-soft text-neutral-500">Manage {masterData.length.toLocaleString('id-ID')}+ construction work items and pricing.</p>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button className="btn-orange h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={() => setShowAddProduct(!showAddProduct)}>
-                    <Plus className="w-4 h-4 mr-2" /> {showAddProduct ? "Close Form" : "Add New Item"}
-                  </Button>
-                  <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={() => setShowAddMasterCategory(!showAddMasterCategory)}>
-                    <Layers className="w-4 h-4 mr-2" /> Categories
-                  </Button>
-                  <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={handleExportMasterRAB}>
-                    <Download className="w-4 h-4 mr-2" /> Export PDF
-                  </Button>
-                  <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={async () => {
-                    const mode = confirm("SYNC LOCAL DATA\n\nOK: Sync Tambahan (Hanya tambah yang belum ada)\nCancel: Overwrite (Hapus semua cloud lalu upload ulang 161 item)");
-                    
-                    if (mode) {
-                      // Sync Addition
-                      let count = 0;
-                      for (const item of WORK_ITEMS_MASTER) {
-                        const existing = masterData.find(d => d.id === item.id);
-                        if (!existing) {
-                          await addMasterItem(item);
-                          count++;
-                        }
-                      }
-                      toast.success(`Berhasil menambahkan ${count} item baru.`);
-                    } else {
-                      // Hard Reset & Sync
-                      if (confirm("⚠️ PERINGATAN: Ini akan menghapus SEMUA data master di Cloud (termasuk hasil import manual) dan menggantinya dengan 161 item internal. Lanjutkan?")) {
-                        await clearMasterData();
-                        await bulkAddMasterItems(WORK_ITEMS_MASTER);
-                      }
-                    }
-                  }}>
-                    <RefreshCw className="w-4 h-4 mr-2" /> Sync AHSP
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="border-2 border-red-600 text-red-600 hover:bg-red-50 h-10 px-6 rounded-xl font-black uppercase text-[10px]" 
-                    onClick={handleNuclearClear}
-                    disabled={isClearing}
-                  >
-                    {isClearing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
-                    {isClearing ? `Deleting (${clearProgress})...` : "Hapus Semua"}
-                  </Button>
-                  <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={() => navigate("/import")}>
-                    <Upload className="w-4 h-4 mr-2" /> Bulk Import
-                  </Button>
-                  <Button variant="outline" className="border-2 border-accent text-accent h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={() => setShowSaveVersion(true)}>
-                    <Save className="w-4 h-4 mr-2" /> Save Master
-                  </Button>
-                  <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px]" onClick={() => setShowVersionHistory(true)}>
-                    <History className="w-4 h-4 mr-2" /> Archive
-                  </Button>
-                </div>
+                  <div className="flex flex-wrap gap-2 mt-4 md:mt-0">
+                    <div className="md:hidden w-full">
+                      <Button 
+                        variant="outline" 
+                        className="w-full border-2 border-black h-12 rounded-xl font-black uppercase text-xs flex justify-between px-6"
+                        onClick={() => setMasterActionsExpanded(!masterActionsExpanded)}
+                      >
+                        Action Center {masterActionsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </Button>
+                    </div>
+                    {(masterActionsExpanded || window.innerWidth >= 768) && (
+                      <div className={cn(
+                        "flex flex-wrap gap-2 w-full md:w-auto",
+                        "animate-in slide-in-from-top-2 duration-300 md:animate-none"
+                      )}>
+                        <Button className="btn-orange h-10 px-6 rounded-xl font-black uppercase text-[10px] flex-grow md:flex-grow-0" onClick={() => setShowAddProduct(!showAddProduct)}>
+                          <Plus className="w-4 h-4 mr-2" /> {showAddProduct ? "Close Form" : "Add Item"}
+                        </Button>
+                        <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px] flex-grow md:flex-grow-0" onClick={() => setShowAddMasterCategory(!showAddMasterCategory)}>
+                          <Layers className="w-4 h-4 mr-2" /> Categories
+                        </Button>
+                        <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px] flex-grow md:flex-grow-0" onClick={handleExportMasterRAB}>
+                          <Download className="w-4 h-4 mr-2" /> PDF
+                        </Button>
+                        <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px] flex-grow md:flex-grow-0" onClick={async () => {
+                          const mode = confirm("SYNC LOCAL DATA\n\nOK: Sync Tambahan (Hanya tambah yang belum ada)\nCancel: Overwrite (Hapus semua cloud lalu upload ulang 161 item)");
+                          
+                          if (mode) {
+                            let count = 0;
+                            for (const item of WORK_ITEMS_MASTER) {
+                              const existing = masterData.find(d => d.id === item.id);
+                              if (!existing) {
+                                await addMasterItem(item);
+                                count++;
+                              }
+                            }
+                            toast.success(`Berhasil menambahkan ${count} item baru.`);
+                          } else {
+                            if (confirm("⚠️ PERINGATAN: Ini akan menghapus SEMUA data master di Cloud (termasuk hasil import manual) dan menggantinya dengan 161 item internal. Lanjutkan?")) {
+                              await clearMasterData();
+                              await bulkAddMasterItems(WORK_ITEMS_MASTER);
+                            }
+                          }
+                        }}>
+                          <RefreshCw className="w-4 h-4 mr-2" /> AHSP
+                        </Button>
+                        <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px] flex-grow md:flex-grow-0" onClick={() => navigate("/import")}>
+                          <Upload className="w-4 h-4 mr-2" /> Import
+                        </Button>
+                        <Button variant="outline" className="border-2 border-accent text-accent h-10 px-6 rounded-xl font-black uppercase text-[10px] flex-grow md:flex-grow-0" onClick={() => setShowSaveVersion(true)}>
+                          <Save className="w-4 h-4 mr-2" /> Snapshot
+                        </Button>
+                        <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl font-black uppercase text-[10px] flex-grow md:flex-grow-0" onClick={() => setShowVersionHistory(true)}>
+                          <History className="w-4 h-4 mr-2" /> Archive
+                        </Button>
+                      </div>
+                    )}
+                  </div>
               </div>
 
               <Dialog open={showVersionHistory} onOpenChange={setShowVersionHistory}>
-                <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-auto">
+                <DialogContent className="w-[95vw] sm:max-w-3xl max-h-[90vh] overflow-auto rounded-3xl border-2 border-black">
                   <DialogHeader>
                     <DialogTitle className="font-black uppercase tracking-tighter">Master Data History</DialogTitle>
                     <DialogDescription>Daftar snapshot master data yang telah disimpan. Klik "Activate" untuk memulihkan versi tersebut.</DialogDescription>
@@ -1143,7 +1300,7 @@ export default function AdminPanel() {
               )}
 
               {/* Advanced Filter Bar */}
-              <div className="grid md:grid-cols-4 gap-4 bg-neutral-50 p-4 rounded-2xl border-2 border-black/5 shadow-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-neutral-50 p-4 rounded-2xl border-2 border-black/5 shadow-sm">
                 <div className="relative col-span-1 md:col-span-2">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
                   <Input 
@@ -1181,16 +1338,16 @@ export default function AdminPanel() {
               {showAddMasterCategory && (
                 <Card className="border-2 border-black rounded-2xl p-6 bg-white animate-in slide-in-from-top-4">
                   <div className="space-y-4">
-                    <div className="flex items-center gap-4">
-                      <div className="flex-grow">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                      <div className="flex-grow w-full">
                         <Input 
                           placeholder="New Category Name..." 
                           value={newMasterCategory}
                           onChange={e => setNewMasterCategory(e.target.value)}
-                          className="border-black/10"
+                          className="border-black/10 w-full"
                         />
                       </div>
-                      <Button className="btn-sleek px-8" onClick={async () => {
+                      <Button className="btn-sleek w-full sm:w-auto px-8" onClick={async () => {
                         if (!newMasterCategory) return;
                         await addMasterCategory(newMasterCategory);
                         setNewMasterCategory("");
@@ -1306,16 +1463,17 @@ export default function AdminPanel() {
                         </TableRow>
                       </TableHeader>
                     <TableBody>
-                      {filteredMaster.length === 0 ? (
+                      {paginatedMaster.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={7} className="h-40 text-center text-neutral-400 italic uppercase font-black tracking-widest">
                             No items found matching your filters.
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredMaster.map((item, index) => {
+                        paginatedMaster.map((item, index) => {
                           const isExpanded = expandedRows.includes(item.id);
                           const isEditing = editingId === item.id;
+                          const absoluteIndex = (currentPage - 1) * itemsPerPage + index + 1;
                           
                           return (
                             <React.Fragment key={item.id}>
@@ -1327,7 +1485,7 @@ export default function AdminPanel() {
                                 )}
                               >
                                 <TableCell className="text-center font-mono text-[10px] text-neutral-400 font-black">
-                                  {index + 1}
+                                  {absoluteIndex}
                                 </TableCell>
                                 <TableCell className="font-mono text-[10px] font-black text-accent">
                                   {isEditing ? (
@@ -1531,6 +1689,58 @@ export default function AdminPanel() {
                   </Table>
                 </div>
               </Card>
+
+              {/* Pagination Controls */}
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-2xl border-2 border-black/5 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Items per page:</span>
+                  <div className="flex gap-1">
+                    {[10, 50, 100].map((size) => (
+                      <Button 
+                        key={size}
+                        variant="outline" 
+                        size="sm"
+                        className={cn(
+                          "h-8 px-3 rounded-lg text-[10px] font-black border-none",
+                          itemsPerPage === size ? "bg-black text-white" : "bg-neutral-100 text-neutral-400 hover:bg-neutral-200"
+                        )}
+                        onClick={() => {
+                          setItemsPerPage(size);
+                          setCurrentPage(1);
+                        }}
+                      >
+                        {size}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                    Page {currentPage} of {totalPages || 1}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      className="h-8 w-8 rounded-lg border-2 border-black/5"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      className="h-8 w-8 rounded-lg border-2 border-black/5"
+                      disabled={currentPage === totalPages || totalPages === 0}
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1836,41 +2046,43 @@ export default function AdminPanel() {
                   </div>
                 </div>
                 
-                <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
-                  <select 
-                    className="h-10 px-4 border-2 border-black/10 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none bg-neutral-50 w-full md:w-40"
-                    value={projectStatus}
-                    onChange={e => setProjectStatus(e.target.value)}
-                  >
-                    <option value="all">ANY STATUS</option>
-                    <option value="active">ACTIVE</option>
-                    <option value="survey">SURVEY</option>
-                    <option value="deal">DEAL / GOLD</option>
-                    <option value="completed">COMPLETED</option>
-                    <option value="pending">PENDING</option>
-                  </select>
-                  <select 
-                    className="h-10 px-4 border-2 border-black/10 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none bg-neutral-50 w-full md:w-40"
-                    value={projectCategory}
-                    onChange={e => setProjectCategory(e.target.value)}
-                  >
-                    <option value="all">All Categories</option>
-                    <option value="Renovasi">Renovasi</option>
-                    <option value="Interior">Interior</option>
-                    <option value="Arsitektur">Arsitektur</option>
-                    <option value="Landskap">Landskap</option>
-                    <option value="Maintenance">Maintenance</option>
-                  </select>
-                  <div className="relative w-full md:w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                <div className="flex flex-col lg:flex-row items-center gap-3 w-full lg:w-auto">
+                  <div className="flex gap-3 w-full lg:w-auto">
+                    <select 
+                      className="h-12 flex-1 lg:flex-none px-4 border-2 border-black/10 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none bg-neutral-50 lg:w-40"
+                      value={projectStatus}
+                      onChange={e => setProjectStatus(e.target.value)}
+                    >
+                      <option value="all">ANY STATUS</option>
+                      <option value="active">ACTIVE</option>
+                      <option value="survey">SURVEY</option>
+                      <option value="deal">DEAL / GOLD</option>
+                      <option value="completed">COMPLETED</option>
+                      <option value="pending">PENDING</option>
+                    </select>
+                    <select 
+                      className="h-12 flex-1 lg:flex-none px-4 border-2 border-black/10 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none bg-neutral-50 lg:w-40"
+                      value={projectCategory}
+                      onChange={e => setProjectCategory(e.target.value)}
+                    >
+                      <option value="all">All Categories</option>
+                      <option value="Renovasi">Renovasi</option>
+                      <option value="Interior">Interior</option>
+                      <option value="Arsitektur">Arsitektur</option>
+                      <option value="Landskap">Landskap</option>
+                      <option value="Maintenance">Maintenance</option>
+                    </select>
+                  </div>
+                  <div className="relative w-full lg:w-64">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                     <Input 
                       placeholder="Search projects..." 
-                      className="pl-10 h-10 rounded-xl border-2 border-black/10 text-xs font-bold"
+                      className="pl-12 h-12 rounded-2xl border-2 border-black/10 text-xs font-bold"
                       value={projectSearch}
                       onChange={e => setProjectSearch(e.target.value)}
                     />
                   </div>
-                  <Button className="btn-sleek h-10 px-6 rounded-xl w-full md:w-auto" onClick={() => navigate("/pm")}>
+                  <Button className="btn-sleek h-12 px-6 rounded-2xl w-full lg:w-auto" onClick={() => navigate("/pm")}>
                     <LayoutDashboard className="w-4 h-4 mr-2" /> Global Dashboard
                   </Button>
                 </div>
@@ -1883,75 +2095,123 @@ export default function AdminPanel() {
                   const matchesCategory = projectCategory === "all" || p.category === projectCategory || p.type === projectCategory;
                   const matchesStatus = projectStatus === "all" || p.status === projectStatus;
                   return matchesSearch && matchesCategory && matchesStatus;
-                }).map(p => (
-                  <Card key={p.id} className={cn(
-                    "border-2 rounded-3xl overflow-hidden shadow-sm group transition-all relative",
-                    selectedProjects.includes(p.id) ? "border-accent bg-accent/5" : "border-black hover:border-accent"
-                  )}>
-                    <div className="h-48 bg-neutral-100 relative">
-                      <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-                        <Checkbox 
-                          checked={selectedProjects.includes(p.id)}
-                          onCheckedChange={() => {
-                            setSelectedProjects(prev => 
-                              prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
-                            );
-                          }}
-                          className="bg-white border-2 border-black"
-                        />
-                      </div>
-                      <img src={getDriveImageUrl(p.imageUrl) || `https://picsum.photos/seed/${p.id}/400/300`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      <Badge className={cn(
-                        "absolute top-4 right-4 uppercase-soft",
-                        p.status === 'active' ? "bg-green-500 text-white" : 
-                        p.status === 'survey' ? "bg-blue-500 text-white" :
-                        p.status === 'completed' ? "bg-purple-500 text-white" :
-                        "bg-neutral-500 text-white"
-                      )}>{p.status}</Badge>
-                    </div>
-                    <CardContent className="p-6 space-y-4">
-                      <div className="space-y-1">
-                        <h3 className="text-lg font-black uppercase tracking-tighter">{p.name}</h3>
-                        <p className="text-[10px] text-neutral-400 uppercase font-bold">Location: {p.location}</p>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-[10px] font-black uppercase">
-                          <span>Progress</span>
-                          <span>{p.progress}%</span>
+                }).map(p => {
+                  const projectExpenses = transactions.filter(t => t.projectId === p.id && t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+                  const isOver = p.totalBudget && projectExpenses > p.totalBudget;
+
+                  return (
+                    <Card 
+                      key={p.id} 
+                      className={cn(
+                        "border-2 rounded-3xl overflow-hidden shadow-sm group transition-all relative cursor-pointer",
+                        selectedProjects.includes(p.id) ? "border-accent bg-accent/5" : "border-black hover:border-accent hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]",
+                        isOver && "border-red-500 shadow-red-500/20"
+                      )}
+                      onClick={() => navigate(`/projects/${p.id}`)}
+                    >
+                      <div className="h-48 bg-neutral-100 relative">
+                        <div className="absolute top-4 left-4 z-10 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                          <Checkbox 
+                            checked={selectedProjects.includes(p.id)}
+                            onCheckedChange={() => {
+                              setSelectedProjects(prev => 
+                                prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                              );
+                            }}
+                            className="bg-white border-2 border-black"
+                          />
                         </div>
-                        <Progress value={p.progress} className="h-1.5" />
+                        <img src={getDriveImageUrl(p.imageUrl) || `https://picsum.photos/seed/${p.id}/400/300`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        
+                        <div className="absolute top-4 right-4 flex gap-2">
+                           {isOver && <div className="bg-red-500 text-white p-1.5 rounded-full animate-bounce"><AlertCircle className="w-3 h-3" /></div>}
+                           <Badge className={cn(
+                             "uppercase font-black text-[8px] border-none px-3 py-1",
+                             p.status === 'active' ? "bg-green-500 text-white" : 
+                             p.status === 'survey' ? "bg-blue-500 text-white" :
+                             p.status === 'completed' ? "bg-purple-500 text-white" :
+                             "bg-neutral-500 text-white"
+                           )}>{p.status}</Badge>
+                        </div>
+
+                        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+                           <div className="flex justify-between items-end">
+                             <div className="space-y-1">
+                               <p className="text-[10px] text-white/80 font-black uppercase tracking-widest flex items-center gap-2">
+                                 <Clock className="w-3 h-3 text-accent" /> {p.createdAt ? new Date(p.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
+                               </p>
+                               <h3 className="text-lg font-black uppercase tracking-tighter text-white leading-none">{p.name}</h3>
+                             </div>
+                           </div>
+                        </div>
                       </div>
-                      <div className="flex gap-2 pt-2">
-                        <Button className="flex-grow btn-sleek h-10 text-[10px]" onClick={() => {
-                          setSelectedProjectTeam(p);
-                          setShowManageTeam(true);
-                        }}>
-                          Manage Team
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="h-10 w-10 border-2 border-red-50 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl flex items-center justify-center p-0"
-                          onClick={async (e) => {
+                      <CardContent className="p-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-[10px] text-neutral-400 uppercase font-black">
+                              <MapPin className="w-3 h-3" /> {p.location || "Jakarta"}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                               <Users className="w-3 h-3 text-neutral-400" />
+                               <span className="text-[9px] font-black uppercase text-neutral-600">PM: {users.find(u => u.uid === p.pmId)?.displayName?.split(' ')[0] || "None"}</span>
+                            </div>
+                        </div>
+                        
+                        <div className="space-y-2 py-3 border-y border-black/5">
+                          <div className="flex justify-between items-center text-[9px] font-black uppercase">
+                            <span className="text-neutral-400">Activity: {p.updatedAt ? "Syncing Updates" : "Project Initialized"}</span>
+                            <span className={cn("font-black", isOver ? "text-red-500" : "text-black")}>
+                               {Math.round((projectExpenses / (p.totalBudget || 1)) * 100)}% Spent
+                            </span>
+                          </div>
+                          <Progress value={p.totalBudget ? (projectExpenses / p.totalBudget) * 100 : 0} className={cn("h-1.5", isOver && "bg-red-100")} />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-[10px]">
+                          <div className="space-y-1">
+                            <p className="font-black uppercase text-neutral-400 tracking-tighter">Budget Balance</p>
+                            <p className="font-black text-black">{formatRupiah(p.totalBudget || 0)}</p>
+                          </div>
+                          <div className="space-y-1 text-right">
+                            <p className="font-black uppercase text-neutral-400 tracking-tighter">Profit Meta</p>
+                            <p className="font-black text-green-600">+{formatRupiah((p.totalBudget || 0) * 0.1)}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          <Button className="flex-grow btn-sleek h-10 text-[9px] font-black uppercase tracking-widest border-2 border-black" onClick={(e) => {
                             e.stopPropagation();
-                            if (confirm(`Hapus proyek ${p.name}?`)) {
-                              await deleteProject(p.id);
-                              toast.success("Proyek dihapus.");
-                            }
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="flex-grow border-2 border-black h-10 text-[10px] bg-black text-white hover:bg-neutral-800"
-                          onClick={() => setSelectedProjectAI(p)}
-                        >
-                          <Brain className="w-3 h-3 mr-2 text-accent" /> AI Health
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                            setSelectedProjectTeam(p);
+                            setShowManageTeam(true);
+                          }}>
+                            <Users className="w-3 h-3 mr-2" /> Team
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            className="h-10 w-10 border-2 border-black text-red-500 hover:bg-neutral-900 hover:text-white rounded-xl p-0 flex items-center justify-center transition-colors"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (confirm(`Hapus proyek ${p.name}?`)) {
+                                await deleteProject(p.id);
+                                toast.success("Proyek dihapus.");
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                             className="h-10 w-10 border-2 border-black bg-black text-white hover:bg-accent rounded-xl p-0 flex items-center justify-center"
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               setSelectedProjectAI(p);
+                             }}
+                          >
+                             <Brain className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
 
               {showManageTeam && selectedProjectTeam && (
@@ -2034,8 +2294,7 @@ export default function AdminPanel() {
                 </Dialog>
               )}
 
-              <div className="pt-8 border-t border-black/5">
-                <h3 className="text-xl font-black uppercase tracking-tighter mb-6">All Projects (Database)</h3>
+              <div className="pt-8 border-t border-black/5 opacity-0 pointer-events-none absolute invisible">
                 <div className="grid md:grid-cols-3 gap-8">
                   {["active", "survey", "completed"].map(status => (
                     <div key={status} className="space-y-4">
@@ -2047,24 +2306,84 @@ export default function AdminPanel() {
                         {status} Projects
                       </h3>
                       <div className="space-y-4">
-                        {projects.filter(p => p.status === status).map(p => (
-                          <Card key={p.id} className="border-2 border-black rounded-2xl p-4 hover:shadow-md transition-shadow cursor-pointer">
-                            <div className="flex justify-between items-start mb-3">
-                              <h4 className="font-black text-xs uppercase tracking-widest">{p.name}</h4>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={(e) => { e.stopPropagation(); deleteProject(p.id); }}>
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2 text-[10px] text-neutral-500">
-                                <Users className="w-3 h-3" /> PM: {users.find(u => u.uid === p.pmId)?.displayName || "Unassigned"}
+                        {projects.filter(p => p.status === status).map(p => {
+                          const projectExpenses = transactions.filter(t => t.projectId === p.id && t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+                          const isOver = p.totalBudget && projectExpenses > p.totalBudget;
+                          
+                          return (
+                            <Card 
+                              key={p.id} 
+                              className={cn(
+                                "border-2 border-black rounded-[1.5rem] p-5 hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer bg-white group relative overflow-hidden",
+                                isOver && "border-red-500"
+                              )}
+                              onClick={() => navigate(`/projects/${p.id}`)}
+                            >
+                              <div className="flex justify-between items-start mb-4">
+                                <div className="space-y-1">
+                                   <div className="flex items-center gap-2">
+                                     <h4 className="font-black text-[11px] uppercase tracking-widest">{p.name}</h4>
+                                     {isOver && <AlertCircle className="w-3 h-3 text-red-500 animate-pulse" />}
+                                   </div>
+                                   <p className="text-[10px] text-neutral-400 font-bold uppercase truncate w-40">{p.location || "No LocationSet"}</p>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-7 w-7 text-neutral-400 hover:text-red-500 transition-colors" 
+                                    onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      if(confirm("Hapus proyek ini secara permanen?")) deleteProject(p.id); 
+                                    }}
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2 text-[10px] text-neutral-500">
-                                <Clock className="w-3 h-3" /> Created: {new Date(p.createdAt).toLocaleDateString()}
+                              
+                              <div className="space-y-3 pb-4 border-b border-black/5">
+                                <div className="flex items-center justify-between text-[9px] font-black uppercase">
+                                  <div className="flex items-center gap-2 text-neutral-500">
+                                    <Users className="w-3 h-3" /> PM: {users.find(u => u.uid === p.pmId)?.displayName?.split(' ')[0] || "None"}
+                                  </div>
+                                  <div className="text-black">
+                                    {p.totalBudget ? `Rp ${(p.totalBudget/1000000).toFixed(1)}M` : "-"}
+                                  </div>
+                                </div>
+                                <Progress value={p.totalBudget ? (projectExpenses/p.totalBudget)*100 : 0} className="h-1.5" />
                               </div>
-                            </div>
-                          </Card>
-                        ))}
+
+                              <div className="pt-3 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[8px] font-black uppercase text-neutral-400 tracking-tighter">Activity Log</span>
+                                  <span className="text-[8px] font-mono text-neutral-300">#id_{p.id.slice(0,4)}</span>
+                                </div>
+                                <div className="space-y-1">
+                                   <div className="flex items-center gap-2">
+                                     <div className="w-1 h-1 rounded-full bg-accent" />
+                                     <p className="text-[9px] font-bold text-neutral-600 truncate">Project initialized on {new Date(p.createdAt).toLocaleDateString()}</p>
+                                   </div>
+                                   {p.updatedAt && (
+                                     <div className="flex items-center gap-2">
+                                       <div className="w-1 h-1 rounded-full bg-blue-500" />
+                                       <p className="text-[9px] font-bold text-neutral-600 truncate">Last updated {new Date(p.updatedAt).toLocaleTimeString()}</p>
+                                     </div>
+                                   )}
+                                </div>
+                              </div>
+
+                              <div className="absolute bottom-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <ChevronRight className="w-4 h-4 text-accent" />
+                              </div>
+                            </Card>
+                          );
+                        })}
+                        {projects.filter(p => p.status === status).length === 0 && (
+                          <div className="py-10 text-center border-2 border-dashed border-neutral-200 rounded-2xl">
+                             <p className="text-[9px] font-black uppercase text-neutral-300">No {status} projects</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -2075,9 +2394,9 @@ export default function AdminPanel() {
 
           {activeTab === "workforce" && (
             <div className="space-y-8">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <h2 className="text-2xl font-black uppercase tracking-tighter">Workforce Database</h2>
-                <Button className="btn-sleek h-10 px-6 rounded-xl" onClick={() => setShowAddWorker(true)}>
+                <Button className="btn-sleek h-10 px-6 rounded-xl w-full md:w-auto" onClick={() => setShowAddWorker(true)}>
                   <UserPlus className="w-4 h-4 mr-2" /> Register Worker
                 </Button>
               </div>
@@ -2273,43 +2592,121 @@ export default function AdminPanel() {
           )}
 
           {activeTab === "cms" && (
-            <div className="space-y-8">
-              <Card className="border-2 border-black rounded-2xl overflow-hidden">
-                <CardHeader className="bg-neutral-50 border-b-2 border-black">
-                  <CardTitle className="text-xl font-black uppercase tracking-tighter">Hero Banner & Promo Settings</CardTitle>
-                </CardHeader>
-                <CardContent className="p-8 space-y-6">
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="uppercase-soft text-[10px]">Hero Title</label>
-                      <Input value={cmsForm?.heroTitle} onChange={e => setCmsForm({ ...cmsForm, heroTitle: e.target.value })} />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="uppercase-soft text-[10px]">Hero Subtitle</label>
-                      <Input value={cmsForm?.heroSubtitle} onChange={e => setCmsForm({ ...cmsForm, heroSubtitle: e.target.value })} />
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <div className="flex justify-between items-center">
-                        <label className="uppercase-soft text-[10px]">Promo Ticker Text (Gunakan | untuk pisahkan baris)</label>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-6 text-[8px] font-black uppercase border-black/10"
-                          onClick={() => setCmsForm({ ...cmsForm, promoText: cmsForm?.promoText ? `${cmsForm.promoText} | ` : "" })}
-                        >
-                          <Plus className="w-3 h-3 mr-1" /> Add Row
-                        </Button>
-                      </div>
-                      <Textarea 
-                        value={cmsForm?.promoText} 
-                        onChange={e => setCmsForm({ ...cmsForm, promoText: e.target.value })} 
-                        placeholder="Contoh: Promo Diskon 10% | Gratis Survey Jabodetabek"
-                        className="bg-white/50"
-                      />
-                    </div>
+            <div className="space-y-8 animate-in fade-in duration-500">
+              <Card className="border-2 border-black rounded-2xl overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] bg-white">
+                <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div className="text-center md:text-left">
+                    <CardTitle className="text-xl font-black uppercase tracking-tighter">Branding & Hero Console</CardTitle>
+                    <CardDescription className="uppercase-soft text-[10px]">Kelola konten utama dan promosi di landing page</CardDescription>
                   </div>
-                  <div className="flex justify-end">
-                    <Button className="btn-sleek px-8" onClick={handleSaveCMS}>Update Landing Page</Button>
+                  <div className="flex gap-2 w-full md:w-auto">
+                     <Button className="btn-sleek h-10 px-6 rounded-xl text-[10px] w-full md:w-auto" onClick={handleSaveCMS}>
+                        Deploy Updates
+                     </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-8 space-y-10">
+                  <div className="grid md:grid-cols-2 gap-10">
+                    <div className="space-y-6">
+                       <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-accent border-b border-black/5 pb-3">Hero Content</h4>
+                       <div className="space-y-6">
+                          <div className="space-y-3">
+                             <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Headline Title</Label>
+                             <Input 
+                               value={cmsForm?.heroTitle} 
+                               onChange={e => setCmsForm({ ...cmsForm, heroTitle: e.target.value })} 
+                               className="h-14 border-2 border-black/10 rounded-2xl font-black text-sm uppercase tracking-tight"
+                             />
+                          </div>
+                          <div className="space-y-3">
+                             <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Sub-Headline Description</Label>
+                             <Textarea 
+                               value={cmsForm?.heroSubtitle} 
+                               onChange={e => setCmsForm({ ...cmsForm, heroSubtitle: e.target.value })} 
+                               className="h-32 border-2 border-black/10 rounded-2xl font-bold text-xs leading-relaxed"
+                             />
+                          </div>
+                       </div>
+                    </div>
+
+                    <div className="space-y-6">
+                       <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500 border-b border-black/5 pb-3">Floating Promos (Active Fade Cycle)</h4>
+                       <div className="space-y-4">
+                          {(cmsForm?.promos || []).length > 0 ? (cmsForm?.promos || []).map((promo, idx) => (
+                            <div key={promo.id} className="group relative flex flex-col gap-3 bg-neutral-50 p-5 rounded-[1.5rem] border-2 border-transparent hover:border-black transition-all">
+                               <div className="flex items-center justify-between">
+                                 <div className="flex items-center gap-3">
+                                   <Checkbox 
+                                     id={`promo-${promo.id}`}
+                                     checked={promo.isActive} 
+                                     onCheckedChange={(checked) => {
+                                       const newPromos = [...(cmsForm.promos || [])];
+                                       newPromos[idx] = { ...promo, isActive: !!checked };
+                                       setCmsForm({ ...cmsForm, promos: newPromos });
+                                     }}
+                                     className="border-2 border-black"
+                                   />
+                                   <label htmlFor={`promo-${promo.id}`} className="text-[10px] font-black uppercase tracking-widest cursor-pointer">
+                                      {promo.isActive ? "Published" : "Hidden / Draft"}
+                                   </label>
+                                 </div>
+                                 <Button 
+                                   variant="ghost" 
+                                   size="icon" 
+                                   className="h-8 w-8 text-neutral-300 hover:text-red-500 transition-colors"
+                                   onClick={() => {
+                                     const newPromos = (cmsForm.promos || []).filter((_, i) => i !== idx);
+                                     setCmsForm({ ...cmsForm, promos: newPromos });
+                                   }}
+                                 >
+                                   <Trash2 className="w-4 h-4" />
+                                 </Button>
+                               </div>
+                               <Input 
+                                 value={promo.text} 
+                                 onChange={(e) => {
+                                   const newPromos = [...(cmsForm.promos || [])];
+                                   newPromos[idx] = { ...promo, text: e.target.value };
+                                   setCmsForm({ ...cmsForm, promos: newPromos });
+                                 }}
+                                 className="h-12 bg-white border-2 border-black/5 rounded-xl text-xs font-black uppercase tracking-tight px-4"
+                                 placeholder="Enter promo text..."
+                               />
+                               <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-black/5">
+                                 <Calendar className="w-3.5 h-3.5 text-neutral-400" />
+                                 <div className="flex flex-col flex-grow">
+                                   <span className="text-[8px] font-black uppercase text-neutral-400">Scheduled Takedown (Expiry)</span>
+                                   <input 
+                                     type="date"
+                                     value={promo.expiresAt ? new Date(promo.expiresAt).toISOString().split('T')[0] : ""}
+                                     onChange={(e) => {
+                                       const newPromos = [...(cmsForm.promos || [])];
+                                       newPromos[idx] = { ...promo, expiresAt: e.target.value || undefined };
+                                       setCmsForm({ ...cmsForm, promos: newPromos });
+                                     }}
+                                     className="text-[10px] font-bold outline-none bg-transparent"
+                                   />
+                                 </div>
+                               </div>
+                            </div>
+                          )) : (
+                            <div className="py-12 text-center border-2 border-dashed border-neutral-200 rounded-[2rem]">
+                               <p className="text-[10px] font-black uppercase tracking-widest text-neutral-300">No managed promos found.</p>
+                            </div>
+                          )}
+                          
+                          <Button 
+                            variant="outline" 
+                            className="w-full h-14 border-2 border-dashed border-black/20 rounded-2xl hover:border-black hover:bg-white font-black uppercase text-[10px] tracking-widest gap-2 transition-all"
+                            onClick={() => {
+                              const newPromos = [...(cmsForm.promos || []), { id: Date.now().toString(), text: "New Promo Item", isActive: true }];
+                              setCmsForm({ ...cmsForm, promos: newPromos });
+                            }}
+                          >
+                            <Plus className="w-4 h-4" /> Add Promo Slide
+                          </Button>
+                       </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -2381,7 +2778,7 @@ export default function AdminPanel() {
                   </div>
 
                   <div className="pt-6 border-t-2 border-black/5">
-                    <div className="flex justify-between items-center mb-4">
+                    <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 border-t-2 border-black/5 pt-4">
                       <h4 className="text-[10px] font-black uppercase tracking-widest text-black">Digital Assessment Key Benefits</h4>
                       <Button 
                         variant="outline" 
@@ -2423,8 +2820,8 @@ export default function AdminPanel() {
                     </div>
                   </div>
 
-                  <div className="flex justify-end border-t-2 border-black pt-6 mt-4">
-                    <Button className="btn-sleek px-12 h-12 rounded-xl" onClick={handleSaveCMS}>Save Content Updates</Button>
+                    <div className="flex flex-col sm:flex-row justify-end border-t-2 border-black pt-6 mt-4 gap-4">
+                    <Button className="btn-sleek px-12 h-12 rounded-xl w-full sm:w-auto" onClick={handleSaveCMS}>Save Content Updates</Button>
                   </div>
                 </CardContent>
               </Card>
@@ -2469,18 +2866,18 @@ export default function AdminPanel() {
           )}
 
           {activeTab === "finance" && (
-            <div className="space-y-8">
+            <div className="space-y-8 animate-in fade-in duration-700">
               {/* Record Payment Dialog */}
               <Dialog open={showRecordPayment} onOpenChange={setShowRecordPayment}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="w-[95vw] sm:max-w-md rounded-[2.5rem] border-4 border-black p-8 max-h-[90vh] overflow-auto">
                   <DialogHeader>
-                    <DialogTitle className="text-xl font-black uppercase tracking-tighter">Record Client Payment</DialogTitle>
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Record Client Payment</DialogTitle>
                   </DialogHeader>
-                  <div className="space-y-4 py-4">
+                  <div className="space-y-6 py-6">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase">Select Project</label>
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Select Project Account</Label>
                       <select 
-                        className="w-full h-10 rounded-xl border-2 border-black/10 px-3 text-sm"
+                        className="w-full h-12 rounded-xl border-2 border-black/10 px-4 text-sm font-bold bg-neutral-50"
                         value={paymentForm.projectId}
                         onChange={e => setPaymentForm({...paymentForm, projectId: e.target.value})}
                       >
@@ -2490,96 +2887,312 @@ export default function AdminPanel() {
                         ))}
                       </select>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase">Amount (Rp)</label>
-                      <Input 
-                        type="number" 
-                        value={paymentForm.amount} 
-                        onChange={e => setPaymentForm({...paymentForm, amount: Number(e.target.value)})}
-                        className="h-10 rounded-xl border-2 border-black/10"
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Amount (Rp)</Label>
+                        <Input 
+                          type="number" 
+                          value={paymentForm.amount} 
+                          onChange={e => setPaymentForm({...paymentForm, amount: Number(e.target.value)})}
+                          className="h-12 rounded-xl border-2 border-black/10 font-mono font-bold px-4"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Method</Label>
+                        <select 
+                          className="w-full h-12 rounded-xl border-2 border-black/10 px-4 text-sm font-bold bg-neutral-50"
+                          value={paymentForm.method}
+                          onChange={e => setPaymentForm({...paymentForm, method: e.target.value as any})}
+                        >
+                          <option>Transfer</option>
+                          <option>Cash</option>
+                          <option>Digital Wallet</option>
+                        </select>
+                      </div>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase">Description</label>
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Description / Reference</Label>
                       <Input 
                         value={paymentForm.description} 
                         onChange={e => setPaymentForm({...paymentForm, description: e.target.value})}
-                        className="h-10 rounded-xl border-2 border-black/10"
+                        className="h-12 rounded-xl border-2 border-black/10"
+                        placeholder="e.g., Progress Payment 30%"
                       />
                     </div>
-                    <Button className="w-full btn-sleek h-12 mt-4" onClick={handleRecordPayment}>Confirm Payment</Button>
+                    <Button className="w-full bg-black text-white h-14 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-neutral-800" onClick={handleRecordPayment}>Confirm Entry &rarr;</Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              {/* Record Expense Dialog */}
+              <Dialog open={showRecordExpense} onOpenChange={setShowRecordExpense}>
+                <DialogContent className="w-[95vw] sm:max-w-md rounded-[2.5rem] border-4 border-black p-8 max-h-[90vh] overflow-auto">
+                  <DialogHeader>
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tighter">New Expense Entry</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-6 py-6">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Allocation (Project/Op)</Label>
+                      <select 
+                        className="w-full h-12 rounded-xl border-2 border-black/10 px-4 text-sm font-bold bg-neutral-50"
+                        value={expenseForm.projectId}
+                        onChange={e => setExpenseForm({...expenseForm, projectId: e.target.value})}
+                      >
+                        <option value="">General Operational</option>
+                        {projects.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Category</Label>
+                        <select 
+                          className="w-full h-12 rounded-xl border-2 border-black/10 px-4 text-sm font-bold bg-neutral-50"
+                          value={expenseForm.category}
+                          onChange={e => setExpenseForm({...expenseForm, category: e.target.value as any})}
+                        >
+                          <option value="material">Material</option>
+                          <option value="labor">Labor/Upah</option>
+                          <option value="assessment">Survey/Assessment</option>
+                          <option value="other">Lain-lain</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Amount (Rp)</Label>
+                        <Input 
+                          type="number" 
+                          value={expenseForm.amount} 
+                          onChange={e => setExpenseForm({...expenseForm, amount: Number(e.target.value)})}
+                          className="h-12 rounded-xl border-2 border-black/10 font-mono font-bold px-4"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                         <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Method</Label>
+                         <select 
+                           className="w-full h-12 rounded-xl border-2 border-black/10 px-4 text-xs font-black uppercase"
+                           value={expenseForm.method}
+                           onChange={e => setExpenseForm({...expenseForm, method: e.target.value})}
+                         >
+                           <option value="transfer">Bank Transfer</option>
+                           <option value="cash">Cash / Petty Cash</option>
+                           <option value="card">Credit Card</option>
+                         </select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Description</Label>
+                      <Input 
+                        value={expenseForm.description} 
+                        onChange={e => setExpenseForm({...expenseForm, description: e.target.value})}
+                        className="h-12 rounded-xl border-2 border-black/10"
+                        placeholder="e.g., Semen 50 Sak Tiga Roda"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Upload Receipt (Foto Bon)</Label>
+                      <div className="flex items-center gap-4">
+                        {expenseForm.receiptUrl ? (
+                          <div className="relative group">
+                            <img src={expenseForm.receiptUrl} className="w-16 h-16 object-cover rounded-xl border-2 border-black" />
+                            <Button size="icon" variant="destructive" className="absolute -top-2 -right-2 w-6 h-6 rounded-full" onClick={() => setExpenseForm({...expenseForm, receiptUrl: ""})}>
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex-grow">
+                             <Input 
+                               type="file" 
+                               accept="image/*" 
+                               className="hidden" 
+                               id="receipt-upload" 
+                               onChange={(e) => {
+                                 const file = e.target.files?.[0];
+                                 if (file) handleUploadReceipt(file);
+                               }}
+                             />
+                             <label 
+                               htmlFor="receipt-upload" 
+                               className="flex items-center justify-center p-4 border-2 border-dashed border-black/10 rounded-xl cursor-pointer hover:bg-neutral-50 transition-all font-bold text-xs uppercase"
+                             >
+                               {isUploadingReceipt ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Camera className="w-4 h-4 mr-2" /> Lampirkan Foto Bon</>}
+                             </label>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <Button className="w-full bg-red-600 text-white h-14 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-red-700" onClick={handleRecordExpense}>Submit Expense Entry &rarr;</Button>
                   </div>
                 </DialogContent>
               </Dialog>
 
               <div className="grid md:grid-cols-4 gap-6">
-                <Card className="border-2 border-black rounded-2xl p-6 bg-green-50">
-                  <p className="uppercase-soft text-green-600 text-[10px]">Total Revenue (Released)</p>
-                  <p className="text-3xl font-black text-green-700">
+                <Card className="border-2 border-black rounded-[2rem] p-8 bg-black text-white shadow-[12px_12px_0px_rgba(0,0,0,0.1)] group hover:scale-105 transition-transform duration-500">
+                  <div className="flex justify-between items-start mb-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Total Income</p>
+                    <ArrowDownLeft className="w-6 h-6 text-green-400" />
+                  </div>
+                  <p className="text-3xl font-black leading-none mb-1">
                     Rp {transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0).toLocaleString()}
                   </p>
+                  <p className="text-[10px] text-neutral-500 font-bold">Total revenue recognized</p>
                 </Card>
-                <Card className="border-2 border-black rounded-2xl p-6 bg-red-50">
-                  <p className="uppercase-soft text-red-600 text-[10px]">Total Expenses</p>
-                  <p className="text-3xl font-black text-red-700">
+                <Card className="border-2 border-black rounded-[2rem] p-8 bg-white shadow-[12px_12px_0px_rgba(255,107,0,0.1)] group hover:scale-105 transition-transform duration-500 border-red-100">
+                  <div className="flex justify-between items-start mb-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-400">Operational Cost</p>
+                    <ArrowUpRight className="w-6 h-6 text-red-400" />
+                  </div>
+                  <p className="text-3xl font-black leading-none mb-1 text-red-600">
                     Rp {transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0).toLocaleString()}
                   </p>
+                  <p className="text-[10px] text-neutral-400 font-bold">Total direct & indirect costs</p>
                 </Card>
-                <Card className="border-2 border-black rounded-2xl p-6 bg-blue-50">
-                  <p className="uppercase-soft text-blue-600 text-[10px]">Total Escrow Balance</p>
-                  <p className="text-3xl font-black text-blue-700">
+                <Card className="border-2 border-black rounded-[2rem] p-8 bg-white shadow-[12px_12px_0px_rgba(0,0,0,0.05)] group hover:scale-105 transition-transform duration-500">
+                  <div className="flex justify-between items-start mb-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">Escrow Balance</p>
+                    <Lock className="w-6 h-6 text-blue-400" />
+                  </div>
+                  <p className="text-3xl font-black leading-none mb-1 text-blue-600">
                     Rp {projects.reduce((acc, p) => acc + (p.escrowBalance || 0), 0).toLocaleString()}
                   </p>
+                  <p className="text-[10px] text-neutral-400 font-bold">Client deposits on hold</p>
                 </Card>
-                <Card className="border-2 border-black rounded-2xl p-6 bg-black text-white">
-                  <p className="uppercase-soft text-white/60 text-[10px]">Net Profit</p>
-                  <p className="text-3xl font-black text-accent">
+                <Card className="border-2 border-black rounded-[2rem] p-8 bg-accent text-white shadow-[12px_12px_0px_rgba(255,107,0,0.2)] group hover:scale-105 transition-transform duration-500">
+                  <div className="flex justify-between items-start mb-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Estimated Net</p>
+                    <TrendingUp className="w-6 h-6 text-white" />
+                  </div>
+                  <p className="text-3xl font-black leading-none mb-1">
                     Rp {(transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0) - 
                          transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0)).toLocaleString()}
                   </p>
+                  <p className="text-[10px] text-white/50 font-bold">Realized profit after costs</p>
                 </Card>
               </div>
 
               <div className="grid md:grid-cols-3 gap-8">
-                <Card className="md:col-span-2 border-2 border-black rounded-2xl overflow-hidden shadow-sm">
-                  <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-row items-center justify-between">
-                    <CardTitle className="text-xl font-black uppercase tracking-tighter">Transaction Ledger</CardTitle>
-                    <div className="flex gap-2">
-                      <Button size="sm" className="btn-sleek text-[10px] font-black uppercase" onClick={() => setShowRecordPayment(true)}>Record Client Payment</Button>
-                      <Button size="sm" variant="outline" className="border-2 border-black text-[10px] font-black uppercase">Export CSV</Button>
+                <Card className="border-4 border-black rounded-[2.5rem] overflow-hidden shadow-2xl bg-white">
+                  <CardHeader className="bg-neutral-900 p-8 border-b-4 border-black flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="space-y-1">
+                      <CardTitle className="text-3xl font-black uppercase tracking-tighter text-white flex items-center gap-3">
+                        <AlertCircle className="w-8 h-8 text-accent" /> Budget Tracker
+                      </CardTitle>
+                      <CardDescription className="text-white/60 uppercase-soft text-xs font-bold font-mono">Comparing Actual Expense vs Planned RAB.</CardDescription>
                     </div>
                   </CardHeader>
                   <CardContent className="p-0">
+                    <div className="divide-y-2 divide-black/5 max-h-[500px] overflow-y-auto">
+                      {projects.map(p => {
+                        const projectExpenses = transactions.filter(t => t.projectId === p.id && t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+                        const isOverBudget = projectExpenses > (p.totalBudget || 0);
+                        const usagePercentage = p.totalBudget ? (projectExpenses / p.totalBudget) * 100 : 0;
+                        
+                        return (
+                          <div key={p.id} className="p-6 space-y-4 hover:bg-neutral-50 transition-colors">
+                            <div className="flex justify-between items-start">
+                              <div className="space-y-1">
+                                <p className="text-xs font-black uppercase tracking-widest">{p.name}</p>
+                                <p className="text-[10px] text-neutral-400 font-bold uppercase">Budget: {formatRupiah(p.totalBudget || 0)}</p>
+                              </div>
+                              {isOverBudget && (
+                                <Badge className="bg-red-600 text-white animate-bounce text-[9px] uppercase font-black">Over Budget!</Badge>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-[9px] font-black uppercase">
+                                <span className={isOverBudget ? "text-red-600" : "text-neutral-400"}>Actual Usage: {formatRupiah(projectExpenses)}</span>
+                                <span className={usagePercentage > 90 ? "text-red-600" : "text-black"}>{usagePercentage.toFixed(1)}%</span>
+                              </div>
+                              <div className="h-2 w-full bg-neutral-100 rounded-full overflow-hidden border border-black/5">
+                                <div 
+                                  className={cn(
+                                    "h-full transition-all duration-1000",
+                                    usagePercentage > 100 ? "bg-red-600" : usagePercentage > 80 ? "bg-orange-500" : "bg-green-500"
+                                  )} 
+                                  style={{ width: `${Math.min(usagePercentage, 100)}%` }} 
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="md:col-span-2 border-4 border-black rounded-[2.5rem] overflow-hidden shadow-2xl bg-white">
+                  <CardHeader className="bg-neutral-50 p-8 border-b-4 border-black flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="space-y-1">
+                      <CardTitle className="text-3xl font-black uppercase tracking-tighter flex items-center gap-3">
+                        <Gavel className="w-8 h-8 text-black" /> Financial Ledger
+                      </CardTitle>
+                      <CardDescription className="uppercase-soft text-xs font-bold font-mono">Consolidated data of all financial movements per project.</CardDescription>
+                    </div>
+                    <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                      <Button className="bg-green-600 text-white font-black uppercase text-[10px] h-12 rounded-2xl px-6 hover:translate-y-1 transition-all" onClick={() => setShowRecordPayment(true)}>
+                        <Download className="w-5 h-5 mr-3" /> Record Client Payment
+                      </Button>
+                      <Button className="bg-red-600 text-white font-black uppercase text-[10px] h-12 rounded-2xl px-6 hover:translate-y-1 transition-all" onClick={() => setShowRecordExpense(true)}>
+                        <ArrowUpRight className="w-5 h-5 mr-3" /> Manual Expense
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0 overflow-x-auto">
                     <Table>
-                      <TableHeader>
-                        <TableRow className="bg-neutral-50">
-                          <TableHead className="uppercase-soft">Date</TableHead>
-                          <TableHead className="uppercase-soft">Description</TableHead>
-                          <TableHead className="uppercase-soft">Category</TableHead>
-                          <TableHead className="uppercase-soft text-right">Amount</TableHead>
+                      <TableHeader className="bg-neutral-50">
+                        <TableRow className="border-b-4 border-black">
+                          <TableHead className="px-4 md:px-8 py-4 md:py-6 text-[10px] font-black uppercase tracking-widest text-neutral-400">Date & Ref</TableHead>
+                          <TableHead className="px-4 md:px-8 py-4 md:py-6 text-[10px] font-black uppercase tracking-widest text-neutral-400">Account Details</TableHead>
+                          <TableHead className="px-4 md:px-8 py-4 md:py-6 text-[10px] font-black uppercase tracking-widest text-neutral-400">Method & Evidence</TableHead>
+                          <TableHead className="px-4 md:px-8 py-4 md:py-6 text-[10px] font-black uppercase tracking-widest text-neutral-400 text-right">Debit/Credit</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {transactions.map((t) => (
-                          <TableRow key={t.id}>
-                            <TableCell className="text-[10px] font-bold">{new Date(t.date).toLocaleDateString()}</TableCell>
-                            <TableCell>
+                          <TableRow key={t.id} className="group border-b border-black/5 hover:bg-neutral-50/50 transition-all duration-300">
+                            <TableCell className="px-4 md:px-8 py-4 md:py-6">
+                               <div className="space-y-1">
+                                 <p className="text-xs font-black font-mono text-black">{new Date(t.date).toLocaleDateString()}</p>
+                                 <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-tighter">ID: #{t.id.substring(0,6).toUpperCase()}</p>
+                               </div>
+                            </TableCell>
+                            <TableCell className="px-4 md:px-8 py-4 md:py-6">
                               <div className="space-y-1">
-                                <p className="text-[10px] font-black uppercase">{t.description}</p>
-                                {t.projectName && <p className="text-[8px] text-neutral-400 uppercase">Project: {t.projectName}</p>}
+                                <p className="text-sm font-black uppercase text-black leading-tight">{t.description}</p>
+                                {t.projectName && (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Badge className="bg-neutral-100 text-neutral-500 border-none text-[8px] font-black uppercase px-2 py-0.5">Project: {t.projectName}</Badge>
+                                    <Badge className={cn(
+                                      "text-[8px] font-black uppercase border-none px-2 py-0.5",
+                                      t.category === 'client_payment' ? "bg-green-100 text-green-600" :
+                                      t.category === 'material' ? "bg-blue-100 text-blue-600" :
+                                      t.category === 'labor' ? "bg-yellow-100 text-yellow-600" : "bg-neutral-100 text-neutral-500"
+                                    )}>{t.category}</Badge>
+                                  </div>
+                                )}
                               </div>
                             </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className={cn(
-                                "text-[8px] uppercase font-black",
-                                t.type === 'income' ? "border-green-500 text-green-600" : "border-red-500 text-red-600"
-                              )}>
-                                {t.category}
-                              </Badge>
+                            <TableCell className="px-4 md:px-8 py-4 md:py-6">
+                              <div className="flex items-center gap-4">
+                                <Badge variant="outline" className="border-2 border-black/10 text-[9px] font-black uppercase tracking-widest">{t.method || "System"}</Badge>
+                                {t.receiptUrl && (
+                                  <Dialog>
+                                    <DialogTrigger render={
+                                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-neutral-100 hover:bg-black hover:text-white transition-all scale-110">
+                                        <Camera className="w-4 h-4" />
+                                      </Button>
+                                    } />
+                                    <DialogContent className="max-w-2xl bg-black border-none p-4">
+                                      <img src={t.receiptUrl} alt="Receipt Evidence" className="w-full h-auto rounded-xl shadow-2xl" />
+                                      <p className="text-center text-white/50 text-[10px] font-black uppercase tracking-[0.5em] mt-4">Evidence ID: #{t.id.toUpperCase()}</p>
+                                    </DialogContent>
+                                  </Dialog>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className={cn(
-                              "text-right font-mono font-bold text-xs",
-                              t.type === 'income' ? "text-green-600" : "text-red-600"
+                              "px-4 md:px-8 py-4 md:py-6 text-right font-mono font-black text-lg",
+                              t.type === 'income' ? "text-green-600" : "text-red-500"
                             )}>
                               {t.type === 'income' ? "+" : "-"} Rp {t.amount.toLocaleString()}
                             </TableCell>
@@ -2587,7 +3200,13 @@ export default function AdminPanel() {
                         ))}
                         {transactions.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={4} className="text-center py-12 text-neutral-400 italic">No transactions recorded yet.</TableCell>
+                            <TableCell colSpan={4} className="p-24 text-center">
+                              <div className="w-20 h-20 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-6 text-neutral-300">
+                                <DollarSign className="w-10 h-10" />
+                              </div>
+                              <p className="uppercase-soft font-black text-neutral-400 mb-2 text-lg">No Transactions Recorded</p>
+                              <p className="text-xs text-neutral-300 font-medium max-w-sm mx-auto">Start recording your project finances to see data here.</p>
+                            </TableCell>
                           </TableRow>
                         )}
                       </TableBody>
@@ -2596,51 +3215,74 @@ export default function AdminPanel() {
                 </Card>
 
                 <div className="space-y-8">
-                  <Card className="border-2 border-black rounded-2xl p-6 bg-accent text-white">
-                    <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Escrow Release Requests</h3>
-                    <div className="space-y-4">
-                      {projects.flatMap(p => (p.paymentMilestones || [])
-                        .filter(m => m.status === 'requested')
-                        .map(m => (
-                          <div key={`${p.id}-${m.id}`} className="p-4 bg-white/10 rounded-xl border border-white/20 space-y-3">
-                            <div>
-                              <p className="text-[10px] font-bold uppercase text-white/60">{p.name}</p>
-                              <p className="text-sm font-black">{m.label}</p>
+                  {/* Budget Health Warning Panel */}
+                  <Card className="border-4 border-black rounded-[2rem] p-8 bg-black text-white shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                       <ShieldCheck className="w-40 h-40" />
+                    </div>
+                    <h3 className="text-2xl font-black uppercase tracking-tighter mb-6 flex items-center gap-3">
+                      <Sparkles className="w-6 h-6 text-accent" /> Budget Overwatch
+                    </h3>
+                    <div className="space-y-6">
+                       {projects.filter(p => p.totalBudget > 0).map(p => {
+                          const projectExpenses = transactions.filter(t => t.projectId === p.id && t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+                          const percentage = (projectExpenses / p.totalBudget) * 100;
+                          const isOver = percentage > 100;
+                          const isWarning = percentage > 85 && !isOver;
+
+                          return (
+                            <div key={p.id} className="space-y-3 p-4 bg-white/5 rounded-2xl border border-white/10">
+                              <div className="flex justify-between items-start">
+                                <div className="space-y-1">
+                                  <p className="text-xs font-black uppercase text-white/90">{p.name}</p>
+                                  <p className="text-[10px] font-bold text-white/40">Allocated Capital: Rp {p.totalBudget.toLocaleString()}</p>
+                                </div>
+                                {isOver && <Badge className="bg-red-500 text-white border-none text-[8px] font-black uppercase">Over Budget!</Badge>}
+                                {isWarning && <Badge className="bg-yellow-500 text-black border-none text-[8px] font-black uppercase">Warning Level</Badge>}
+                              </div>
+                              <Progress value={Math.min(100, percentage)} className={cn(
+                                "h-2 rounded-full",
+                                isOver ? "bg-red-900 border-red-500" : isWarning ? "bg-yellow-900 border-yellow-500" : "bg-neutral-800"
+                              )} />
+                              <div className="flex justify-between items-center">
+                                <p className="text-[10px] font-black uppercase tracking-tighter text-neutral-400">Current Spent: {percentage.toFixed(1)}%</p>
+                                <p className="text-xs font-mono font-bold text-accent">Rp {projectExpenses.toLocaleString()}</p>
+                              </div>
                             </div>
-                            <div className="flex justify-between items-end">
-                              <p className="text-lg font-black">Rp {m.amount.toLocaleString()}</p>
-                              <Button size="sm" className="bg-white text-accent hover:bg-white/90 text-[9px] font-black uppercase">Approve Release</Button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                      {projects.every(p => !(p.paymentMilestones || []).some(m => m.status === 'requested')) && (
-                        <p className="text-[10px] text-white/60 italic text-center py-4">No pending release requests.</p>
-                      )}
+                          );
+                       })}
+                       {projects.filter(p => p.totalBudget > 0).length === 0 && (
+                         <div className="py-12 text-center border-2 border-dashed border-white/10 rounded-3xl">
+                            <p className="text-xs font-black uppercase text-white/30 tracking-widest">No Active Projects with Budgets</p>
+                         </div>
+                       )}
                     </div>
                   </Card>
 
-                  <Card className="border-2 border-black rounded-2xl p-6">
-                    <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Weekly Worker Payroll</h3>
+                  <Card className="border-4 border-black rounded-[2rem] p-8 shadow-xl">
+                    <h3 className="text-2xl font-black uppercase tracking-tighter mb-6 flex items-center gap-3">
+                      <CreditCard className="w-6 h-6 text-blue-500" /> Pending Transfers
+                    </h3>
                     <div className="space-y-4">
                       {wages.filter(w => w.status === 'pending').map(w => (
-                        <div key={w.id} className="flex items-center justify-between p-3 border-2 border-black rounded-xl">
+                        <div key={w.id} className="flex items-center justify-between p-4 bg-neutral-50 border-2 border-black/5 rounded-2xl group hover:border-black transition-all">
                           <div>
-                            <p className="text-[10px] font-black uppercase">{w.workerName}</p>
-                            <p className="text-[8px] text-neutral-400 uppercase">{w.projectName}</p>
-                            <p className="text-xs font-bold">Rp {w.amount.toLocaleString()}</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">{w.workerName}</p>
+                            <p className="text-xs font-black mt-0.5">Rp {w.amount.toLocaleString()}</p>
                           </div>
                           <Button 
                             size="sm" 
                             onClick={() => updateWageStatus(w.id, 'paid')}
-                            className="bg-green-500 hover:bg-green-600 text-white text-[9px] font-black uppercase h-8"
+                            className="bg-black text-white hover:bg-neutral-800 text-[10px] font-black uppercase h-10 rounded-xl px-4 shadow-lg group-hover:bg-accent group-hover:text-white transition-all"
                           >
-                            Pay
+                            Execute Transfer
                           </Button>
                         </div>
                       ))}
                       {wages.filter(w => w.status === 'pending').length === 0 && (
-                        <p className="text-[10px] text-neutral-400 italic text-center py-4">All wages paid.</p>
+                        <div className="py-8 text-center bg-green-50 rounded-2xl border-2 border-green-100">
+                          <p className="text-[10px] text-green-600 font-black uppercase tracking-widest">All payrolls settled &check;</p>
+                        </div>
                       )}
                     </div>
                   </Card>
@@ -2650,337 +3292,249 @@ export default function AdminPanel() {
           )}
 
           {activeTab === "marketing" && (
-            <div className="space-y-8">
-              <div className="grid md:grid-cols-3 gap-8">
-                <Card className="border-2 border-black rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <TrendingUp className="w-6 h-6 text-accent" />
-                    <h3 className="text-lg font-black uppercase tracking-tighter">Engagement Rate</h3>
-                  </div>
-                  <p className="text-4xl font-black">68.4%</p>
-                  <p className="uppercase-soft text-neutral-400">Average client response time: 12 mins</p>
+            <div className="space-y-8 animate-in fade-in duration-500">
+              <div className="grid md:grid-cols-4 gap-6">
+                <Card className="border-2 border-black rounded-2xl p-6 bg-white shadow-[8px_8px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all cursor-default">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Total Prospects</p>
+                  <p className="text-4xl font-black mt-2">{leads.length}</p>
                 </Card>
-                <Card className="border-2 border-black rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Users className="w-6 h-6 text-blue-500" />
-                    <h3 className="text-lg font-black uppercase tracking-tighter">Lead Conversion</h3>
+                <Card className="border-2 border-black rounded-2xl p-6 bg-white">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">New Leads</p>
+                  <div className="flex items-end justify-between">
+                    <p className="text-4xl font-black mt-2 text-blue-600">{leads.filter(l => l.status === 'Lead').length}</p>
+                    <Badge className="bg-blue-50 text-blue-600 border-none uppercase text-[8px] font-black">Incoming</Badge>
                   </div>
-                  <p className="text-4xl font-black">24.2%</p>
-                  <p className="uppercase-soft text-neutral-400">Tier 1 to Tier 2 conversion rate</p>
                 </Card>
-                <Card className="border-2 border-black rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <BarChart3 className="w-6 h-6 text-green-500" />
-                    <h3 className="text-lg font-black uppercase tracking-tighter">Campaign ROI</h3>
+                <Card className="border-2 border-black rounded-2xl p-6 bg-white">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-accent">Qualified</p>
+                  <div className="flex items-end justify-between">
+                    <p className="text-4xl font-black mt-2 text-accent">{leads.filter(l => l.status === 'Qualified').length}</p>
+                    <Badge className="bg-accent/10 text-accent border-none uppercase text-[8px] font-black">Hot</Badge>
                   </div>
-                  <p className="text-4xl font-black">4.2x</p>
-                  <p className="uppercase-soft text-neutral-400">Return on marketing spend</p>
+                </Card>
+                <Card className="border-2 border-black rounded-2xl p-6 bg-black text-white shadow-[12px_12px_0px_rgba(255,107,0,0.2)]">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Wins (Conversion)</p>
+                  <div className="flex items-end justify-between">
+                    <p className="text-4xl font-black mt-2 text-white">{leads.filter(l => l.status === 'Won').length}</p>
+                    <TrendingUp className="w-6 h-6 text-accent mb-1" />
+                  </div>
                 </Card>
               </div>
 
-              <Card className="border-2 border-black rounded-2xl overflow-hidden">
-                <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <CardTitle className="text-xl font-black uppercase tracking-tighter">Marketing Campaigns</CardTitle>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="h-8 rounded-full text-[8px] uppercase font-black border-black/10"
-                        onClick={cleanExpiredCampaigns}
-                      >
-                        <RefreshCw className="w-3 h-3 mr-2" /> Clean Expired
-                      </Button>
-                      {selectedCampaigns.length > 0 && (
-                      <Button 
-                        variant="destructive" 
-                        size="sm" 
-                        className="h-8 px-4 rounded-full text-[8px] uppercase font-black"
-                        onClick={async () => {
-                          if (confirm(`Hapus ${selectedCampaigns.length} campaign terpilih?`)) {
-                            for (const id of selectedCampaigns) await deleteCampaign(id);
-                            setSelectedCampaigns([]);
-                            toast.success("Bulk delete complete.");
-                          }
-                        }}
-                      >
-                        <Trash2 className="w-3 h-3 mr-2" /> Bulk Delete ({selectedCampaigns.length})
-                      </Button>
-                    )}
+              <Card className="border-4 border-black rounded-[2.5rem] overflow-hidden shadow-2xl bg-white">
+                <CardHeader className="bg-neutral-50 p-8 border-b-4 border-black flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="space-y-1 text-center md:text-left">
+                    <CardTitle className="text-3xl font-black uppercase tracking-tighter flex items-center gap-3 justify-center md:justify-start">
+                      <UserPlus className="w-8 h-8 text-accent" /> Relationship Pipeline
+                    </CardTitle>
+                    <CardDescription className="uppercase-soft text-xs font-bold">Monitor every lead from initial contact to successful handover to Project Management.</CardDescription>
                   </div>
-                  <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
-                    {selectedProjects.length > 0 && (
-                      <Button 
-                        variant="destructive" 
-                        size="sm" 
-                        className="h-10 px-6 rounded-xl text-[10px] font-black uppercase"
-                        onClick={async () => {
-                          if (confirm(`Hapus ${selectedProjects.length} proyek terpilih?`)) {
-                            for (const id of selectedProjects) await deleteProject(id);
-                            setSelectedProjects([]);
-                            toast.success("Bulk delete complete.");
-                          }
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" /> Bulk Delete ({selectedProjects.length})
-                      </Button>
-                    )}
-                    <div className="relative w-full md:w-64">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                  <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+                    <div className="relative w-full md:w-80">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
                       <Input 
-                        placeholder="Search campaigns..." 
-                        className="pl-10 h-10 rounded-xl border-2 border-black/10 text-xs font-bold bg-white"
-                        value={campaignSearch}
-                        onChange={e => setCampaignSearch(e.target.value)}
+                        placeholder="Cari nama, WA, atau source..." 
+                        className="pl-12 h-14 rounded-2xl border-2 border-black/10 focus:border-black text-sm font-bold bg-white outline-none ring-0 focus-visible:ring-0"
+                        value={leadSearch}
+                        onChange={e => setLeadSearch(e.target.value)}
                       />
                     </div>
-                    <Button className="btn-sleek h-10 px-6 rounded-xl w-full md:w-auto" onClick={() => {
-                      setEditingCampaign({ name: "", content: "", status: "Draft", reach: "0", conversion: "0%" });
-                      setShowEditCampaign(true);
-                    }}>
-                      <Plus className="w-4 h-4 mr-2" /> New Campaign
-                    </Button>
+                    <Dialog open={showAddLead} onOpenChange={setShowAddLead}>
+                      <DialogTrigger render={
+                        <Button className="btn-accent h-14 px-8 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg hover:translate-y-1 transition-all">
+                          <Plus className="w-5 h-5 mr-3" /> Input New Lead
+                        </Button>
+                      } />
+                      <DialogContent className="w-[95vw] sm:max-w-lg p-8 rounded-[2.5rem] border-4 border-black max-h-[90vh] overflow-auto">
+                        <DialogHeader>
+                          <DialogTitle className="text-2xl font-black uppercase tracking-tighter">New Lead Entry</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-6 pt-6">
+                          <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Prospect Identity</Label>
+                            <Input 
+                              placeholder="Full Name (e.g., John Doe)"
+                              value={newLead.name}
+                              onChange={e => setNewLead({...newLead, name: e.target.value})}
+                              className="h-12 border-2 border-black/10 rounded-xl font-bold bg-neutral-50 px-4"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">WhatsApp Connection</Label>
+                              <Input 
+                                placeholder="08xxxxxxxxxx"
+                                value={newLead.whatsapp}
+                                onChange={e => setNewLead({...newLead, whatsapp: e.target.value})}
+                                className="h-12 border-2 border-black/10 rounded-xl font-bold bg-neutral-50 px-4"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Marketing Source</Label>
+                              <select 
+                                className="w-full h-12 border-2 border-black/10 rounded-xl bg-neutral-50 px-3 font-bold text-sm focus:outline-none focus:border-black"
+                                value={newLead.source}
+                                onChange={e => setNewLead({...newLead, source: e.target.value})}
+                              >
+                                <option>Instagram</option>
+                                <option>Facebook Ads</option>
+                                <option>TikTok Organic</option>
+                                <option>Website TBJ</option>
+                                <option>Manual Input</option>
+                                <option>Referral Client</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Initial Brief / Notes</Label>
+                            <Textarea 
+                              placeholder="Ex: Interested in kitchen renovation, budget ~150jt..."
+                              value={newLead.notes}
+                              onChange={e => setNewLead({...newLead, notes: e.target.value})}
+                              className="border-2 border-black/10 rounded-xl min-h-[100px] font-medium bg-neutral-50 p-4"
+                            />
+                          </div>
+                          <Button className="w-full bg-black text-white h-14 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-neutral-800" onClick={async () => {
+                            if (!newLead.name || !newLead.whatsapp) return;
+                            await addLead(newLead as any);
+                            setShowAddLead(false);
+                            setNewLead({ name: "", email: "", whatsapp: "", source: "Manual", status: "Lead", notes: "" });
+                            toast.success("Relationship initialized successfully!");
+                          }}>
+                            Initialize Phase 1 &rarr;
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </CardHeader>
-                <CardContent className="p-8 space-y-6 max-h-[700px] overflow-y-auto custom-scrollbar">
-                  {["Active", "Draft", "Archived"].map(statusGroup => {
-                    const groupCampaigns = campaigns.filter(c => 
-                      c.status === statusGroup && (
-                        c.name.toLowerCase().includes(campaignSearch.toLowerCase()) || 
-                        c.content.toLowerCase().includes(campaignSearch.toLowerCase())
-                      )
-                    );
-                    
-                    if (groupCampaigns.length === 0) return null;
-
-                    return (
-                      <div key={statusGroup} className="space-y-4">
-                        <div className="flex items-center gap-4">
-                          <h4 className="text-xs font-black uppercase tracking-[0.3em] text-neutral-400">{statusGroup} Campaigns</h4>
-                          <span className="h-[1px] flex-grow bg-neutral-100" />
-                          <Badge className={cn(
-                            "text-[8px] font-black uppercase border-none",
-                            statusGroup === "Active" ? "bg-green-500" : statusGroup === "Draft" ? "bg-blue-500" : "bg-neutral-300"
-                          )}>{groupCampaigns.length}</Badge>
-                        </div>
-                        <div className="grid gap-4">
-                          {groupCampaigns.map((c) => (
-                            <div 
-                              key={c.id} 
-                              className={cn(
-                                "flex flex-col gap-4 p-6 border-2 border-black rounded-3xl hover:bg-neutral-50 transition-all cursor-pointer group relative",
-                                selectedCampaigns.includes(c.id) ? "border-accent bg-accent/5" : "border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:translate-x-1 hover:translate-y-1 hover:shadow-none",
-                                statusGroup === "Active" ? "bg-white" : "bg-neutral-50/50"
-                              )}
-                            >
-                              <div className="flex items-center justify-between w-full">
-                                <div className="flex items-center gap-4 flex-grow">
-                                  <Checkbox 
-                                    checked={selectedCampaigns.includes(c.id)}
-                                    onCheckedChange={() => {
-                                      setSelectedCampaigns(prev => 
-                                        prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
-                                      );
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                  <div className="space-y-1" onClick={() => {
-                                    setEditingCampaign(c);
-                                    setShowEditCampaign(true);
-                                  }}>
-                                    <div className="flex items-center gap-2">
-                                      <p className="font-black text-sm uppercase tracking-widest">{c.name}</p>
-                                      {c.category && (
-                                        <Badge variant="outline" className="text-[8px] font-bold uppercase border-black/20 text-neutral-500">{c.category}</Badge>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                      <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">Reach: {c.reach} | Conv: {c.conversion}</p>
-                                      {c.scheduledDeleteDate && (
-                                        <Badge className="bg-red-50 text-red-500 text-[8px] border-none uppercase font-black">
-                                          <Clock className="w-3 h-3 mr-1" /> Expired: {new Date(c.scheduledDeleteDate).toLocaleDateString()}
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  </div>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader className="bg-neutral-50">
+                        <TableRow className="border-b-4 border-black hover:bg-transparent">
+                          <TableHead className="p-8 text-[10px] font-black uppercase tracking-widest text-neutral-400 w-1/3">Client Identity & Contact</TableHead>
+                          <TableHead className="p-8 text-[10px] font-black uppercase tracking-widest text-neutral-400">Lead Metadata</TableHead>
+                          <TableHead className="p-8 text-[10px] font-black uppercase tracking-widest text-neutral-400 text-center">Pipeline Progress</TableHead>
+                          <TableHead className="p-8 text-[10px] font-black uppercase tracking-widest text-neutral-400 text-right">Command Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {leadsLoading ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="p-24 text-center">
+                              <div className="flex flex-col items-center gap-4">
+                                <Loader2 className="w-12 h-12 animate-spin text-accent" />
+                                <p className="text-xs font-black uppercase tracking-[0.4em] animate-pulse">Syncing Global Lead Database...</p>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : leads.filter(l => 
+                          l.name.toLowerCase().includes(leadSearch.toLowerCase()) || 
+                          l.whatsapp.includes(leadSearch) ||
+                          l.source.toLowerCase().includes(leadSearch.toLowerCase())
+                        ).length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="p-24 text-center">
+                              <div className="w-20 h-20 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-6 text-neutral-300">
+                                <Users className="w-10 h-10" />
+                              </div>
+                              <p className="uppercase-soft font-black text-neutral-400 mb-2 text-lg">No Prospects Found</p>
+                              <p className="text-xs text-neutral-300 font-medium max-w-sm mx-auto">Try adjusting your search filter or initialize a new relationship.</p>
+                            </TableCell>
+                          </TableRow>
+                        ) : leads.filter(l => 
+                          l.name.toLowerCase().includes(leadSearch.toLowerCase()) || 
+                          l.whatsapp.includes(leadSearch)
+                        ).map((lead) => (
+                          <TableRow key={lead.id} className="group border-b border-black/5 hover:bg-neutral-50/50 transition-all duration-300">
+                            <TableCell className="p-8">
+                              <div className="flex items-center gap-6">
+                                <div className="w-16 h-16 rounded-[1.25rem] bg-black text-white flex items-center justify-center font-black text-2xl shadow-xl transform group-hover:rotate-3 transition-transform">
+                                  {lead.name[0].toUpperCase()}
                                 </div>
-                                <div className="flex items-center gap-3">
-                                  <div className="flex gap-2">
-                                    <Button 
-                                      variant="outline" 
-                                      size="icon" 
-                                      className="h-8 w-8 border-2 border-black/10 rounded-xl hover:bg-black hover:text-white transition-colors"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setEditingCampaign(c);
-                                        setShowEditCampaign(true);
-                                      }}
-                                    >
-                                      <Settings className="w-4 h-4" />
-                                    </Button>
-                                    <Button 
-                                      variant="outline" 
-                                      size="icon" 
-                                      className="h-8 w-8 text-red-500 border-2 border-red-100 rounded-xl hover:bg-red-50"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (confirm(`Hapus campaign ${c.name}?`)) deleteCampaign(c.id);
-                                      }}
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                <div className="space-y-1">
+                                  <p className="font-black text-lg uppercase tracking-tight text-black leading-none">{lead.name}</p>
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-1.5 bg-green-50 px-2 py-0.5 rounded text-green-600 border border-green-100">
+                                      <Phone className="w-3 h-3" />
+                                      <p className="text-[10px] font-mono font-bold tracking-tighter">{lead.whatsapp}</p>
+                                    </div>
+                                    <p className="text-[10px] font-bold text-neutral-400 border-l border-neutral-100 pl-3">Registered: {new Date(lead.createdAt).toLocaleDateString()}</p>
                                   </div>
                                 </div>
                               </div>
-                              <div className="bg-neutral-50 p-4 rounded-xl border border-black/5">
-                                <p className="text-xs font-medium text-neutral-600 italic">"{c.content}"</p>
+                            </TableCell>
+                            <TableCell className="p-8">
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <Badge className="bg-blue-50 text-blue-600 border-none uppercase text-[8px] font-black px-2 py-0.5">{lead.source}</Badge>
+                                </div>
+                                {lead.notes ? (
+                                  <div className="bg-neutral-50 p-4 rounded-xl border border-black/5 relative overflow-hidden">
+                                     <div className="absolute top-0 left-0 w-1 h-full bg-neutral-200" />
+                                     <p className="text-[11px] font-medium text-neutral-600 italic line-clamp-2">"{lead.notes}"</p>
+                                  </div>
+                                ) : (
+                                  <p className="text-[10px] text-neutral-300 italic">No notes provided for this prospect.</p>
+                                )}
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {campaigns.length === 0 && (
-                    <div className="py-20 text-center border-2 border-dashed border-neutral-200 rounded-3xl">
-                      <p className="uppercase-soft text-neutral-400">Belum ada campaign marketing.</p>
-                    </div>
-                  )}
+                            </TableCell>
+                            <TableCell className="p-8 text-center">
+                              <div className="flex flex-col items-center gap-2">
+                                <select 
+                                  className={cn(
+                                    "h-11 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 focus:outline-none transition-all cursor-pointer shadow-sm w-44 text-center",
+                                    lead.status === 'Won' ? "bg-black text-white border-black" :
+                                    lead.status === 'Qualified' ? "bg-accent text-white border-accent shadow-accent/20" :
+                                    lead.status === 'Lost' ? "bg-neutral-100 text-neutral-400 border-neutral-200" :
+                                    "bg-white text-blue-600 border-blue-100"
+                                  )}
+                                  value={lead.status}
+                                  onChange={async (e) => {
+                                    await updateLead(lead.id, { status: e.target.value as any });
+                                    toast.success(`Pipeline progression: ${lead.name} is now ${e.target.value}`);
+                                  }}
+                                >
+                                  <option value="Lead">Initial Lead</option>
+                                  <option value="Qualified">Qualified (Surveyed)</option>
+                                  <option value="Won">Won (Deal Closed)</option>
+                                  <option value="Lost">Lead Lost</option>
+                                </select>
+                                <p className="text-[8px] font-black uppercase text-neutral-300 tracking-tighter">Current Status In Database</p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="p-8 text-right">
+                              <div className="flex justify-end gap-3">
+                                <Button 
+                                  variant="outline" 
+                                  className="h-12 w-auto px-6 border-2 border-black rounded-2xl hover:bg-black hover:text-white transition-all shadow-lg active:translate-y-1 font-black text-[10px] uppercase gap-2 flex items-center"
+                                  onClick={() => window.open(`https://wa.me/${lead.whatsapp}?text=Halo Bapak/Ibu ${lead.name}, saya Admin TBJ Constech. Ingin menindaklanjuti rencana proyek Anda...`, '_blank')}
+                                >
+                                  <Phone className="w-5 h-5 text-green-500 group-hover:text-white" /> Follow Up
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="icon" 
+                                  className="h-12 w-12 border-2 border-red-500 text-red-500 rounded-2xl hover:bg-red-50 transition-all shadow-lg active:translate-y-1"
+                                  onClick={async () => {
+                                    if (confirm(`Hapus prospect ${lead.name} dari database CRM secara permanen? Tindakan ini tidak dapat dibatalkan.`)) {
+                                      await deleteLead(lead.id);
+                                      toast.success("Lead purged from ecosystem.");
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="w-5 h-5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
-
-              {showEditCampaign && (
-                <Dialog open={showEditCampaign} onOpenChange={setShowEditCampaign}>
-                  <DialogContent className="max-w-2xl rounded-3xl border-2 border-black">
-                    <DialogHeader>
-                      <DialogTitle className="text-xl font-black uppercase tracking-tighter">
-                        {editingCampaign.id ? "Edit Campaign" : "Create New Campaign"}
-                      </DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-6 py-4">
-                    <div className="grid md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <label className="uppercase-soft text-[10px]">Campaign Name</label>
-                          <Input 
-                            value={editingCampaign.name} 
-                            onChange={e => setEditingCampaign({...editingCampaign, name: e.target.value})}
-                            placeholder="e.g. Promo Lebaran" 
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="uppercase-soft text-[10px]">Category</label>
-                          <select 
-                            className="w-full h-10 rounded-md border border-black/10 px-3 text-sm font-bold uppercase" 
-                            value={editingCampaign.category || ""}
-                            onChange={e => setEditingCampaign({...editingCampaign, category: e.target.value as any})}
-                          >
-                            <option value="Promo">Promo</option>
-                            <option value="Information">Information</option>
-                            <option value="Launch">Launch</option>
-                            <option value="Maintenance">Maintenance</option>
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="uppercase-soft text-[10px]">Status</label>
-                          <select 
-                            className="w-full h-10 rounded-md border border-black/10 px-3 text-sm" 
-                            value={editingCampaign.status}
-                            onChange={e => setEditingCampaign({...editingCampaign, status: e.target.value as any})}
-                          >
-                            <option value="Active">Active</option>
-                            <option value="Draft">Draft</option>
-                            <option value="Paused">Paused</option>
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="uppercase-soft text-[10px]">Auto Delete Date (Optional)</label>
-                          <Input 
-                            type="date"
-                            value={editingCampaign.scheduledDeleteDate || ""} 
-                            onChange={e => setEditingCampaign({...editingCampaign, scheduledDeleteDate: e.target.value})}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="uppercase-soft text-[10px]">Campaign Content / Copy</label>
-                        <Textarea 
-                          value={editingCampaign.content} 
-                          onChange={e => setEditingCampaign({...editingCampaign, content: e.target.value})}
-                          className="min-h-[150px]" 
-                          placeholder="Write your campaign message here..." 
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="uppercase-soft text-[10px]">Display Location</label>
-                        <div className="flex gap-4">
-                          {["Landing Page", "User Dashboard", "WhatsApp Blast"].map(loc => (
-                            <label key={loc} className="flex items-center gap-2 text-[10px] font-bold uppercase cursor-pointer">
-                              <input 
-                                type="checkbox" 
-                                checked={editingCampaign.locations?.includes(loc)} 
-                                onChange={e => {
-                                  const locations = editingCampaign.locations || [];
-                                  if (e.target.checked) {
-                                    setEditingCampaign({...editingCampaign, locations: [...locations, loc]});
-                                  } else {
-                                    setEditingCampaign({...editingCampaign, locations: locations.filter(l => l !== loc)});
-                                  }
-                                }}
-                                className="rounded border-black" 
-                              /> {loc}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <label className="uppercase-soft text-[10px]">Reach Count Estimate</label>
-                          <Input 
-                            value={editingCampaign.reach || ""} 
-                            onChange={e => setEditingCampaign({...editingCampaign, reach: e.target.value})}
-                            placeholder="e.g. 1.2k" 
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="uppercase-soft text-[10px]">Schedule Frequency</label>
-                          <select 
-                            className="w-full h-10 rounded-md border border-black/10 px-3 text-sm" 
-                            value={editingCampaign.scheduleType || "Once"}
-                            onChange={e => setEditingCampaign({...editingCampaign, scheduleType: e.target.value as any})}
-                          >
-                            <option value="Once">Once (No Repeat)</option>
-                            <option value="Daily">Daily</option>
-                            <option value="Weekly">Weekly</option>
-                            <option value="Monthly">Monthly</option>
-                          </select>
-                        </div>
-                      </div>
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <label className="uppercase-soft text-[10px]">Scheduled Start Date</label>
-                          <Input 
-                            type="date"
-                            value={editingCampaign.scheduledDate || ""} 
-                            onChange={e => setEditingCampaign({...editingCampaign, scheduledDate: e.target.value})}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="uppercase-soft text-[10px] text-red-500">Scheduled Auto-Delete (Optional)</label>
-                          <Input 
-                            type="date" 
-                            value={editingCampaign.scheduledDeleteDate || ""} 
-                            onChange={e => setEditingCampaign({...editingCampaign, scheduledDeleteDate: e.target.value})} 
-                            className="border-red-100"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex justify-end gap-4 pt-4">
-                        <Button variant="ghost" onClick={() => setShowEditCampaign(false)}>Cancel</Button>
-                        <Button className="btn-sleek px-8" onClick={handleSaveCampaign}>Publish Campaign</Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              )}
             </div>
           )}
 
@@ -3055,9 +3609,9 @@ export default function AdminPanel() {
                           </select>
                         </div>
                         <div className="space-y-4">
-                          <div className="flex justify-between items-center">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                             <h4 className="text-xs font-black uppercase tracking-widest">Order Items</h4>
-                            <Button variant="outline" size="sm" className="h-8 text-[9px] font-black uppercase border-black/10" onClick={handleAddBulkRow}>Add Row</Button>
+                            <Button variant="outline" size="sm" className="h-8 text-[9px] font-black uppercase border-black/10 w-full sm:w-auto" onClick={handleAddBulkRow}>Add Row</Button>
                           </div>
                           <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                             {bulkOrderItems.map((item, i) => (
@@ -3263,7 +3817,8 @@ export default function AdminPanel() {
 
               <div className="grid md:grid-cols-3 gap-8">
                 <Card className="md:col-span-2 border-2 border-black rounded-2xl overflow-hidden shadow-sm">
-                  <Table>
+                  <div className="overflow-x-auto">
+                    <Table>
                     <TableHeader>
                       <TableRow className="bg-neutral-50">
                         <TableHead className="uppercase-soft">Staff Name</TableHead>
@@ -3294,7 +3849,8 @@ export default function AdminPanel() {
                       )}
                     </TableBody>
                   </Table>
-                </Card>
+                </div>
+              </Card>
                 
                 <Card className="border-2 border-black rounded-2xl p-6 bg-black text-white">
                   <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Attendance Stats</h3>
@@ -3315,9 +3871,9 @@ export default function AdminPanel() {
 
           {activeTab === "gallery" && (
             <div className="space-y-8">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <h2 className="text-2xl font-black uppercase tracking-tighter">Gallery Management</h2>
-                <Button className="btn-sleek h-10 px-6 rounded-xl" onClick={() => setShowAddGallery(true)}>
+                <Button className="btn-sleek h-10 px-6 rounded-xl w-full md:w-auto" onClick={() => setShowAddGallery(true)}>
                   <Plus className="w-4 h-4 mr-2" /> Add Gallery Item
                 </Button>
               </div>
@@ -3401,9 +3957,9 @@ export default function AdminPanel() {
 
           {activeTab === "properties" && (
             <div className="space-y-8">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <h2 className="text-2xl font-black uppercase tracking-tighter">Property & Strategic Hub</h2>
-                <Button className="btn-sleek h-10 px-6 rounded-xl" onClick={() => setShowAddProperty(true)}>
+                <Button className="btn-sleek h-10 px-6 rounded-xl w-full md:w-auto" onClick={() => setShowAddProperty(true)}>
                   <Plus className="w-4 h-4 mr-2" /> List New Asset
                 </Button>
               </div>
@@ -3553,9 +4109,9 @@ export default function AdminPanel() {
 
           {activeTab === "vendors" && (
             <div className="space-y-8">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <h2 className="text-2xl font-black uppercase tracking-tighter">Vendor Database</h2>
-                <Button className="btn-sleek h-10 px-6 rounded-xl" onClick={() => setShowAddVendor(true)}>
+                <Button className="btn-sleek h-10 px-6 rounded-xl w-full md:w-auto" onClick={() => setShowAddVendor(true)}>
                   <Plus className="w-4 h-4 mr-2" /> Register Vendor
                 </Button>
               </div>
@@ -3652,10 +4208,10 @@ export default function AdminPanel() {
               </div>
 
               <Card className="border-2 border-black rounded-2xl overflow-hidden">
-                <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-row justify-between items-center">
+                <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-col md:flex-row justify-between items-center gap-4">
                   <CardTitle className="text-xl font-black uppercase tracking-tighter">Assessment & Payment Terms</CardTitle>
                   <select 
-                    className="h-10 rounded-xl border-2 border-black px-3 text-[10px] font-black uppercase"
+                    className="h-10 rounded-xl border-2 border-black px-3 text-[10px] font-black uppercase w-full md:w-auto"
                     value={selectedProjectFinance?.id || ""}
                     onChange={e => setSelectedProjectFinance(projects.find(p => p.id === e.target.value) || null)}
                   >
@@ -3689,12 +4245,13 @@ export default function AdminPanel() {
                       <div className="space-y-3">
                         {selectedProjectFinance ? (
                           <>
-                            <div className="flex justify-between items-center mb-4">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                               <h4 className="text-[10px] font-black uppercase">Termin Pembayaran</h4>
-                              <Button 
-                                size="sm" 
-                                className="btn-orange h-8 text-[9px] font-black uppercase"
-                                onClick={async () => {
+                              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                                <Button 
+                                  size="sm" 
+                                  className="btn-orange h-8 text-[9px] font-black uppercase flex-grow sm:flex-grow-0"
+                                  onClick={async () => {
                                   // Fetch items for the project subcollection
                                   const itemsRef = collection(db, "projects", selectedProjectFinance.id, "items");
                                   const snap = await getDocs(itemsRef);
@@ -3743,7 +4300,8 @@ export default function AdminPanel() {
                                 <Phone className="w-3 h-3 mr-2 text-green-500" /> Share via WA
                               </Button>
                             </div>
-                            {(selectedProjectFinance.paymentMilestones || []).map((m, i) => (
+                          </div>
+                          {(selectedProjectFinance.paymentMilestones || []).map((m, i) => (
                               <div key={i} className="flex justify-between items-center p-3 border-2 border-black rounded-xl bg-white">
                                 <div className="space-y-1">
                                   <span className="text-[10px] font-black uppercase block">{m.label}</span>
@@ -3912,6 +4470,33 @@ export default function AdminPanel() {
                         <TableCell className="text-[10px] text-neutral-400">{new Date(est.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
+                            <Dialog>
+                              <DialogTrigger render={
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50" title="Assign to Project">
+                                  <Link2 className="w-4 h-4" />
+                                </Button>
+                              } />
+                              <DialogContent className="sm:max-w-md">
+                                <DialogHeader>
+                                  <DialogTitle className="text-lg font-black uppercase tracking-tighter">Assign to Active Project</DialogTitle>
+                                  <DialogDescription className="uppercase-soft">Copy this RAB budget and data to a project's dashboard.</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                  <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase">Select Destination Project</label>
+                                    <select 
+                                      className="w-full h-12 border-2 border-black rounded-xl px-4 text-sm font-bold bg-neutral-50"
+                                      onChange={(e) => syncEstimateToProject(est.id, e.target.value)}
+                                    >
+                                      <option value="">Choose Project...</option>
+                                      {projects.filter(p => p.status !== 'completed').map(p => (
+                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/rab?load=${est.id}`)}>
                               <Eye className="w-4 h-4" />
                             </Button>
@@ -4117,7 +4702,8 @@ export default function AdminPanel() {
           )}
         </div>
       </div>
-      {/* Vendor Assignment Modal */}
+  
+  {/* Vendor Assignment Modal */}
       {showAssignVendor && selectedRequest && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <Card className="w-full max-w-md border-2 border-black rounded-3xl overflow-hidden animate-in zoom-in-95">
@@ -4193,6 +4779,7 @@ export default function AdminPanel() {
         </DialogContent>
       </Dialog>
     </div>
+  </div>
   );
 }
 

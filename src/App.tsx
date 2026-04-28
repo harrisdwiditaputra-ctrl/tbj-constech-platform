@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import ErrorBoundary from "@/components/ErrorBoundary.tsx";
 import Layout from "@/components/Layout.tsx";
 import { useState, useEffect, useMemo } from "react";
-import { useAuth, useProjects, useProjectDetails, useProperties, useMasterData, useCMSConfig, useSystemConfig, useMediaAssets, useCampaigns, incrementAIUsage } from "@/lib/hooks";
+import { useAuth, useProjects, useProjectDetails, useProperties, useMasterData, useCMSConfig, useSystemConfig, useMediaAssets, useCampaigns, useSavedEstimates as useEstimations, incrementAIUsage, useLeads, useFinance, useProjectMaterialRequests } from "@/lib/hooks";
 import { WORK_ITEMS_MASTER, QRIS_IMAGE, TBJ_LOGO } from "@/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,7 @@ import { WorkItemMaster, Property, AIEstimateResponse, BudgetItem, TimelineEvent
 import { cn, getDriveImageUrl, calculateAdminPrice, calculateClientPrice, formatRupiah } from "@/lib/utils";
 import { getAIEstimation } from "./services/aiEstimator";
 import { generateAIPDF, generateRABPDF } from "@/lib/pdfUtils";
-import { Plus, Trash2, ChevronRight, Loader2, Calculator, Search, CheckCircle2, Phone, Mail, Lock, CreditCard, Image as ImageIcon, Calendar, FileCheck, Clock, ExternalLink, ChevronDown, ChevronUp, Home, Wrench, PenTool, Building2, MapPin, Ruler, Layers, FileText, Gavel, Key, Camera, Upload, UserCheck, Map as MapIcon, Share2, Instagram, Download, Star, Settings, User, MessageSquare, ShieldCheck, Sparkles, Minus, Brain, Quote, Zap } from "lucide-react";
+import { Plus, Trash2, ChevronRight, ChevronLeft, Loader2, Calculator, Search, CheckCircle2, Phone, Mail, Lock, CreditCard, Image as ImageIcon, Calendar, FileCheck, Clock, ExternalLink, ChevronDown, ChevronUp, Home, Wrench, PenTool, Building2, MapPin, Ruler, Layers, FileText, Gavel, Key, Camera, Upload, UserCheck, Map as MapIcon, Share2, Instagram, Download, Star, Settings, User, MessageSquare, ShieldCheck, Sparkles, Minus, Brain, Quote, Zap, LayoutDashboard, DollarSign, Edit2, ArrowRight, UserPlus, Fingerprint, History, Package } from "lucide-react";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import Gallery from "./components/Gallery";
@@ -70,7 +70,7 @@ const MapPicker = ({ position, setPosition }: { position: [number, number], setP
   };
 
   return (
-    <div className="h-64 w-full border-2 border-black relative overflow-hidden">
+    <div className="h-64 w-full border border-neutral-200 relative overflow-hidden rounded-xl">
       <MapContainer center={position} zoom={13} scrollWheelZoom={false} className="h-full w-full">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -79,7 +79,7 @@ const MapPicker = ({ position, setPosition }: { position: [number, number], setP
         <Marker position={position} />
         <MapEvents />
       </MapContainer>
-      <div className="absolute bottom-2 right-2 z-[1000] bg-white/80 backdrop-blur-sm p-2 text-[8px] font-mono uppercase border border-black">
+      <div className="absolute bottom-2 right-2 z-[1000] bg-white/80 backdrop-blur-sm p-2 text-[8px] font-mono uppercase border border-neutral-200">
         Click map to set point
       </div>
     </div>
@@ -95,6 +95,42 @@ const Dashboard = ({ user }: { user: any }) => {
   const totalBudget = totalRawBudget;
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
+
+  // Tier 1 Lock for Dashboard
+  if (user?.tier === 'prospect' && !user?.assessmentBooked) {
+    return (
+      <div className="py-24 flex flex-col items-center text-center space-y-8 max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-8">
+        <div className="w-24 h-24 bg-accent/10 rounded-full flex items-center justify-center relative">
+          <Lock className="w-10 h-10 text-accent" />
+          <div className="absolute -top-1 -right-1 w-6 h-6 bg-white border-2 border-accent rounded-full flex items-center justify-center">
+            <Sparkles className="w-3 h-3 text-accent animate-pulse" />
+          </div>
+        </div>
+        <div className="space-y-4">
+          <Badge variant="outline" className="border-accent text-accent uppercase font-black px-4 py-1">Limited Access</Badge>
+          <h2 className="text-4xl font-black uppercase tracking-tighter text-black">Dashboard Terkunci</h2>
+          <p className="text-neutral-500 uppercase-soft text-sm leading-relaxed">
+            Selamat datang di TBJ Constech OS. Sebagai member Tier 1, dashboard operasional Anda akan aktif setelah Anda melakukan **Digital Assessment**. Tim kami akan melakukan survey teknis untuk memvalidasi budget dan teknis proyek Anda.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full pt-4">
+          <Card className="p-6 border-2 border-black/5 hover:border-accent transition-all bg-white group cursor-pointer" onClick={() => navigate("/assistant")}>
+            <Calculator className="w-6 h-6 mb-4 text-accent group-hover:scale-110 transition-transform" />
+            <h3 className="font-black text-xs uppercase mb-2">Pesan Assessment</h3>
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest leading-normal">Dapatkan validasi teknis dari tim ahli kami.</p>
+          </Card>
+          <Card className="p-6 border-2 border-black/5 hover:border-black transition-all bg-white group cursor-pointer" onClick={() => navigate("/gallery")}>
+            <ImageIcon className="w-6 h-6 mb-4 text-black group-hover:scale-110 transition-transform" />
+            <h3 className="font-black text-xs uppercase mb-2">Lihat Portfolio</h3>
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest leading-normal">Inspirasi proyek konstruksi yang telah kami kerjakan.</p>
+          </Card>
+        </div>
+        <Button onClick={() => navigate("/assistant")} className="btn-accent h-16 w-full max-w-sm rounded-2xl uppercase font-black tracking-[0.2em] shadow-xl active:translate-y-1">
+          Buka Kunci Dashboard Sekarang &rarr;
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -157,156 +193,292 @@ const Dashboard = ({ user }: { user: any }) => {
 };
 
 const ProjectsPage = ({ user }: { user: any }) => {
-  const { projects, loading, createProject, deleteProject } = useProjects(user?.uid);
+  const { projects, loading: projectsLoading, createProject, deleteProject } = useProjects(user?.uid, user?.role);
+  const { estimates: aiEstimates, loading: estimatesLoading, deleteEstimate } = useEstimations(user?.uid);
   const { config } = useSystemConfig();
-  const { updateProfile } = useAuth();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const navigate = useNavigate();
 
+  const isAdmin = user?.role === 'admin' || user?.role === 'pm';
+  const loading = projectsLoading || estimatesLoading;
+  const isProspectNotBooked = user?.tier === 'prospect' && !user?.assessmentBooked;
+
   const handleCreate = async () => {
     if (!newName) return;
-    await createProject(newName, newDesc);
-    setIsCreateOpen(false);
-    setNewName("");
-    setNewDesc("");
+    if (!isAdmin) {
+      toast.error("Hanya Admin/PM yang dapat membuat proyek resmi.");
+      return;
+    }
+    const newId = await createProject(newName, newDesc);
+    if (newId) {
+      setIsCreateOpen(false);
+      setNewName("");
+      setNewDesc("");
+      toast.success("Proyek berhasil dibuat!");
+      navigate(`/projects/${newId}`);
+    }
   };
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
 
-  const aiLimitReached = (user?.aiUsageCount || 0) >= (user?.waVerified ? (config?.aiVerifiedLimit || 5) : (config?.aiFreeLimit || 1)) && user?.tier === "prospect";
+  // Tier 1 Lock Check
+  const showLockedView = user?.tier === 'prospect' && !user?.assessmentBooked;
+
+  if (showLockedView) {
+    return (
+      <div className="py-20 flex flex-col items-center text-center space-y-6 max-w-2xl mx-auto translate-y-10 animate-in fade-in duration-700">
+        <div className="w-24 h-24 bg-accent/5 rounded-full flex items-center justify-center relative border-2 border-accent/20">
+          <Lock className="w-10 h-10 text-accent" />
+          <div className="absolute -top-2 -right-2 bg-accent text-white p-1 rounded-full border-2 border-white">
+            <Sparkles className="w-4 h-4" />
+          </div>
+        </div>
+        <div className="space-y-4">
+          <h2 className="text-4xl font-black uppercase tracking-tighter">Status: Locked</h2>
+          <p className="text-neutral-500 uppercase-soft text-sm max-w-md mx-auto leading-relaxed">
+            Untuk memulai proyek resmi dan mengakses dashboard monitoring, Anda perlu melakukan **Digital Assessment** terlebih dahulu. 
+            Silakan lihat riwayat estimasi AI Anda di bawah jika ada.
+          </p>
+        </div>
+        <Button onClick={() => navigate("/assistant")} className="btn-accent h-16 px-12 rounded-2xl uppercase font-black text-xs tracking-widest shadow-xl">
+          Book Digital Assessment Now &rarr;
+        </Button>
+
+        {aiEstimates.length > 0 && (
+          <div className="w-full pt-20 space-y-8 text-left">
+            <div className="flex items-center gap-3 border-b-2 border-black pb-4">
+              <FileText className="w-6 h-6 text-accent" />
+              <h3 className="text-xl font-black uppercase tracking-tighter">AI Drafts Archive</h3>
+            </div>
+            <div className="grid gap-6">
+              {aiEstimates.map(est => (
+                <Card key={est.id} className="p-6 border-2 border-black/5 hover:border-black transition-all group relative overflow-hidden" onClick={() => navigate(`/rab?load=${est.id}`)}>
+                   <div className="flex justify-between items-start">
+                     <div className="space-y-2">
+                       <h4 className="font-black text-lg uppercase tracking-tight">{est.projectName || "Draft Estimasi AI"}</h4>
+                       <div className="flex items-center gap-4 text-[10px] uppercase font-bold text-neutral-400">
+                         <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(est.createdAt).toLocaleDateString()}</span>
+                         <span className="flex items-center gap-1 font-mono text-accent">ID: {est.id.substring(0, 8)}</span>
+                       </div>
+                     </div>
+                     <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="icon" className="h-10 w-10 text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-full" onClick={(e) => {
+                          e.stopPropagation();
+                          deleteEstimate(est.id);
+                        }}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                        <Button variant="outline" className="border-2 border-black h-10 px-6 rounded-xl uppercase font-black text-[10px]" onClick={() => navigate(`/rab?load=${est.id}`)}>
+                          View Draft
+                        </Button>
+                     </div>
+                   </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-12">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="heading-sleek uppercase">Arsip Estimasi</h1>
-          <p className="text-neutral-500 font-light">Kelola estimasi dan proyek konstruksi Anda.</p>
+    <div className="space-y-16 py-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-neutral-200 pb-8">
+        <div className="space-y-2">
+          <Badge className="bg-black text-white uppercase text-[10px] px-4 py-1">Project Command Center</Badge>
+          <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tighter text-black leading-none">Official Projects</h1>
+          <p className="text-neutral-500 uppercase-soft text-xs">Kelola seluruh proyek konstruksi aktif dan arsip estimasi.</p>
         </div>
-        <div className="flex gap-4">
-          <Button 
-            variant="outline" 
-            className="btn-sleek gap-2"
-            onClick={() => window.open(`https://wa.me/62821942016509?text=Halo%20TBJ%20Architect,%20saya%20ingin%20konsultasi%20desain.`, "_blank")}
-          >
-            <Phone className="w-4 h-4" /> Chat Architect
+        <div className="flex flex-wrap gap-4">
+          <Button variant="outline" className="border border-neutral-200 h-12 md:h-14 px-6 md:px-8 rounded-xl md:rounded-2xl uppercase font-black text-[10px] md:text-xs gap-2 hover:bg-neutral-50" onClick={() => window.open(`https://wa.me/6281213496672?text=Halo%20Admin%20TBJ,%20saya%20butuh%20bantuan%20terkait%20proyek%20saya.`, "_blank")}>
+            <MessageSquare className="w-4 h-4" /> Priority Support
           </Button>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger render={
-              <Button className="btn-accent gap-2">
-                <Plus className="w-4 h-4" /> Buat RAB Baru
-              </Button>
-            } />
-            <DialogContent className="rounded-2xl border-none shadow-2xl">
-              <DialogHeader>
-                <DialogTitle className="font-heading text-2xl uppercase tracking-tighter">Buat Proyek / RAB Baru</DialogTitle>
-                <DialogDescription className="uppercase-soft">Mulai estimasi mandiri untuk proyek Anda.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-6 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="text-[10px] font-black uppercase tracking-widest opacity-60">Nama Proyek</Label>
-                  <Input id="name" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Contoh: Renovasi Rumah Minimalis" className="input-sleek" />
+          {(isAdmin) && (
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger render={
+                <Button className="bg-accent text-white hover:bg-accent/90 h-14 px-8 rounded-2xl uppercase font-black text-xs tracking-widest shadow-lg shadow-accent/20 gap-2">
+                  <Plus className="w-5 h-5" /> Buat Proyek Resmi
+                </Button>
+              } />
+              <DialogContent className="rounded-3xl border-none shadow-2xl p-8 max-w-lg">
+                <DialogHeader className="space-y-4 mb-6">
+                  <div className="w-12 h-12 bg-accent/10 rounded-2xl flex items-center justify-center">
+                    <Building2 className="w-6 h-6 text-accent" />
+                  </div>
+                  <DialogTitle className="text-3xl font-black uppercase tracking-tighter text-black leading-none">Register New Project</DialogTitle>
+                  <DialogDescription className="uppercase-soft text-sm">Halaman ini hanya dapat diakses oleh Admin & Project Manager untuk inisiasi proyek klien.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400 ml-1">Client Name / Project Title</Label>
+                    <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Contoh: Proyek Interior - Bpk. Alex" className="h-14 border-2 border-black/5 focus:border-accent transition-colors text-lg font-black uppercase" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400 ml-1">Brief Description</Label>
+                    <Textarea value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Tuliskan scope pekerjaan singkat..." className="border-2 border-black/5 focus:border-accent transition-colors text-sm font-medium uppercase-soft p-4 rounded-2xl min-h-[120px]" />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="desc" className="text-[10px] font-black uppercase tracking-widest opacity-60">Deskripsi Singkat</Label>
-                  <Input id="desc" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Misal: Perbaikan atap dan cat dinding" className="input-sleek" />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setIsCreateOpen(false)} className="text-[10px] font-black uppercase tracking-widest">Batal</Button>
-                <Button onClick={handleCreate} className="btn-accent uppercase font-black text-[10px]">Simpan Proyek</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter className="mt-10 gap-3">
+                  <Button variant="ghost" onClick={() => setIsCreateOpen(false)} className="uppercase font-black text-[10px] tracking-widest h-14 px-8">Batal</Button>
+                  <Button onClick={handleCreate} className="bg-black text-white hover:bg-neutral-800 h-14 px-10 rounded-2xl uppercase font-black text-[10px] tracking-widest">Create Identity &rarr;</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
-      {aiLimitReached && (
-        <div className="sleek-card p-8 border-accent/20 bg-accent/5 relative overflow-hidden">
-          <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="space-y-2 text-center md:text-left">
-              <Badge className="tag-sleek bg-accent text-white border-none">AI Limit Reached</Badge>
-              <h3 className="text-2xl font-heading uppercase tracking-tighter">Digital Assessment Selesai</h3>
-              <p className="text-sm text-neutral-600 max-w-md uppercase-soft">
-                Anda telah menggunakan batas analisa AI gratis. Untuk mendapatkan estimasi detail, validasi teknis, dan RAB Final, silakan booking survey lokasi.
-              </p>
-            </div>
-            <Button 
-              className="btn-accent h-14 px-10 uppercase font-black text-xs"
-              onClick={() => navigate("/assistant")}
-            >
-              Booking Survey (Rp {(config?.surveyFee || 399000).toLocaleString('id-ID')})
-            </Button>
+      <div className="grid gap-8">
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Zap className="w-6 h-6 text-accent" />
+            <h3 className="text-xl font-black uppercase tracking-tighter">Live Construction Projects</h3>
           </div>
-          <div className="absolute -right-20 -bottom-20 w-64 h-64 bg-accent/10 rounded-full blur-3xl" />
-        </div>
-      )}
-
-      <div className="sleek-card overflow-hidden">
-        <Table>
-          <TableHeader className="bg-neutral-50/50">
-            <TableRow className="hover:bg-transparent border-b border-black/5">
-              <TableHead className="text-[10px] uppercase tracking-[0.2em] font-black py-6">Nama Proyek</TableHead>
-              <TableHead className="text-[10px] uppercase tracking-[0.2em] font-black">Tanggal</TableHead>
-              <TableHead className="text-[10px] uppercase tracking-[0.2em] font-black text-right">Estimasi Anggaran</TableHead>
-              <TableHead className="w-[100px] text-right font-black uppercase tracking-widest text-[10px]">Aksi</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+          
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {projects.map(project => (
-              <TableRow 
+              <Card 
                 key={project.id} 
-                className="cursor-pointer group border-b border-black/5 last:border-0" 
+                className="group border-2 border-black/5 hover:border-black transition-all cursor-pointer overflow-hidden p-6 relative bg-white shadow-sm hover:shadow-xl hover:-translate-y-1 active:translate-y-0"
                 onClick={() => navigate(`/projects/${project.id}`)}
               >
-                <TableCell className="py-6">
-                  <div>
-                    <p className="font-bold text-sm uppercase tracking-tight group-hover:text-accent transition-colors">{project.name}</p>
-                    <p className="text-[10px] text-neutral-400 font-medium uppercase-soft">{project.description}</p>
-                  </div>
-                </TableCell>
-                <TableCell className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">
-                  {new Date(project.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                </TableCell>
-                <TableCell className="text-right font-mono text-xs font-black text-black">
-                  Rp {(project.totalBudget || 0).toLocaleString('id-ID')}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end items-center gap-4" onClick={e => e.stopPropagation()}>
-                    {(user?.role === 'admin' || user?.role === 'pm' || project.ownerId === user?.uid) && (
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 text-neutral-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        onClick={() => {
-                          if (window.confirm("Hapus proyek/estimasi ini secara permanen?")) {
-                            deleteProject(project.id);
-                          }
-                        }}
-                      >
+                <div className="flex flex-col h-full space-y-6">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-neutral-50 flex items-center justify-center border-2 border-black/5 group-hover:border-accent transition-colors overflow-hidden">
+                        {project.thumbnail ? (
+                          <img src={getDriveImageUrl(project.thumbnail)} alt="Thumb" className="w-full h-full object-cover" />
+                        ) : (
+                          <Building2 className="w-6 h-6 text-neutral-300" />
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="font-black text-lg uppercase tracking-tight leading-none mb-2">{project.name}</h4>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className={cn(
+                            "text-[8px] uppercase-soft border-none font-black px-2 py-0.5",
+                            project.status === 'active' ? "bg-green-100 text-green-600" :
+                            project.status === 'completed' ? "bg-blue-100 text-blue-600" :
+                            "bg-amber-100 text-amber-600"
+                          )}>
+                            {project.status}
+                          </Badge>
+                          <span className="text-[10px] font-mono text-neutral-400 font-bold">#{project.id.substring(0, 6)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {isAdmin && (
+                      <Button variant="ghost" size="icon" className="h-10 w-10 text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm("Hapus proyek ini secara permanen?")) {
+                          deleteProject(project.id);
+                        }
+                      }}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     )}
-                    <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-accent transition-all group-hover:translate-x-1" />
                   </div>
-                </TableCell>
-              </TableRow>
+
+                  <div className="space-y-4 pt-4 border-t border-black/5">
+                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                      <span>Live Progress</span>
+                      <span className="text-black">{(project.progress || 0).toFixed(0)}%</span>
+                    </div>
+                    <Progress value={project.progress || 0} className="h-2 bg-neutral-100" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-3 bg-neutral-50 rounded-xl space-y-1">
+                      <p className="text-[8px] font-black uppercase text-neutral-400">Budget Managed</p>
+                      <p className="text-xs font-black text-black">Rp {(project.totalBudget || 0).toLocaleString('id-ID')}</p>
+                    </div>
+                    <div className="p-3 bg-neutral-50 rounded-xl space-y-1">
+                      <p className="text-[8px] font-black uppercase text-neutral-400">Created Date</p>
+                      <p className="text-[10px] font-bold text-black uppercase">{new Date(project.createdAt).toLocaleDateString('id-ID')}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-3 h-3 text-accent" />
+                      <span className="text-[9px] font-black uppercase text-neutral-500 truncate max-w-[120px]">{project.location || "Jakarta"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-3 h-3 text-neutral-300" />
+                      <span className="text-[9px] font-bold text-neutral-400 uppercase">Last: {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString('id-ID') : new Date(project.createdAt).toLocaleDateString('id-ID')}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-2 flex items-center gap-2">
+                    <History className="w-3 h-3 text-accent" />
+                    <p className="text-[9px] font-bold uppercase-soft text-accent truncate">
+                      Pekerjaan inisiasi dimulai pada {new Date(project.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              </Card>
             ))}
             {projects.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center py-20">
-                  <div className="space-y-4">
-                    <div className="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center mx-auto">
-                      <Layers className="w-6 h-6 text-neutral-300" />
-                    </div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Belum ada proyek. Mulai dengan membuat RAB baru.</p>
-                  </div>
-                </TableCell>
-              </TableRow>
+              <div className="col-span-full py-12 md:py-20 border border-dashed border-neutral-200 rounded-3xl md:rounded-[40px] flex flex-col items-center justify-center text-center space-y-4">
+                <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center">
+                  <Layers className="w-8 h-8 text-neutral-300" />
+                </div>
+                <div className="px-6">
+                  <h4 className="text-xl font-black uppercase tracking-tighter">No Active Projects</h4>
+                  <p className="text-[10px] md:text-[11px] uppercase-soft text-neutral-400 max-w-xs mx-auto">Hubungi PM untuk mendaftarkan proyek konstruksi Anda secara resmi.</p>
+                </div>
+              </div>
             )}
-          </TableBody>
-        </Table>
+          </div>
+        </div>
+
+        <div className="space-y-6 pt-12 border-t-2 border-neutral-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-6 h-6 text-accent" />
+              <h3 className="text-xl font-black uppercase tracking-tighter text-neutral-400">AI Estimation Drafts</h3>
+            </div>
+            <Badge variant="outline" className="font-mono text-xs">{aiEstimates.length} Saved</Badge>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {aiEstimates.map(est => (
+              <Card key={est.id} className="p-6 border-2 border-black/5 hover:border-accent hover:shadow-2xl transition-all group/est bg-white/50 hover:bg-white overflow-hidden" onClick={() => navigate(`/rab?load=${est.id}`)}>
+                <div className="flex flex-col justify-between h-full space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-start">
+                      <div className="w-10 h-10 rounded-xl bg-accent/5 flex items-center justify-center">
+                        <Calculator className="w-5 h-5 text-accent" />
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-200 hover:text-red-500 rounded-full opacity-0 group-hover/est:opacity-100 transition-opacity" onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm("Hapus draf estimasi ini?")) {
+                          deleteEstimate(est.id);
+                        }
+                      }}>
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                    <h4 className="font-black text-sm uppercase tracking-tight truncate">{est.projectName || "Draft RAB"}</h4>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <p className="text-lg font-black text-black">Rp {(est.totalEstimatedCost || 0).toLocaleString('id-ID')}</p>
+                    <div className="flex items-center gap-3 text-[10px] font-bold text-neutral-400 uppercase">
+                       <Clock className="w-3 h-3" /> {new Date(est.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <Button variant="ghost" className="w-full text-[10px] font-black uppercase-soft border border-transparent group-hover/est:border-accent/10 group-hover/est:bg-accent/5">
+                    Continue Refining &rarr; 
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -314,13 +486,44 @@ const ProjectsPage = ({ user }: { user: any }) => {
 
 const ProjectDetail = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { config: sysConfig } = useSystemConfig();
   const { masterData } = useMasterData(user?.role);
-  const { project, categories, items, loading, addCategory, addItem, updateItem, deleteCategory, deleteItem, updateProjectStatus, updateItemProgress, updateTimelineEvent, addTimelineEvent } = useProjectDetails(id);
+  const { project, categories, items, loading, addCategory, addItem, updateItem, deleteCategory, deleteItem, updateProjectStatus, updateItemProgress, updateTimelineEvent, addTimelineEvent, updateProjectMetadata } = useProjectDetails(id);
   const pdfLogo = TBJ_LOGO;
+
+  if (user?.tier === 'prospect' && !user?.assessmentBooked) {
+    return (
+      <div className="py-24 flex flex-col items-center text-center space-y-8 max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-8">
+        <div className="w-24 h-24 bg-accent/10 rounded-full flex items-center justify-center relative">
+          <Lock className="w-10 h-10 text-accent" />
+        </div>
+        <div className="space-y-4">
+          <h2 className="text-4xl font-black uppercase tracking-tighter">Access Denied</h2>
+          <p className="text-neutral-500 uppercase font-bold text-xs tracking-widest leading-loose max-w-sm mx-auto">
+            Halaman ini dikunci. Silakan lakukan pembayaran <span className="text-black underline font-black">Digital Assessment & Survey</span> seharga <span className="bg-accent text-white px-2 py-0.5 rounded">Rp399.000</span> untuk mengaktifkan dashboard proyek Anda.
+          </p>
+        </div>
+        <Button onClick={() => navigate("/assistant")} className="btn-accent h-16 px-12 rounded-2xl gap-3 font-black uppercase text-xs tracking-widest shadow-2xl shadow-accent/30 animate-bounce">
+          Book Digital Assessment Sekarang &rarr;
+        </Button>
+      </div>
+    );
+  }
   
   const { assets: projectMedia, addAsset: addMedia, deleteAsset: deleteMedia } = useMediaAssets(undefined, id);
+  const { requests: materialRequests, addRequest: addMaterialRequest } = useProjectMaterialRequests(id);
+  const { transactions } = useFinance(id);
+  
+  const projectTransactions = useMemo(() => {
+    return transactions.filter(t => t.projectId === id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [transactions, id]);
+
+  const totalSpent = useMemo(() => {
+    return projectTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+  }, [projectTransactions]);
+  
   const [newMediaUrl, setNewMediaUrl] = useState("");
   const [newMediaName, setNewMediaName] = useState("");
   const [newCatName, setNewCatName] = useState("");
@@ -330,6 +533,7 @@ const ProjectDetail = () => {
   const [newItemUnit, setNewItemUnit] = useState("m2");
   const [newItemPrice, setNewItemPrice] = useState(0);
   const [newItemPriority, setNewItemPriority] = useState<BudgetItem["priority"]>("Medium");
+  const [newItemDueDate, setNewItemDueDate] = useState("");
   const [selectedCatId, setSelectedCatId] = useState("");
   
   // Editing individual item specs
@@ -368,85 +572,294 @@ const ProjectDetail = () => {
   };
 
   const totalWeight = items.reduce((sum, i) => sum + (i.totalPrice / (project.totalBudget || 1)) * 100, 0);
+  const [activeTab, setActiveTab] = useState<"overview" | "rab" | "timeline" | "photos" | "finance" | "procurement">("overview");
+
   const currentProgress = items.reduce((sum, i) => sum + ((i.progress || 0) * (i.totalPrice / (project.totalBudget || 1))), 0);
 
-  const canEdit = user?.role === "admin" || user?.role === "pm";
+  const canEdit = user?.role === "admin" || user?.role === "pm" || 
+    (user?.uid === project?.pmId);
+
+  const canEditRAB = user?.role === "admin" || user?.role === "pm";
 
   if (loading || !project) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
 
-  return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-start">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
-            <Badge className={cn(
-              "rounded-md uppercase-soft",
-              project.status === "active" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-            )}>
-              {project.status === "active" ? "Tier 3: Deal / Aktif" : "Tier 2: Tahap Survey"}
-            </Badge>
-          </div>
-          <p className="text-neutral-500">{project.description}</p>
-          <div className="flex items-center gap-4 pt-2">
-            <div className="flex items-center gap-2">
-              <Label className="text-[10px] uppercase font-bold">Status:</Label>
-              <select 
-                disabled={!canEdit}
-                className="text-[10px] p-1 border-2 border-black rounded-md font-bold uppercase disabled:opacity-50"
-                value={project.status}
-                onChange={(e) => updateProjectStatus(e.target.value as any)}
-              >
-                <option value="survey">Tahap Survey</option>
-                <option value="active">Deal / Aktif</option>
-                <option value="completed">Selesai</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-[10px] uppercase font-bold">Progress:</Label>
-              <Badge variant="outline" className="rounded-md border-black">{currentProgress.toFixed(1)}%</Badge>
-            </div>
+  // Lock for Tier 1
+  if (user?.tier === 'prospect' && !user?.assessmentBooked && project.ownerId === user?.uid) {
+    return (
+      <div className="py-20 flex flex-col items-center text-center space-y-6 max-w-4xl mx-auto">
+        <div className="w-24 h-24 bg-accent/10 rounded-full flex items-center justify-center">
+          <Lock className="w-12 h-12 text-accent" />
+        </div>
+        <div className="space-y-4">
+          <h2 className="text-4xl font-black uppercase tracking-tighter">Dashboard Locked</h2>
+          <p className="text-neutral-500 uppercase-soft text-sm max-w-xl mx-auto leading-relaxed">
+            Estimasi Anda telah tersimpan di sistem. Untuk melihat detail RAB Teknik, 
+            memantau progress harian, dan fitur monitoring proyek, silakan booking 
+            Digital Assessment / Survey lokasi terlebih dahulu.
+          </p>
+          <div className="pt-6">
+            <Button onClick={() => navigate("/assistant")} className="btn-accent h-14 px-12 uppercase font-black text-xs shadow-xl shadow-accent/20">
+              Book Digital Assessment Now
+            </Button>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] text-neutral-500 uppercase tracking-wider font-bold">Total Anggaran (RAB)</p>
-          <p className="text-3xl font-black text-black tracking-tighter">
-            {formatRupiah(user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(project.totalBudget, sysConfig?.globalMarkup) : calculateClientPrice(project.totalBudget, sysConfig?.globalMarkup))}
-          </p>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="mt-2 text-[10px] uppercase font-bold gap-2 text-accent hover:text-accent hover:bg-accent/5"
-            onClick={() => {
-              const summary = `[TBJ PROJECT SUMMARY]\n\nProyek: ${project.name}\nStatus: ${project.status.toUpperCase()}\nTotal RAB: Rp ${(project.totalBudget || 0).toLocaleString('id-ID')}\nProgress: ${currentProgress.toFixed(1)}%\n\nDetail Kategori:\n${categories.map(c => `- ${c.name}: Rp ${items.filter(i => i.categoryId === c.id).reduce((s, it) => s + it.totalPrice, 0).toLocaleString('id-ID')}`).join('\n')}\n\nLaporan terstruktur oleh TBJ Constech Hub.`;
-              window.open(`https://wa.me/?text=${encodeURIComponent(summary)}`, "_blank");
-            }}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-700">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="space-y-1 w-full overflow-hidden">
+          <div className="flex items-center gap-3">
+            <Link to="/projects">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full border border-black/5 shrink-0">
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+            </Link>
+            <h1 className="text-2xl md:text-4xl font-black tracking-tighter uppercase leading-tight truncate">{project.name}</h1>
+          </div>
+          <p className="text-neutral-500 uppercase font-bold text-[9px] md:text-[10px] tracking-widest ml-11 line-clamp-1">{project.description}</p>
+        </div>
+        
+        <div className="md:hidden w-full">
+          <select 
+            className="w-full h-12 bg-white border-2 border-black rounded-xl px-4 font-black uppercase text-xs tracking-widest outline-none shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as any)}
           >
-            <Share2 className="w-3 h-3" /> Share Summary to WA
-          </Button>
+            <option value="overview">Overview</option>
+            <option value="rab">RAB Teknik</option>
+            <option value="finance">Finance</option>
+            <option value="procurement">Material</option>
+            <option value="timeline">Timeline</option>
+            <option value="photos">Media</option>
+          </select>
+        </div>
+        
+        <div className="hidden md:flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-4 md:pb-0 scrollbar-hide px-2 -mx-2">
+          {[
+            { id: "overview", label: "Overview", icon: LayoutDashboard },
+            { id: "rab", label: "RAB Teknik", icon: FileText },
+            { id: "finance", label: "Finance", icon: DollarSign },
+            { id: "procurement", label: "Material", icon: Package },
+            { id: "timeline", label: "Timeline", icon: Clock },
+            { id: "photos", label: "Media", icon: Camera },
+          ].map(tab => (
+            <Button
+              key={tab.id}
+              variant={activeTab === tab.id ? "default" : "outline"}
+              className={cn(
+                "h-10 px-4 md:px-6 rounded-xl uppercase font-black text-[10px] gap-2 transition-all shrink-0",
+                activeTab === tab.id ? "bg-black text-accent shadow-[4px_4px_0px_0px_#FF6B00]" : "border-2 border-black/5 hover:border-black"
+              )}
+              onClick={() => setActiveTab(tab.id as any)}
+            >
+              <tab.icon className="w-3 h-3" />
+              {tab.label}
+            </Button>
+          ))}
         </div>
       </div>
 
-      <div className="grid md:grid-cols-4 gap-6">
-        <Card className="border-2 border-black rounded-2xl p-6 space-y-2">
-          <p className="text-[10px] font-bold uppercase text-neutral-400">Assessment Account (QRIS)</p>
-          <p className="text-sm font-black">BRI 479201031488535</p>
-          <p className="text-[9px] uppercase-soft">a.n TBJ Architect & Constech</p>
-        </Card>
-        <Card className="border-2 border-black rounded-2xl p-6 space-y-2">
-          <p className="text-[10px] font-bold uppercase text-neutral-400">Total Bobot</p>
-          <p className="text-xl font-black">{totalWeight.toFixed(0)}%</p>
-          <Progress value={totalWeight} className="h-1" />
-        </Card>
-        <Card className="md:col-span-2 border-2 border-black rounded-2xl p-6 bg-neutral-50">
-          <div className="flex items-center justify-between mb-4">
+      {activeTab === "overview" && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+          <div className="md:col-span-2 space-y-6 md:space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+               <Card className="border-2 border-black rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-6 bg-accent text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                  <p className="uppercase font-black text-[9px] opacity-80">RAB Total</p>
+                  <p className="text-xl md:text-2xl font-black tracking-tighter">
+                    {formatRupiah(user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(project.totalBudget, sysConfig?.globalMarkup) : calculateClientPrice(project.totalBudget, sysConfig?.globalMarkup))}
+                  </p>
+               </Card>
+               <Card className="border-2 border-black rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-6 bg-black text-white shadow-[4px_4px_0px_0px_#FF6B00]">
+                  <p className="uppercase font-black text-[9px] opacity-80">Progress Lapangan</p>
+                  <div className="flex flex-col gap-2 pt-2">
+                    <p className="text-xl md:text-2xl font-black tracking-tighter">{currentProgress.toFixed(1)}%</p>
+                    <Progress value={currentProgress} className="h-1.5 bg-white/20" />
+                  </div>
+               </Card>
+               <Card className="border-2 border-black rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-6 bg-white sm:col-span-2 lg:col-span-1 shadow-[4px_4px_0px_1px_rgba(0,0,0,1)]">
+                  <p className="uppercase font-black text-[10px] text-neutral-400">Project Status</p>
+                  <div className="flex items-center gap-3 mt-2">
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    <p className="font-black uppercase text-sm tracking-tight">{project.status}</p>
+                  </div>
+               </Card>
+            </div>
+
+            <Card className="border-2 border-black rounded-[1.5rem] md:rounded-[2.5rem] overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] md:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+              <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-col sm:flex-row items-center justify-between gap-4 p-4 md:p-6">
+                <div className="text-center sm:text-left">
+                  <CardTitle className="text-lg md:text-xl font-black uppercase tracking-tighter">Project Details & Specs</CardTitle>
+                  <CardDescription className="uppercase-soft text-[9px] md:text-xs">Informasi mendalam dan data teknis pengerjaan</CardDescription>
+                </div>
+                {canEditRAB && (
+                  <Dialog>
+                    <DialogTrigger render={<Button size="sm" variant="outline" className="h-9 px-4 border-2 border-black rounded-xl uppercase font-black text-[8px] w-full sm:w-auto"><Edit2 className="w-3 h-3 mr-2" /> Edit Metadata</Button>} />
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle className="font-black uppercase tracking-tighter">Edit Project Metadata</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label className="uppercase-soft text-[10px]">Project Name</Label>
+                          <Input id="edit-name" defaultValue={project.name} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="uppercase-soft text-[10px]">Client Name</Label>
+                          <Input id="edit-client" defaultValue={project.clientName} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="uppercase-soft text-[10px]">Location</Label>
+                          <Input id="edit-location" defaultValue={project.location} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="uppercase-soft text-[10px]">Start Date</Label>
+                            <Input id="edit-start" type="date" defaultValue={project.startDate} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="uppercase-soft text-[10px]">End Date</Label>
+                            <Input id="edit-end" type="date" defaultValue={project.endDate} />
+                          </div>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button className="btn-accent w-full" onClick={async () => {
+                          const name = (document.getElementById('edit-name') as HTMLInputElement).value;
+                          const clientName = (document.getElementById('edit-client') as HTMLInputElement).value;
+                          const location = (document.getElementById('edit-location') as HTMLInputElement).value;
+                          const startDate = (document.getElementById('edit-start') as HTMLInputElement).value;
+                          const endDate = (document.getElementById('edit-end') as HTMLInputElement).value;
+                          
+                          await updateProjectMetadata({ name, clientName, location, startDate, endDate });
+                          toast.success("Project metadata updated");
+                        }}>Save Changes</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </CardHeader>
+              <CardContent className="p-8 grid md:grid-cols-2 gap-12">
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-neutral-400">Lokasi Konstruksi</label>
+                    <p className="font-bold flex items-center gap-2"><MapPin className="w-4 h-4 text-accent" /> {project.location || project.description}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-neutral-400">Total Luas Area</label>
+                    <p className="font-bold flex items-center gap-2"><Layers className="w-4 h-4 text-accent" /> {project.area || 0} m2</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase text-neutral-400">Start Date</label>
+                      <p className="font-bold flex items-center gap-2"><Calendar className="w-4 h-4 text-accent" /> {project.startDate ? new Date(project.startDate).toLocaleDateString('id-ID') : '-'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase text-neutral-400">End Date</label>
+                      <p className="font-bold flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-accent" /> {project.endDate ? new Date(project.endDate).toLocaleDateString('id-ID') : '-'}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-neutral-400">Account Bank Assessment (QRIS)</label>
+                    <div className="p-4 bg-orange-50 border-2 border-accent/20 rounded-2xl">
+                      <p className="text-xs font-black uppercase tracking-tighter text-accent">BRI 479201031488535</p>
+                      <p className="text-[10px] font-bold text-neutral-500 uppercase mt-1">a.n TBJ Architect & Constech</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                   <div className="space-y-4">
+                     <label className="text-[10px] font-black uppercase text-neutral-400">Admin Controls</label>
+                     <div className="flex flex-wrap gap-2">
+                       <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="h-9 px-4 border-2 border-black uppercase font-black text-[8px] rounded-xl hover:bg-black hover:text-white transition-all"
+                        onClick={() => {
+                          const summary = `[TBJ PROJECT SUMMARY]\n\nProyek: ${project.name}\nStatus: ${project.status.toUpperCase()}\nTotal RAB: Rp ${(project.totalBudget || 0).toLocaleString('id-ID')}\nProgress: ${currentProgress.toFixed(1)}%\n\nLaporan terstruktur oleh TBJ Constech Hub.`;
+                          window.open(`https://wa.me/?text=${encodeURIComponent(summary)}`, "_blank");
+                        }}
+                       >
+                         <Share2 className="w-3 h-3 mr-2" /> Share Summary
+                       </Button>
+                       {(user?.role === 'admin' || user?.role === 'pm') && (
+                         <select 
+                           className="h-9 px-4 border-2 border-black uppercase font-black text-[8px] rounded-xl bg-white"
+                           value={project.status}
+                           onChange={(e) => updateProjectStatus(e.target.value as any)}
+                         >
+                           <option value="survey">Set to Survey</option>
+                           <option value="active">Set to Active</option>
+                           <option value="completed">Set to Completed</option>
+                         </select>
+                       )}
+                     </div>
+                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-8">
+            <Card className="border-2 border-black rounded-3xl p-6 bg-neutral-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+              <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Project Progress</h3>
+              <div className="space-y-6">
+                {categories.map(c => {
+                  const catItems = items.filter(i => i.categoryId === c.id);
+                  const catProg = catItems.reduce((s, it) => s + (it.progress || 0) * (it.totalPrice / (project.totalBudget || 1)), 0);
+                  const catWeight = catItems.reduce((s, it) => s + (it.totalPrice / (project.totalBudget || 1)), 0) * 100;
+
+                  return (
+                    <div key={c.id} className="space-y-2">
+                      <div className="flex justify-between text-[10px] font-black uppercase tracking-tight">
+                        <span>{c.name}</span>
+                        <span>{catProg.toFixed(1)}% / {catWeight.toFixed(0)}%</span>
+                      </div>
+                      <Progress value={(catProg / catWeight) * 100} className="h-1 bg-neutral-200" />
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            <Card className="border-2 border-black rounded-3xl p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+              <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Quick Links</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <Button variant="outline" className="h-20 flex-col border-2 border-black rounded-2xl gap-2 hover:bg-neutral-50" onClick={() => setActiveTab("rab")}>
+                  <FileText className="w-5 h-5 text-accent" />
+                  <span className="text-[8px] uppercase font-black tracking-widest">RAB Teknik</span>
+                </Button>
+                <Button variant="outline" className="h-20 flex-col border-2 border-black rounded-2xl gap-2 hover:bg-neutral-50" onClick={() => setActiveTab("timeline")}>
+                  <Clock className="w-5 h-5 text-accent" />
+                  <span className="text-[8px] uppercase font-black tracking-widest">Timeline</span>
+                </Button>
+                <Button variant="outline" className="h-20 flex-col border-2 border-black rounded-2xl gap-2 hover:bg-neutral-50" onClick={() => setActiveTab("finance")}>
+                  <DollarSign className="w-5 h-5 text-accent" />
+                  <span className="text-[8px] uppercase font-black tracking-widest">Finance</span>
+                </Button>
+                <Button variant="outline" className="h-20 flex-col border-2 border-black rounded-2xl gap-2 hover:bg-neutral-50" onClick={() => setActiveTab("photos")}>
+                  <Camera className="w-5 h-5 text-accent" />
+                  <span className="text-[8px] uppercase font-black tracking-widest">Photos</span>
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "timeline" && (
+        <Card className="border-2 border-black rounded-2xl p-6 bg-neutral-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center justify-between mb-8">
              <div>
-               <p className="text-[10px] font-bold uppercase text-neutral-400">Project Timeline</p>
-               <p className="text-sm font-black">Tracking Fasa Pembangunan</p>
+               <h3 className="text-2xl font-black uppercase tracking-tighter">Project Timeline</h3>
+               <p className="uppercase-soft text-neutral-400">Tracking Fasa Pembangunan & Milestone</p>
              </div>
              {(user?.role === 'admin' || user?.role === 'pm') && (
                <Dialog>
-                 <DialogTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8 rounded-full border border-black"><Plus className="w-4 h-4" /></Button>} />
+                 <DialogTrigger render={<Button className="btn-accent px-6 h-10 rounded-xl gap-2 font-black uppercase text-[10px]"><Plus className="w-4 h-4" /> Add Event</Button>} />
                  <DialogContent className="sm:max-w-md">
                    <DialogHeader>
                      <DialogTitle className="font-black uppercase tracking-tighter">Add Timeline Event</DialogTitle>
@@ -487,7 +900,7 @@ const ProjectDetail = () => {
                </Dialog>
              )}
           </div>
-          <div className="max-h-[300px] overflow-y-auto pr-2 no-scrollbar">
+          <div className="overflow-y-auto no-scrollbar">
             <ProjectTimeline 
               events={project.timeline || []} 
               onUpdateEvent={updateTimelineEvent} 
@@ -495,10 +908,242 @@ const ProjectDetail = () => {
             />
           </div>
         </Card>
-      </div>
+      )}
 
-      {/* Progress Photos Section */}
-      <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] bg-white">
+      {activeTab === "procurement" && (
+        <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] bg-white animate-in slide-in-from-bottom-4 duration-500">
+          <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-xl font-black uppercase tracking-tighter">Material & Supply Requests</CardTitle>
+              <CardDescription className="uppercase-soft">Permintaan material lapangan untuk logistik</CardDescription>
+            </div>
+            <Dialog>
+              <DialogTrigger render={<Button className="btn-accent px-6 h-10 rounded-xl gap-2 font-black uppercase text-[10px]"><Plus className="w-4 h-4" /> Request Material</Button>} />
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="font-black uppercase tracking-tighter">New Material Request</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label className="uppercase-soft text-[10px]">Material Name</Label>
+                    <Input id="mat-name" placeholder="e.g. Semen Tiga Roda" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="uppercase-soft text-[10px]">Quantity</Label>
+                      <Input id="mat-qty" type="number" defaultValue="1" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="uppercase-soft text-[10px]">Unit</Label>
+                      <Input id="mat-unit" placeholder="e.g. Sak" defaultValue="Sak" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="uppercase-soft text-[10px]">Notes / Specification</Label>
+                    <Textarea id="mat-notes" placeholder="e.g. Minimal isi 40kg" />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button className="btn-sleek w-full" onClick={async () => {
+                    const name = (document.getElementById('mat-name') as HTMLInputElement).value;
+                    const qty = Number((document.getElementById('mat-qty') as HTMLInputElement).value);
+                    const unit = (document.getElementById('mat-unit') as HTMLInputElement).value;
+                    const notes = (document.getElementById('mat-notes') as HTMLTextAreaElement).value;
+
+                    if (name && qty > 0) {
+                      await addMaterialRequest({
+                        projectId: id,
+                        projectName: project.name,
+                        requesterId: user?.uid || "guest",
+                        requesterName: user?.displayName || user?.email || 'Field Staff',
+                        itemName: name,
+                        quantity: qty,
+                        unit,
+                        note: notes,
+                        status: 'pending'
+                      } as any);
+                      toast.success("Material request submitted!");
+                    }
+                  }}>Submit Request</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table className="min-w-[800px]">
+                <TableHeader>
+                  <TableRow className="bg-neutral-50/50 hover:bg-neutral-50/50 border-b-2 border-black">
+                    <TableHead className="uppercase font-black text-[10px] pl-8">Material</TableHead>
+                    <TableHead className="uppercase font-black text-[10px] text-center">Qty</TableHead>
+                    <TableHead className="uppercase font-black text-[10px]">Requested By</TableHead>
+                    <TableHead className="uppercase font-black text-[10px]">Status</TableHead>
+                    <TableHead className="uppercase font-black text-[10px] text-right pr-8">Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {materialRequests.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-20 text-neutral-400 font-bold uppercase text-[10px]">No pending requests</TableCell>
+                    </TableRow>
+                  ) : (
+                    materialRequests.map(req => (
+                      <TableRow key={req.id} className="border-b border-black/5 last:border-0">
+                        <TableCell className="pl-8 py-4">
+                          <p className="font-black text-xs uppercase">{req.itemName}</p>
+                          {req.note && <p className="text-[10px] text-neutral-400 font-medium italic">{req.note}</p>}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline" className="border-black font-black uppercase text-[10px]">{req.quantity} {req.unit}</Badge>
+                        </TableCell>
+                        <TableCell className="text-xs font-bold text-neutral-500 uppercase">{req.requesterName}</TableCell>
+                        <TableCell>
+                          <Badge className={cn(
+                            "uppercase font-black text-[8px]",
+                            req.status === 'approved' ? "bg-green-500" : 
+                            req.status === 'rejected' ? "bg-red-500" : "bg-orange-500"
+                          )}>{req.status}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right pr-8 font-mono text-[10px] text-neutral-400">
+                          {new Date(req.createdAt).toLocaleDateString('id-ID')}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === "finance" && (
+        <div className="grid md:grid-cols-3 gap-8 animate-in slide-in-from-bottom-4 duration-500">
+           <div className="md:col-span-2 space-y-6">
+              <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                <CardHeader className="bg-neutral-50 border-b-2 border-black flex justify-between items-center">
+                   <CardTitle className="text-xl font-black uppercase tracking-tighter">Transaction LEDGER</CardTitle>
+                   <Badge variant="outline" className="border-black font-black uppercase text-[8px] bg-neutral-100">Project Fin-001</Badge>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-neutral-50/50 hover:bg-neutral-50/50 border-b-2 border-black">
+                        <TableHead className="uppercase font-black text-[10px] py-4 pl-8">Date</TableHead>
+                        <TableHead className="uppercase font-black text-[10px]">Description</TableHead>
+                        <TableHead className="uppercase font-black text-[10px]">Method</TableHead>
+                        <TableHead className="uppercase font-black text-[10px] text-right pr-8">Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {projectTransactions.length > 0 ? (
+                        projectTransactions.map((t) => (
+                          <TableRow key={t.id} className="border-b border-black/5">
+                            <TableCell className="py-6 pl-8 font-mono text-[10px] text-neutral-400">
+                              {new Date(t.date).toLocaleDateString('id-ID')}
+                            </TableCell>
+                            <TableCell>
+                              <p className={cn(
+                                "font-bold text-xs uppercase tracking-tight leading-tight",
+                                t.type === 'income' ? "text-green-600" : "text-red-500"
+                              )}>
+                                {t.description}
+                              </p>
+                              <p className="text-[9px] font-bold text-neutral-400 lowercase">{t.category}</p>
+                            </TableCell>
+                            <TableCell><Badge variant="outline" className="text-[8px] uppercase">{t.method || 'Transfer'}</Badge></TableCell>
+                            <TableCell className={cn(
+                              "text-right pr-8 font-black text-xs",
+                              t.type === 'income' ? "text-green-600" : "text-red-500"
+                            )}>
+                              {t.type === 'income' ? "+" : "-"} {formatRupiah(t.amount)}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-20">
+                            <div className="space-y-3">
+                              <DollarSign className="w-8 h-8 mx-auto text-neutral-200" />
+                              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Belum ada riwayat transaksi finansial.</p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
+              <Card className="border-2 border-black rounded-3xl p-8 bg-black text-white shadow-[8px_8px_0px_0px_#FF6B00] group relative overflow-hidden">
+                 <div className="absolute top-0 right-0 w-64 h-64 bg-accent opacity-5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl transition-opacity group-hover:opacity-10" />
+                 <div className="flex justify-between items-start mb-10 relative z-10">
+                    <div className="space-y-2">
+                      <h3 className="text-2xl font-black uppercase tracking-tighter italic">Total Escrow Wallet</h3>
+                      <p className="text-white/40 uppercase-soft text-[10px] max-w-[300px]">Dana aman tertahan di TBJ Wallet (Akan direlease per Milestone pembangunan)</p>
+                    </div>
+                    <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center border border-white/10 backdrop-blur-sm">
+                      <ShieldCheck className="w-8 h-8 text-accent" />
+                    </div>
+                 </div>
+                 <div className="space-y-2 relative z-10">
+                    <p className="text-6xl font-black tracking-tighter text-accent uppercase leading-[0.8]">Rp {(project.escrowBalance || 0).toLocaleString('id-ID')}</p>
+                    <div className="flex items-center gap-2 pt-2">
+                       <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                       <span className="text-[9px] font-black uppercase text-white/60 tracking-widest leading-none">Safe & Insured via TBJ Connect</span>
+                    </div>
+                 </div>
+              </Card>
+           </div>
+
+           <div className="space-y-6">
+              <Card className="border-2 border-black rounded-3xl p-8 bg-accent text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
+                 <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-black/5 rounded-full" />
+                 <h4 className="font-black uppercase tracking-tighter text-xl mb-6 relative z-10">Structure Payment</h4>
+                 <div className="space-y-4 relative z-10">
+                    {[
+                      { label: 'Booking Fee', pct: 0, status: 'released' },
+                      { label: 'Termin I (DP)', pct: 30, status: 'released' },
+                      { label: 'Termin II (Mid)', pct: 40, status: 'locked' },
+                      { label: 'Termin III (Final)', pct: 30, status: 'locked' },
+                    ].map((m, idx) => (
+                      <div key={idx} className={cn(
+                        "flex justify-between items-center p-4 rounded-2xl border-2 transition-all",
+                        m.status === 'released' ? "bg-white/10 border-white/20" : "bg-black/10 border-black/5 opacity-50"
+                      )}>
+                         <div>
+                            <p className="text-[10px] font-black uppercase tracking-tighter">{m.label} ({m.pct}%)</p>
+                            <p className="text-sm font-black italic">Rp {(project.totalBudget * (m.pct/100) || 0).toLocaleString('id-ID')}</p>
+                         </div>
+                         {m.status === 'released' ? (
+                           <CheckCircle2 className="w-5 h-5 text-white" />
+                         ) : (
+                           <Lock className="w-5 h-5 text-black/40" />
+                         )}
+                      </div>
+                    ))}
+                 </div>
+                 <div className="mt-8 pt-8 border-t border-white/20">
+                    <Button className="w-full h-14 bg-black text-white hover:bg-neutral-900 rounded-2xl font-black uppercase tracking-widest text-[10px] gap-2">
+                      <FileText className="w-4 h-4" /> Invoice & Receipt Portal
+                    </Button>
+                 </div>
+              </Card>
+              
+              <Card className="border-2 border-black rounded-3xl p-6 bg-neutral-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                 <h5 className="font-black uppercase text-[10px] text-neutral-400 tracking-[0.2em] mb-4">Financial Support</h5>
+                 <p className="text-[11px] font-bold text-neutral-600 leading-relaxed mb-6">Butuh pendanaan tambahan (Kredit Konstruksi) atau pertanyaan seputar termin?</p>
+                 <Button variant="outline" className="w-full border-2 border-black h-12 rounded-xl font-black uppercase text-[9px] gap-2">
+                    <MessageSquare className="w-3 h-3" /> Chat Finance Team
+                 </Button>
+              </Card>
+           </div>
+        </div>
+      )}
+
+
+      {activeTab === "photos" && (
+        <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] bg-white animate-in slide-in-from-bottom-4 duration-500">
         <CardHeader className="bg-neutral-50 border-b-2 border-black flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-xl font-black uppercase tracking-tighter">Progress Photos</CardTitle>
@@ -593,335 +1238,201 @@ const ProjectDetail = () => {
           )}
         </CardContent>
       </Card>
-
-      {canEdit && (
-        <div className="flex gap-4">
-          <Dialog>
-            <DialogTrigger render={
-              <Button variant="outline" className="gap-2">
-                <Plus className="w-4 h-4" /> Tambah Kategori
-              </Button>
-            } />
-            <DialogContent>
-              <DialogHeader><DialogTitle>Tambah Kategori Baru</DialogTitle></DialogHeader>
-              <div className="py-4 space-y-4">
-                <div className="space-y-2">
-                  <Label>Nama Kategori</Label>
-                  <Input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Contoh: Pekerjaan Tanah" />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={() => { addCategory(newCatName); setNewCatName(""); }}>Simpan</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog>
-            <DialogTrigger render={
-              <Button className="gap-2">
-                <Plus className="w-4 h-4" /> Tambah Item
-              </Button>
-            } />
-            <DialogContent className="max-w-lg">
-              <DialogHeader><DialogTitle>Tambah Item Anggaran</DialogTitle></DialogHeader>
-              <div className="py-4 space-y-4">
-                <div className="space-y-2">
-                  <Label>Kategori</Label>
-                  <select 
-                    className="w-full p-2 border rounded-md"
-                    value={selectedCatId}
-                    onChange={e => setSelectedCatId(e.target.value)}
-                  >
-                    <option value="">Pilih Kategori</option>
-                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-
-                <div className="space-y-2 relative">
-                  <Label>Cari Pekerjaan (Master Data)</Label>
-                  <div className="relative">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-neutral-400" />
-                    <Input 
-                      value={searchQuery} 
-                      onChange={e => setSearchQuery(e.target.value)} 
-                      placeholder="Ketik nama pekerjaan (misal: galian, cat, lampu)..." 
-                      className="pl-8"
-                    />
-                  </div>
-                  <p className="text-[10px] text-neutral-400 mt-1 italic">*Jika tidak ada di database, Anda bisa langsung mengisi form di bawah secara manual.</p>
-                  {isSearching && searchResults.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
-                      {searchResults.map(item => (
-                        <div 
-                          key={item.id} 
-                          className="p-2 hover:bg-neutral-100 cursor-pointer border-b last:border-0"
-                          onClick={() => selectMasterItem(item)}
-                        >
-                          <div className="flex justify-between items-center">
-                            <span className="font-medium text-sm">{item.name}</span>
-                            <Badge variant="outline" className="text-[10px]">{item.category}</Badge>
-                          </div>
-                          <div className="flex justify-between text-xs text-neutral-500 mt-1">
-                            <span>Satuan: {item.unit}</span>
-                            <span>Rp {item.price.toLocaleString('id-ID')}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Nama Item (Manual Edit)</Label>
-                  <Input value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="Nama pekerjaan..." />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    Spesifikasi Teknis (Merk, Tipe, Material)
-                    <Badge variant="outline" className="text-[8px] uppercase">Optional</Badge>
-                  </Label>
-                  <Textarea 
-                    value={newItemSpecs} 
-                    onChange={e => setNewItemSpecs(e.target.value)} 
-                    placeholder="Ketik spesifikasi khusus untuk penawaran ini..." 
-                    className="min-h-[60px]"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Jumlah (Volume)</Label>
-                    <Input 
-                      type="number" 
-                      value={newItemQty || 0} 
-                      onChange={e => setNewItemQty(Math.max(0, Number(e.target.value)))} 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Satuan</Label>
-                    <Input value={newItemUnit} onChange={e => setNewItemUnit(e.target.value)} placeholder="m3, m2, kg, dll" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Harga Satuan (Rp)</Label>
-                  <Input 
-                    type="number" 
-                    value={newItemPrice || 0} 
-                    onChange={e => setNewItemPrice(Math.max(0, Number(e.target.value)))} 
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Prioritas Pekerjaan</Label>
-                  <select 
-                    className="w-full p-2 border rounded-md"
-                    value={newItemPriority}
-                    onChange={e => setNewItemPriority(e.target.value as any)}
-                  >
-                    <option value="Low">Low (Pekerjaan Minor)</option>
-                    <option value="Medium">Medium (Standar)</option>
-                    <option value="High">High (Krusal/Struktur)</option>
-                    <option value="Urgent">Urgent (Darurat)</option>
-                  </select>
-                </div>
-                
-                <div className="p-3 bg-neutral-50 rounded-lg border border-neutral-200">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Estimasi Total:</span>
-                    <span className="text-lg font-bold">Rp {(newItemQty * newItemPrice).toLocaleString('id-ID')}</span>
-                  </div>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={() => { 
-                  if(selectedCatId && newItemName) {
-                    addItem(selectedCatId, newItemName, newItemQty, newItemUnit, newItemPrice, newItemSpecs, newItemPriority);
-                    setNewItemName("");
-                    setNewItemSpecs("");
-                    setNewItemQty(1);
-                    setNewItemPrice(0);
-                    setNewItemPriority("Medium");
-                    setSearchQuery("");
-                  }
-                }}>Simpan ke RAB</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
       )}
 
-      <div className="space-y-12">
-        {categories.map(category => (
-          <div key={category.id} className="space-y-4">
-            <div className="flex justify-between items-center border-b pb-2">
-              <div className="flex items-center gap-4">
-                <h3 className="text-xl font-bold">{category.name}</h3>
-                {canEdit && (
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50"
-                    onClick={() => {
-                      if(confirm(`Hapus kategori "${category.name}" dan semua item di dalamnya?`)) {
-                        deleteCategory(category.id);
-                      }
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
-              <Badge variant="outline">
-                {formatRupiah(user?.role === "admin" || user?.role === "pm" 
-                  ? calculateAdminPrice(items.filter(i => i.categoryId === category.id).reduce((sum, i) => sum + i.totalPrice, 0), sysConfig?.globalMarkup) 
-                  : calculateClientPrice(items.filter(i => i.categoryId === category.id).reduce((sum, i) => sum + i.totalPrice, 0), sysConfig?.globalMarkup))}
-              </Badge>
-            </div>
-            <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Uraian Pekerjaan</TableHead>
-                    <TableHead className="text-center">Volume</TableHead>
-                    <TableHead className="text-center">Satuan</TableHead>
-                    <TableHead className="text-right">Harga Satuan</TableHead>
-                    <TableHead className="text-right">Jumlah Harga</TableHead>
-                    <TableHead className="w-[80px] text-center">Prioritas</TableHead>
-                    <TableHead className="w-[100px] text-center">Bobot (%)</TableHead>
-                    <TableHead className="w-[100px] text-center">Progress (%)</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.filter(i => i.categoryId === category.id).map(item => (
-                    <TableRow key={item.id} className="group/row">
-                      <TableCell className="font-medium">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-bold uppercase tracking-tight">{item.name}</span>
-                            <button 
-                              className="text-neutral-300 hover:text-accent transition-colors opacity-0 group-hover/row:opacity-100 transition-opacity"
-                              onClick={() => setEditingItemSpecs({ id: item.id, name: item.name, specs: item.technicalSpecs || "" })}
-                              title="Edit Spesifikasi Teknis"
-                            >
-                               <Minus className="w-3 h-3" />
-                            </button>
+      {activeTab === "rab" && (
+        <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-neutral-50 p-6 rounded-[2rem] border-2 border-black/5 gap-4">
+             <div className="flex flex-wrap gap-4 w-full md:w-auto">
+                <Button variant="outline" className="flex-1 md:flex-none h-12 px-6 border-2 border-black rounded-2xl gap-2 font-black uppercase text-[10px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-100" onClick={() => {
+                  const cats = categories.map(c => ({ id: c.id, name: c.name }));
+                  const formattedItems = items.map(item => ({
+                    name: item.name,
+                    unit: item.unit,
+                    quantity: item.quantity,
+                    pricePerUnit: user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(item.pricePerUnit, sysConfig?.globalMarkup) : calculateClientPrice(item.pricePerUnit, sysConfig?.globalMarkup),
+                    totalPrice: user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(item.totalPrice, sysConfig?.globalMarkup) : calculateClientPrice(item.totalPrice, sysConfig?.globalMarkup),
+                    categoryId: item.categoryId,
+                    technicalSpecs: item.technicalSpecs
+                  }));
+                  generateRABPDF(`RAB ${project.name}`, cats, formattedItems, pdfLogo, { name: project.name, location: project.description || "Jakarta", client: user?.displayName || "Klien Terhomat" });
+                  toast.success("RAB PDF Generated!");
+                }}>
+                  <Download className="w-4 h-4" /> Export RAB PDF
+                </Button>
+                
+                {canEditRAB && (
+                  <div className="flex gap-3">
+                    <Dialog>
+                      <DialogTrigger render={<Button className="btn-accent h-12 px-6 rounded-2xl gap-2 font-black uppercase text-[10px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"><Plus className="w-4 h-4" /> Kategori</Button>} />
+                      <DialogContent>
+                        <DialogHeader><DialogTitle className="font-black uppercase tracking-tighter">Tambah Kategori Baru</DialogTitle></DialogHeader>
+                        <div className="py-4 space-y-4">
+                          <div className="space-y-2">
+                             <Label className="uppercase-soft text-[10px]">Nama Kategori</Label>
+                             <Input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Contoh: Pekerjaan Tanah" className="h-12 border-2 border-black/10 rounded-xl" />
                           </div>
-                          {item.technicalSpecs && (
-                            <div className="flex items-center gap-1">
-                              <div className="w-1 h-1 rounded-full bg-accent/30" />
-                              <p className="text-[9px] italic text-neutral-400 font-normal leading-tight">
-                                {item.technicalSpecs}
-                              </p>
-                            </div>
-                          )}
                         </div>
-                      </TableCell>
-                      <TableCell className="text-center">{item.quantity}</TableCell>
-                      <TableCell className="text-center">{item.unit}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px]">
-                        {formatRupiah(user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(item.pricePerUnit, sysConfig?.globalMarkup) : calculateClientPrice(item.pricePerUnit, sysConfig?.globalMarkup))}
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-bold text-[10px]">
-                        {formatRupiah(user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(item.totalPrice, sysConfig?.globalMarkup) : calculateClientPrice(item.totalPrice, sysConfig?.globalMarkup))}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <select 
-                          disabled={!canEdit}
-                          className={cn(
-                            "text-[8px] p-1 border-2 border-black rounded-md font-bold uppercase disabled:opacity-50",
-                            item.priority === "Urgent" ? "bg-red-50 text-red-600 border-red-200" :
-                            item.priority === "High" ? "bg-orange-50 text-orange-600 border-orange-200" :
-                            item.priority === "Low" ? "bg-blue-50 text-blue-600 border-blue-200" :
-                            "bg-white"
-                          )}
-                          value={item.priority || "Medium"}
-                          onChange={(e) => updateItem(item.id, { priority: e.target.value as any })}
-                        >
-                          <option value="Low">Low</option>
-                          <option value="Medium">Medium</option>
-                          <option value="High">High</option>
-                          <option value="Urgent">Urgent</option>
-                        </select>
-                      </TableCell>
-                      <TableCell className="text-center text-[10px] font-bold">
-                        {((item.totalPrice / (project.totalBudget || 1)) * 100).toFixed(2)}%
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Input 
-                          disabled={!canEdit}
-                          type="number" 
-                          className="w-16 h-8 text-center mx-auto rounded-md border-black/20 disabled:opacity-50" 
-                          value={item.progress || 0}
-                          onChange={(e) => {
-                            updateItemProgress(item.id, Math.max(0, Math.min(100, Number(e.target.value))));
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {canEdit && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-neutral-400 hover:text-red-600"
-                            onClick={() => deleteItem(item.id, item.totalPrice)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {items.filter(i => i.categoryId === category.id).length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-neutral-400 italic">Belum ada item di kategori ini.</TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                        <DialogFooter><Button className="btn-sleek w-full h-12" onClick={() => { addCategory(newCatName); setNewCatName(""); }}>Simpan</Button></DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                    
+                    <Dialog>
+                      <DialogTrigger render={<Button className="btn-sleek h-12 px-6 rounded-2xl gap-2 font-black uppercase text-[10px] shadow-[4px_4px_0px_0px_#FF6B00]"><Plus className="w-4 h-4" /> Item RAB</Button>} />
+                      <DialogContent className="max-w-xl">
+                        <DialogHeader><DialogTitle className="font-black uppercase tracking-tighter">Tambah Item RAB</DialogTitle></DialogHeader>
+                        <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto pr-2 no-scrollbar">
+                           <div className="space-y-2">
+                              <Label className="uppercase-soft text-[10px]">Kategori</Label>
+                              <select className="w-full h-12 px-4 border-2 border-black/10 rounded-xl font-bold uppercase text-xs" value={selectedCatId} onChange={e => setSelectedCatId(e.target.value)}>
+                                <option value="">Pilih Kategori</option>
+                                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                              </select>
+                           </div>
+                           <div className="space-y-2 relative">
+                              <Label className="uppercase-soft text-[10px]">Cari Pekerjaan (Master Data)</Label>
+                              <div className="relative">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                                <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Ketik nama pekerjaan..." className="h-12 pl-11 border-2 border-black/10 rounded-xl" />
+                              </div>
+                              {isSearching && searchResults.length > 0 && (
+                                <div className="absolute z-50 w-full mt-2 bg-white border-2 border-black rounded-2xl shadow-xl max-h-60 overflow-auto scrollbar-hide">
+                                  {searchResults.map(item => (
+                                    <div key={item.id} className="p-4 hover:bg-neutral-50 cursor-pointer border-b-2 border-black/5 last:border-0" onClick={() => selectMasterItem(item)}>
+                                      <div className="flex justify-between items-center mb-1"><span className="font-black text-[11px] uppercase tracking-tighter">{item.name}</span><Badge variant="outline" className="text-[9px] border-black/10 uppercase-soft">{item.category}</Badge></div>
+                                      <div className="flex justify-between text-[10px] font-bold text-neutral-400 italic"><span>Satuan: {item.unit}</span><span>Rp {item.price.toLocaleString('id-ID')}</span></div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                           </div>
+                           <div className="space-y-2"><Label className="uppercase-soft text-[10px]">Nama Item</Label><Input value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="Nama pekerjaan..." className="h-12 border-2 border-black/10 rounded-xl" /></div>
+                           <div className="space-y-2"><Label className="uppercase-soft text-[10px]">Spesifikasi Teknis</Label><Textarea value={newItemSpecs} onChange={e => setNewItemSpecs(e.target.value)} placeholder="Merk, Tipe, Material..." className="min-h-[80px] border-2 border-black/10 rounded-xl" /></div>
+                           <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2"><Label className="uppercase-soft text-[10px]">Volume</Label><Input type="number" value={newItemQty || 0} onChange={e => setNewItemQty(Math.max(0, Number(e.target.value)))} className="h-12 border-2 border-black/10 rounded-xl" /></div>
+                              <div className="space-y-2"><Label className="uppercase-soft text-[10px]">Satuan</Label><Input value={newItemUnit} onChange={e => setNewItemUnit(e.target.value)} className="h-12 border-2 border-black/10 rounded-xl" /></div>
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label className="uppercase-soft text-[10px]">Prioritas</Label>
+                                <select className="w-full h-12 px-4 border-2 border-black/10 rounded-xl font-bold uppercase text-xs" value={newItemPriority} onChange={e => setNewItemPriority(e.target.value as any)}>
+                                  <option value="Low">Low</option>
+                                  <option value="Medium">Medium</option>
+                                  <option value="High">High</option>
+                                  <option value="Urgent">Urgent</option>
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="uppercase-soft text-[10px]">Deadline / Due Date</Label>
+                                <Input type="date" value={newItemDueDate} onChange={e => setNewItemDueDate(e.target.value)} className="h-12 border-2 border-black/10 rounded-xl" />
+                              </div>
+                           </div>
+                           <div className="space-y-2"><Label className="uppercase-soft text-[10px]">Harga Satuan (Rp)</Label><Input type="number" value={newItemPrice || 0} onChange={e => setNewItemPrice(Math.max(0, Number(e.target.value)))} className="h-12 border-2 border-black/10 rounded-xl" /></div>
+                        </div>
+                        <DialogFooter><Button className="btn-accent w-full h-12 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" onClick={() => { if(selectedCatId && newItemName) { addItem(selectedCatId, newItemName, newItemQty, newItemUnit, newItemPrice, newItemSpecs, newItemPriority, 0, newItemDueDate); setNewItemName(""); setNewItemSpecs(""); setNewItemQty(1); setNewItemPrice(0); setNewItemPriority("Medium"); setNewItemDueDate(""); setSearchQuery(""); } }}>Simpan Item</Button></DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                )}
+             </div>
+             <p className="font-black text-[11px] uppercase tracking-tighter">Total RAB: {formatRupiah(user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(project.totalBudget, sysConfig?.globalMarkup) : calculateClientPrice(project.totalBudget, sysConfig?.globalMarkup))}</p>
           </div>
-        ))}
-        {categories.length === 0 && (
-          <div className="py-20 text-center border-2 border-dashed rounded-2xl border-neutral-200">
-            <p className="text-neutral-500">Belum ada kategori anggaran. Silakan tambah kategori terlebih dahulu.</p>
-          </div>
-        )}
 
-        <div className="flex justify-center pt-8">
-          <Button 
-            className="btn-accent px-12 h-12 rounded-2xl shadow-lg gap-2"
-            onClick={() => {
-              const cats = categories.map(c => ({ id: c.id, name: c.name }));
-              const formattedItems = items.map(item => ({
-                name: item.name,
-                unit: item.unit,
-                quantity: item.quantity,
-                pricePerUnit: user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(item.pricePerUnit, sysConfig?.globalMarkup) : calculateClientPrice(item.pricePerUnit, sysConfig?.globalMarkup),
-                totalPrice: user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(item.totalPrice, sysConfig?.globalMarkup) : calculateClientPrice(item.totalPrice, sysConfig?.globalMarkup),
-                categoryId: item.categoryId,
-                technicalSpecs: item.technicalSpecs
-              }));
-              
-              generateRABPDF(
-                `RAB ${project.name}`,
-                cats,
-                formattedItems,
-                pdfLogo,
-                {
-                  name: project.name,
-                  location: project.description || "Jakarta",
-                  client: user?.displayName || "Klien Terhomat"
-                }
-              );
-              toast.success("Project RAB PDF Generated!");
-            }}
-          >
-            <Download className="w-5 h-5" /> Download Professional PDF RAB
-          </Button>
+          <div className="space-y-12">
+            {categories.map(category => (
+              <div key={category.id} className="space-y-6">
+                <div className="flex justify-between items-center border-b-4 border-black pb-4">
+                  <div className="flex items-center gap-4">
+                    <h3 className="text-2xl font-black uppercase tracking-tighter italic">{category.name}</h3>
+                    {canEdit && (
+                      <Button variant="ghost" size="icon" className="h-10 w-10 text-red-500 hover:bg-neutral-100 rounded-full" onClick={() => { if(confirm(`Hapus kategori "${category.name}"?`)) deleteCategory(category.id); }}><Trash2 className="w-5 h-5" /></Button>
+                    )}
+                  </div>
+                  <Badge className="bg-black text-white h-10 px-6 rounded-2xl font-black uppercase text-[12px] shadow-[4px_4px_0px_0px_#FF6B00]">
+                    Subtotal: {formatRupiah(user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(items.filter(i => i.categoryId === category.id).reduce((sum, i) => sum + i.totalPrice, 0), sysConfig?.globalMarkup) : calculateClientPrice(items.filter(i => i.categoryId === category.id).reduce((sum, i) => sum + i.totalPrice, 0), sysConfig?.globalMarkup))}
+                  </Badge>
+                </div>
+                
+                <div className="overflow-x-auto rounded-[2rem] border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] bg-white">
+                  <Table className="min-w-[900px]">
+                    <TableHeader>
+                      <TableRow className="bg-neutral-50 hover:bg-neutral-50 border-b-2 border-black">
+                        <TableHead className="w-[300px] uppercase font-black text-[10px] tracking-tight">Deskripsi Pekerjaan</TableHead>
+                        <TableHead className="text-center uppercase font-black text-[10px] tracking-tight">Prioritas</TableHead>
+                        <TableHead className="text-center uppercase font-black text-[10px] tracking-tight">Deadline</TableHead>
+                        <TableHead className="text-center uppercase font-black text-[10px] tracking-tight">Vol / Sat</TableHead>
+                        <TableHead className="text-right uppercase font-black text-[10px] tracking-tight">Harga Satuan</TableHead>
+                        <TableHead className="text-right uppercase font-black text-[10px] tracking-tight">Total</TableHead>
+                        <TableHead className="w-[140px] text-center uppercase font-black text-[10px] tracking-tight">Progress</TableHead>
+                        <TableHead className="w-[50px]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {items.filter(i => i.categoryId === category.id).map(item => (
+                        <TableRow key={item.id} className="group/row hover:bg-neutral-50 border-b border-black/5 last:border-0 transition-colors">
+                          <TableCell className="py-6">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-3">
+                                <span className="font-bold text-[13px] uppercase tracking-tighter leading-tight">{item.name}</span>
+                                {canEdit && <button onClick={() => setEditingItemSpecs({ id: item.id, name: item.name, specs: item.technicalSpecs || "" })} className="opacity-0 group-hover/row:opacity-100 transition-opacity"><Edit2 className="w-3 h-3 text-neutral-300 hover:text-accent" /></button>}
+                              </div>
+                              {item.technicalSpecs && <p className="text-[10px] font-medium text-neutral-400 italic">{item.technicalSpecs}</p>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className={cn(
+                              "text-[8px] uppercase font-bold",
+                              item.priority === 'Urgent' ? "border-red-500 text-red-500" :
+                              item.priority === 'High' ? "border-orange-500 text-orange-500" :
+                              item.priority === 'Medium' ? "border-blue-500 text-blue-500" : "border-neutral-300 text-neutral-300"
+                            )}>
+                              {item.priority || 'Medium'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center text-[10px] font-bold text-neutral-400">
+                             {item.endDate ? new Date(item.endDate).toLocaleDateString('id-ID') : '-'}
+                          </TableCell>
+                          <TableCell className="text-center">
+                             <p className="font-black text-xs">{item.quantity}</p>
+                             <p className="text-[10px] font-bold uppercase text-neutral-400">{item.unit}</p>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs">
+                            {formatRupiah(user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(item.pricePerUnit, sysConfig?.globalMarkup) : calculateClientPrice(item.pricePerUnit, sysConfig?.globalMarkup))}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-black text-xs text-accent">
+                            {formatRupiah(user?.role === "admin" || user?.role === "pm" ? calculateAdminPrice(item.totalPrice, sysConfig?.globalMarkup) : calculateClientPrice(item.totalPrice, sysConfig?.globalMarkup))}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col items-center gap-2">
+                               <div className="flex justify-between w-full px-1"><span className="text-[9px] font-black uppercase text-neutral-400">Status</span><span className="text-[10px] font-black text-accent">{item.progress || 0}%</span></div>
+                               <Progress value={item.progress || 0} className="h-1.5 bg-neutral-100" />
+                               {canEdit && (
+                                 <input type="range" min="0" max="100" step="10" value={item.progress || 0} onChange={(e) => updateItemProgress(item.id, Number(e.target.value))} className="w-full accent-accent h-1" />
+                               )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                             {canEdit && (
+                               <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-200 hover:text-red-500 rounded-full" onClick={() => { if(confirm(`Hapus item?`)) deleteItem(item.id, item.totalPrice); }}><Trash2 className="w-4 h-4" /></Button>
+                             )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {categories.length === 0 && (
+            <div className="py-20 text-center border-4 border-dashed rounded-[3rem] border-black/5 bg-neutral-50/50">
+              <FileText className="w-12 h-12 mx-auto text-neutral-200 mb-4" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Belum ada kategori anggaran. Silakan hubungi Admin atau tambahkan kategori.</p>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       <Dialog open={!!editingItemSpecs} onOpenChange={(open) => !open && setEditingItemSpecs(null)}>
         <DialogContent className="sm:max-w-md">
@@ -1287,22 +1798,27 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
           )}
 
           {step === 2 && (
-            <div className="p-12 space-y-12">
-              <div className="flex justify-between items-end border-b-2 border-black pb-6">
-                <h2 className="text-4xl font-black uppercase tracking-tighter flex items-center gap-4">
-                  <MapPin className="w-10 h-10" /> Detail Proyek
+            <div className="p-6 md:p-12 space-y-8 md:space-y-12">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-2 border-neutral-200 pb-6 gap-4">
+                <h2 className="text-2xl md:text-4xl font-black uppercase tracking-tighter flex items-center gap-3">
+                  <MapPin className="w-8 md:w-10 h-8 md:h-10" /> Detail Proyek
                 </h2>
-                <p className="uppercase-soft text-neutral-400">Step 02 / 05</p>
+                <div className="flex items-center gap-4">
+                  <Button variant="ghost" size="sm" className="h-8 md:h-10 text-[8px] md:text-[10px] font-black uppercase tracking-widest text-neutral-400" onClick={() => setStep(1)}>
+                    &larr; Categories
+                  </Button>
+                  <p className="uppercase-soft text-neutral-400 text-[10px] md:text-xs">Step 02 / 05</p>
+                </div>
               </div>
               
-              <div className="grid gap-12 md:grid-cols-2">
-                <div className="space-y-8">
+              <div className="grid gap-8 md:gap-12 md:grid-cols-2">
+                <div className="space-y-6 md:space-y-8">
                   <div className="space-y-4">
                     <label className="uppercase-soft text-neutral-400">Lokasi Proyek</label>
                     <div className="flex gap-2">
                       <Input 
                         placeholder="Ketik alamat atau area..." 
-                        className="input-sleek text-lg"
+                        className="input-sleek text-sm md:text-lg"
                         value={projectData.location}
                         onChange={(e) => setProjectData(prev => ({ ...prev, location: e.target.value }))}
                         onKeyDown={(e) => {
@@ -1311,7 +1827,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                       />
                       <Button 
                         variant="outline" 
-                        className="rounded-md border-black h-12 w-12 p-0 flex items-center justify-center" 
+                        className="rounded-md border-black h-10 md:h-12 w-10 md:w-12 p-0 flex items-center justify-center bg-white" 
                         onClick={() => searchLocation(projectData.location)}
                         disabled={isSearchingLocation}
                       >
@@ -1323,28 +1839,28 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
 
                   {projectData.type === "Renovasi" && (
                     <div className="space-y-6">
-                      <div className="border-2 border-black overflow-hidden rounded-2xl">
+                      <div className="border border-neutral-200 overflow-hidden rounded-2xl bg-white shadow-sm">
                         <div 
                           onClick={() => setExpandedRenovasi(!expandedRenovasi)}
                           className={cn(
-                            "p-6 flex justify-between items-center cursor-pointer transition-colors",
+                            "p-5 md:p-6 flex justify-between items-center cursor-pointer transition-colors",
                             selectedCategories.filter(c => c !== "Lain-lain").length > 0 ? "bg-black text-white" : "hover:bg-neutral-50"
                           )}
                         >
                           <div className="flex items-center gap-3">
-                            <Wrench className="w-6 h-6" />
-                            <span className="font-black uppercase tracking-tighter text-lg">Item Renovasi Utama</span>
+                            <Wrench className="w-5 md:w-6 h-5 md:h-6" />
+                            <span className="font-black uppercase tracking-tighter text-base md:text-lg">Item Renovasi Utama</span>
                           </div>
-                          {expandedRenovasi ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                          {expandedRenovasi ? <ChevronUp className="w-4 md:w-5 h-4 md:h-5" /> : <ChevronDown className="w-4 md:w-5 h-4 md:h-5" />}
                         </div>
                         {expandedRenovasi && (
-                          <div className="p-6 bg-neutral-50 grid grid-cols-2 gap-3">
+                          <div className="p-4 md:p-6 bg-neutral-50 grid grid-cols-2 gap-2 md:gap-3">
                             {["Dinding", "Lantai", "Atap", "Plafon", "Cat", "Kamar Mandi"].map(item => (
                               <div 
                                 key={item}
                                 onClick={() => toggleCategory(item)}
                                 className={cn(
-                                  "p-4 border-2 font-bold uppercase tracking-widest text-[10px] cursor-pointer text-center transition-all bg-white rounded-xl",
+                                  "p-3 md:p-4 border-2 font-bold uppercase tracking-widest text-[9px] md:text-[10px] cursor-pointer text-center transition-all bg-white rounded-xl",
                                   selectedCategories.includes(item) ? "border-black bg-black text-white" : "border-neutral-200 hover:border-black"
                                 )}
                               >
@@ -1355,22 +1871,22 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         )}
                       </div>
 
-                      <div className="space-y-6 pt-6 border-t-2 border-black/5">
-                        <div className="space-y-4">
-                          <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
-                            <Calculator className="w-6 h-6 text-accent" /> AI Analysis & Photos
+                      <div className="space-y-6 pt-6 border-t border-neutral-100">
+                        <div className="space-y-3">
+                          <h3 className="text-lg md:text-xl font-black uppercase tracking-tighter flex items-center gap-2">
+                            <Calculator className="w-5 md:w-6 h-5 md:h-6 text-accent" /> AI Analysis & Photos
                           </h3>
-                          <p className="uppercase-soft text-neutral-400">Ceritakan detail renovasi Anda dan upload foto untuk analisa AI yang lebih akurat.</p>
+                          <p className="uppercase-soft text-neutral-400 text-[10px] md:text-xs">Ceritakan detail renovasi Anda dan upload foto untuk analisa AI yang lebih akurat.</p>
                         </div>
                         
-                        <div className="space-y-6 p-8 border-2 border-black animate-in fade-in slide-in-from-top-4 rounded-2xl">
+                        <div className="space-y-6 p-6 md:p-8 border border-neutral-200 bg-white animate-in fade-in slide-in-from-top-4 rounded-2xl shadow-sm">
                           <div className="space-y-2">
                             <label className="uppercase-soft text-neutral-400">Luas Area Renovasi (m2)</label>
                               <Input 
                                 type="number" 
                                 value={projectData.area} 
                                 onChange={e => setProjectData({...projectData, area: e.target.value === "" ? "" : Number(e.target.value)})}
-                                placeholder="_"
+                                placeholder="0"
                                 className="input-sleek"
                               />
                           </div>
@@ -1380,27 +1896,27 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                               placeholder="Contoh: Dinding saya retak rambut di area ruang tamu..." 
                               value={userProblem}
                               onChange={e => setUserProblem(e.target.value)}
-                              className="min-h-[150px] border-black/10 focus:border-black rounded-md resize-none"
+                              className="min-h-[120px] md:min-h-[150px] border-neutral-200 focus:border-black rounded-xl resize-none"
                             />
                           </div>
                             
                           <div className="space-y-4">
                             <label className="uppercase-soft text-neutral-400">Upload Foto Permasalahan</label>
-                            <div className="flex flex-wrap gap-4">
+                            <div className="flex flex-wrap gap-2 md:gap-4">
                               {problemPhotos.map((p, i) => (
-                                <div key={i} className="w-24 h-24 border-2 border-black overflow-hidden relative group rounded-xl">
+                                <div key={i} className="w-20 md:w-24 h-20 md:h-24 border border-neutral-200 overflow-hidden relative group rounded-xl">
                                   <img src={p} className="w-full h-full object-cover" />
                                   <button 
                                     onClick={() => setProblemPhotos(prev => prev.filter((_, idx) => idx !== i))}
                                     className="absolute inset-0 bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                                   >
-                                    <Trash2 className="w-6 h-6" />
+                                    <Trash2 className="w-5 h-5" />
                                   </button>
                                 </div>
                               ))}
-                              <label className="w-24 h-24 border-2 border-dashed border-neutral-300 flex flex-col items-center justify-center cursor-pointer hover:border-black transition-colors rounded-xl">
-                                <Camera className="w-8 h-8 text-neutral-400" />
-                                <span className="uppercase-soft mt-2">Add Photo</span>
+                              <label className="w-20 md:w-24 h-20 md:h-24 border-2 border-dashed border-neutral-200 flex flex-col items-center justify-center cursor-pointer hover:border-black transition-colors rounded-xl bg-neutral-50/50">
+                                <Camera className="w-6 md:w-8 h-6 md:h-8 text-neutral-400" />
+                                <span className="uppercase-soft mt-1 md:mt-2 text-[8px] md:text-[10px]">Add Photo</span>
                                 <input 
                                   type="file" 
                                   className="hidden" 
@@ -1456,15 +1972,15 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         )}
                       </div>
 
-                      <div className="space-y-6 pt-6 border-t-2 border-black/5">
+                      <div className="space-y-6 pt-6 border-t border-neutral-100">
                         <div className="space-y-4">
                           <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
                             <Calculator className="w-6 h-6 text-accent" /> AI Maintenance Analysis
                           </h3>
-                          <p className="uppercase-soft text-neutral-400">Ceritakan kebutuhan perawatan atau perbaikan minor Anda.</p>
+                          <p className="uppercase-soft text-neutral-400 text-[10px] md:text-xs">Ceritakan kebutuhan perawatan atau perbaikan minor Anda.</p>
                         </div>
                         
-                        <div className="space-y-6 p-8 border-2 border-black animate-in fade-in slide-in-from-top-4 rounded-2xl">
+                        <div className="space-y-6 p-4 md:p-8 border border-neutral-200 animate-in fade-in slide-in-from-top-4 rounded-2xl bg-white/50">
                           <div className="space-y-2">
                             <label className="uppercase-soft text-neutral-400">Detail Pekerjaan Maintenance</label>
                             <Textarea 
@@ -1536,15 +2052,15 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         ))}
                       </div>
 
-                      <div className="space-y-6 pt-6 border-t-2 border-black/5">
+                      <div className="space-y-6 pt-6 border-t border-neutral-100">
                         <div className="space-y-4">
                           <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
                             <Calculator className="w-6 h-6 text-accent" /> AI Design Analysis
                           </h3>
-                          <p className="uppercase-soft text-neutral-400">Input spesifikasi untuk analisa AI yang lebih akurat.</p>
+                          <p className="uppercase-soft text-neutral-400 text-[10px] md:text-xs">Input spesifikasi untuk analisa AI yang lebih akurat.</p>
                         </div>
                         
-                        <div className="space-y-6 p-8 border-2 border-black animate-in fade-in slide-in-from-top-4 rounded-2xl">
+                        <div className="space-y-6 p-4 md:p-8 border border-neutral-200 animate-in fade-in slide-in-from-top-4 rounded-2xl bg-white/50">
                           <div className="grid grid-cols-3 gap-4">
                             <div className="space-y-2">
                               <label className="uppercase-soft text-neutral-400">Luas Area (m2)</label>
@@ -1932,27 +2448,27 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                   {/* Removed duplicate Maintenance section and redundant area input */}
                 </div>
 
-                <div className="space-y-8 bg-neutral-50 p-12 border border-black/5">
+                <div className="space-y-8 bg-neutral-50 p-6 md:p-12 border border-black/5 rounded-2xl">
                   <div className="space-y-6">
-                    <h3 className="font-black uppercase tracking-tighter text-2xl">Project Summary</h3>
-                    <div className="space-y-4">
+                    <h3 className="font-black uppercase tracking-tighter text-xl md:text-2xl">Project Summary</h3>
+                    <div className="space-y-3 md:space-y-4">
                       <div className="flex justify-between uppercase-soft border-b border-black/5 pb-2">
                         <span className="text-neutral-400">Category</span>
-                        <span className="font-black">{projectData.type}</span>
+                        <span className="font-black text-xs md:text-sm">{projectData.type}</span>
                       </div>
                       <div className="flex justify-between uppercase-soft border-b border-black/5 pb-2">
                         <span className="text-neutral-400">Location</span>
-                        <span className="font-black truncate max-w-[150px]">{projectData.location || "-"}</span>
+                        <span className="font-black truncate max-w-[120px] md:max-w-[200px] text-xs md:text-sm">{projectData.location || "-"}</span>
                       </div>
                       <div className="flex justify-between uppercase-soft border-b border-black/5 pb-2">
                         <span className="text-neutral-400">Area</span>
-                        <span className="font-black">{projectData.area} m2</span>
+                        <span className="font-black text-xs md:text-sm">{projectData.area} m2</span>
                       </div>
                     </div>
                   </div>
-                      <div className="pt-8 flex flex-col gap-4">
+                      <div className="pt-6 md:pt-8 flex flex-col gap-4">
                         <Button 
-                          className="w-full btn-orange h-20 text-xl font-black uppercase tracking-widest shadow-xl shadow-accent/20 transition-all active:scale-[0.98]" 
+                          className="w-full btn-orange h-16 md:h-20 text-lg md:text-xl font-black uppercase tracking-widest shadow-xl shadow-accent/20 transition-all active:scale-[0.98]" 
                           onClick={() => {
                             if (projectData.type === "Renovasi" && !userProblem) {
                               toast.warning("Mohon jelaskan detail renovasi", { description: "Sedikit cerita membantu AI memberikan estimasi lebih akurat." });
@@ -1963,24 +2479,24 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                           disabled={isAnalyzing}
                         >
                           {isAnalyzing ? (
-                            <div className="flex items-center gap-4">
-                              <Loader2 className="h-6 w-6 animate-spin" />
-                              <span>Mempersiapkan Analisa AI...</span>
+                            <div className="flex items-center gap-3 md:gap-4">
+                              <Loader2 className="h-5 md:h-6 w-5 md:h-6 animate-spin" />
+                              <span className="text-sm md:text-base">Analisa AI...</span>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-4">
-                              <span>PROSES ESTIMASI AI</span>
-                              <Zap className="w-6 h-6 fill-current" />
+                            <div className="flex items-center gap-3 md:gap-4">
+                              <span className="text-sm md:text-base">ESTIMASI AI</span>
+                              <Zap className="w-5 md:w-6 h-5 md:h-6 fill-current" />
                             </div>
                           )}
                         </Button>
                     <Button 
                       variant="ghost" 
-                      className="w-full text-[10px] font-bold uppercase tracking-widest text-neutral-400 hover:text-black" 
+                      className="w-full text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-neutral-400 hover:text-black" 
                       onClick={handleBack} 
                       disabled={isAnalyzing}
                     >
-                      &larr; Back to Categories
+                      &larr; Previous Step
                     </Button>
                   </div>
                 </div>
@@ -1989,26 +2505,26 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
           )}
 
           {step === 3 && (
-            <div className="p-12 space-y-12">
-              <div className="flex justify-between items-end border-b-2 border-black pb-6">
-                <h2 className="text-4xl font-black uppercase tracking-tighter">Volume Pekerjaan</h2>
-                <p className="uppercase-soft text-neutral-400">Step 03 / 05</p>
+            <div className="p-6 md:p-12 space-y-8 md:space-y-12">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-2 border-neutral-200 pb-6 gap-4">
+                <h2 className="text-2xl md:text-4xl font-black uppercase tracking-tighter">Volume Pekerjaan</h2>
+                <p className="uppercase-soft text-neutral-400 text-[10px] md:text-xs">Step 03 / 05</p>
               </div>
-              <div className="grid gap-12 md:grid-cols-3">
-                <div className="md:col-span-2 space-y-8 max-h-[60vh] overflow-auto pr-6 custom-scrollbar">
+              <div className="grid gap-8 md:gap-12 md:grid-cols-3">
+                <div className="md:col-span-2 space-y-8 max-h-[50vh] md:max-h-[60vh] overflow-auto pr-4 md:pr-6 custom-scrollbar">
                   {projectData.type === "Interior" ? (
-                    <div className="space-y-8">
-                      <div className="p-8 border-2 border-black bg-neutral-50 space-y-4">
-                        <p className="uppercase-soft text-neutral-400">Interior Note</p>
-                        <p className="text-sm font-bold leading-relaxed italic">"Detail interior telah diinput pada tahap sebelumnya. Silakan tinjau kembali ringkasan di samping atau lanjutkan ke verifikasi."</p>
+                    <div className="space-y-6 md:space-y-8">
+                      <div className="p-6 md:p-8 border border-neutral-200 bg-neutral-50/50 rounded-2xl space-y-4">
+                        <p className="uppercase-soft text-neutral-400 text-[9px]">Interior Note</p>
+                        <p className="text-xs md:text-sm font-bold leading-relaxed italic opacity-70">"Detail interior telah diinput pada tahap sebelumnya. Silakan tinjau kembali ringkasan di samping atau lanjutkan ke verifikasi."</p>
                       </div>
                       {Object.entries(interiorDetails).map(([room, items]) => (
-                        <div key={room} className="p-8 border-2 border-black space-y-6">
-                          <h4 className="text-xl font-black uppercase tracking-tighter border-b border-black/10 pb-4">{room}</h4>
-                          <div className="grid gap-4">
+                        <div key={room} className="p-6 md:p-8 border border-neutral-200 rounded-2xl space-y-6 bg-white">
+                          <h4 className="text-lg md:text-xl font-black uppercase tracking-tighter border-b border-black/5 pb-4">{room}</h4>
+                          <div className="grid gap-3 md:gap-4 text-[11px] md:text-sm">
                             {Object.entries(items).map(([name, detail]) => (
-                              <div key={name} className="flex justify-between items-center text-sm">
-                                <span className="font-bold uppercase tracking-widest text-[10px]">{name}</span>
+                              <div key={name} className="flex justify-between items-center">
+                                <span className="font-bold uppercase tracking-widest opacity-60">{name}</span>
                                 <span className="font-mono font-bold">{detail.size} {masterData.find(i => i.name === name)?.unit || "m2"}</span>
                               </div>
                             ))}
@@ -2019,21 +2535,21 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                   ) : (
                     selectedCategories.length > 0 ? selectedCategories.map(cat => (
                       <div key={cat} className="space-y-6">
-                        <h3 className="font-black uppercase tracking-tighter text-xl flex items-center gap-3">
-                          <Layers className="w-6 h-6" /> {cat}
+                        <h3 className="font-black uppercase tracking-tighter text-lg md:text-xl flex items-center gap-3">
+                          <Layers className="w-5 md:w-6 h-5 md:h-6" /> {cat}
                         </h3>
-                        <div className="grid gap-4">
+                        <div className="grid gap-3 md:gap-4">
                           {(masterData.length > 0 ? masterData : WORK_ITEMS_MASTER).filter(i => i.category.toLowerCase().includes(cat.toLowerCase())).slice(0, 3).map(item => {
                             const selected = selectedItems.find(si => si.item.id === item.id);
                             return (
-                              <div key={item.id} className="flex items-center gap-6 p-6 border-2 border-black bg-white">
+                              <div key={item.id} className="flex items-center gap-4 md:gap-6 p-5 md:p-6 border border-neutral-200 bg-white rounded-2xl shadow-sm">
                                 <div className="flex-grow">
-                                  <p className="font-black uppercase tracking-widest text-[10px]">{item.name}</p>
+                                  <p className="font-black uppercase tracking-widest text-[9px] md:text-[10px]">{item.name}</p>
                                   <p className="uppercase-soft text-neutral-400 mt-1">{item.unit}</p>
                                 </div>
                                 <Input 
                                   type="number" 
-                                  className="w-32 h-12 border-black/20 focus:border-black rounded-md font-bold text-center" 
+                                  className="w-24 md:w-32 h-10 md:h-12 border-neutral-200 focus:border-black rounded-lg font-bold text-center" 
                                   placeholder="Vol"
                                   value={selected?.qty || ""}
                                   onChange={e => {
@@ -2051,8 +2567,8 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         </div>
                       </div>
                     )) : (
-                      <div className="text-center py-20 border-2 border-dashed border-neutral-200">
-                        <p className="uppercase-soft text-neutral-400">
+                      <div className="text-center py-20 border-2 border-dashed border-neutral-200 rounded-[2rem]">
+                        <p className="uppercase-soft text-neutral-400 px-8">
                           Gunakan input luas area untuk kalkulasi otomatis atau pilih kategori di tahap sebelumnya.
                         </p>
                       </div>
@@ -2060,43 +2576,44 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                   )}
                 </div>
 
-                <div className="space-y-8 bg-neutral-50 p-12 border border-black/5">
+                <div className="space-y-8 bg-neutral-50 p-6 md:p-12 border border-black/5 rounded-2xl">
                   <div className="space-y-6">
-                    <h3 className="font-black uppercase tracking-tighter text-2xl">Project Summary</h3>
-                    <div className="space-y-4">
+                    <h3 className="font-black uppercase tracking-tighter text-xl md:text-2xl">Project Summary</h3>
+                    <div className="space-y-3 md:space-y-4">
                       <div className="flex justify-between uppercase-soft border-b border-black/5 pb-2">
                         <span className="text-neutral-400">Type</span>
-                        <span className="font-black">{projectData.type}</span>
+                        <span className="font-black text-xs md:text-sm">{projectData.type}</span>
                       </div>
                       <div className="flex justify-between uppercase-soft border-b border-black/5 pb-2">
                         <span className="text-neutral-400">Area</span>
-                        <span className="font-black">{projectData.area} m2</span>
+                        <span className="font-black text-xs md:text-sm">{projectData.area} m2</span>
                       </div>
                     </div>
                   </div>
-                  <div className="pt-12 flex flex-col gap-4">
+                  <div className="pt-6 md:pt-12 flex flex-col gap-4">
                     <Button 
-                      className="w-full btn-orange py-10 text-xl" 
+                      className="w-full btn-orange h-16 md:h-20 text-lg md:text-xl font-black uppercase tracking-widest shadow-xl shadow-accent/20" 
                       onClick={handleNext}
                       disabled={isAnalyzing}
                     >
                       {isAnalyzing ? (
                         <>
-                          <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-                          Analyzing...
+                          <Loader2 className="mr-2 h-5 md:h-6 w-5 md:h-6 animate-spin" />
+                          <span className="text-sm md:text-base">Analyzing...</span>
                         </>
                       ) : (
-                        <>
-                          Verify Data <ChevronRight className="ml-2 w-6 h-6" />
-                        </>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm md:text-base">Verify Data</span> 
+                          <ChevronRight className="w-5 md:w-6 h-5 md:h-6" />
+                        </div>
                       )}
                     </Button>
                     <Button 
                       variant="ghost" 
-                      className="w-full text-[11px] font-bold uppercase tracking-widest text-neutral-400 hover:text-black" 
+                      className="w-full text-[9px] md:text-[11px] font-bold uppercase tracking-widest text-neutral-400 hover:text-black" 
                       onClick={handleBack}
                     >
-                      &larr; Back to Details
+                      &larr; Previous Step
                     </Button>
                   </div>
                 </div>
@@ -2105,13 +2622,13 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
           )}
 
           {step === 4 && (
-            <div className="p-8 space-y-8">
-              <div className="text-center space-y-2">
-                <div className="w-16 h-16 bg-black text-white flex items-center justify-center mx-auto mb-4 rounded-xl">
-                  <UserCheck className="w-8 h-8" />
+            <div className="p-6 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4">
+              <div className="text-center space-y-3">
+                <div className="w-12 md:w-16 h-12 md:h-16 bg-black text-white flex items-center justify-center mx-auto mb-4 rounded-xl shadow-xl shadow-black/10">
+                  <UserCheck className="w-6 md:w-8 h-6 md:h-8" />
                 </div>
-                <h2 className="text-3xl font-black uppercase tracking-tighter">Tier 01: Verifikasi Data</h2>
-                <p className="text-neutral-500 text-sm">Mohon lengkapi data kontak Anda untuk menerima hasil estimasi lengkap.</p>
+                <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Tier 01: Verifikasi Data</h2>
+                <p className="text-neutral-500 text-[10px] md:text-sm px-6">Mohon lengkapi data kontak Anda untuk menerima hasil estimasi lengkap.</p>
               </div>
               <div className="max-w-md mx-auto space-y-6">
                 <div className="space-y-4">
@@ -2119,7 +2636,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                     <label className="uppercase-soft text-neutral-400">WhatsApp Number</label>
                     <Input 
                       placeholder="0812..." 
-                      className="input-sleek text-lg"
+                      className="h-12 md:h-14 border border-neutral-200 rounded-xl font-bold bg-white px-6"
                       value={leadData.whatsapp}
                       onChange={e => setLeadData({...leadData, whatsapp: e.target.value})}
                     />
@@ -2128,7 +2645,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                     <label className="uppercase-soft text-neutral-400">Email Address</label>
                     <Input 
                       placeholder="email@example.com" 
-                      className="input-sleek text-lg"
+                      className="h-12 md:h-14 border border-neutral-200 rounded-xl font-bold bg-white px-6"
                       value={leadData.email}
                       onChange={e => setLeadData({...leadData, email: e.target.value})}
                     />
@@ -2136,26 +2653,38 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                 </div>
                 {!isOtpSent ? (
                   <Button 
-                    className="w-full btn-orange"
+                    className="w-full btn-orange h-14 md:h-16 text-sm md:text-base"
                     onClick={handleLeadSubmit}
                     disabled={!leadData.whatsapp || !leadData.email}
                   >
                     Kirim Kode Verifikasi
                   </Button>
                 ) : (
-                  <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
+                  <div className="space-y-6 md:space-y-4 animate-in fade-in slide-in-from-bottom-4">
                     <div className="space-y-1">
                       <label className="uppercase-soft text-neutral-400">Kode Verifikasi (Cek WA)</label>
                       <Input 
                         placeholder="---" 
-                        className="input-sleek text-center text-2xl tracking-[1em]"
+                        className="h-14 md:h-16 border border-neutral-200 rounded-xl text-center text-xl md:text-2xl tracking-[0.5em] md:tracking-[1em] font-black bg-white"
                         value={otp}
                         onChange={e => setOtp(e.target.value)}
                       />
                     </div>
-                    <Button className="w-full btn-orange" onClick={() => handleVerifyOtp(otp)}>Verifikasi & Lihat Hasil</Button>
+                    <Button 
+                      className="w-full btn-orange h-14 md:h-16" 
+                      onClick={() => handleVerifyOtp(otp)}
+                    >
+                      Verifikasi & Lihat Hasil
+                    </Button>
                   </div>
                 )}
+                <Button 
+                  variant="ghost" 
+                  className="w-full text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-neutral-400" 
+                  onClick={handleBack}
+                >
+                  &larr; Previous Step
+                </Button>
               </div>
             </div>
           )}
@@ -2501,23 +3030,28 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
           )}
 
           {step === 10 && (
-            <div className="space-y-12 animate-in fade-in duration-500">
-              <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b-2 border-black pb-8">
-                <div className="space-y-2">
-                  <Badge variant="outline" className="border-accent text-accent uppercase font-black tracking-[0.2em] px-4 py-1">Phase: Market Insight</Badge>
-                  <h2 className="text-5xl font-black uppercase tracking-tighter text-black">TBJ Property Hub</h2>
-                  <p className="uppercase-soft text-neutral-500 max-w-xl">
+            <div className="p-4 md:p-8 space-y-8 md:space-y-12 animate-in fade-in duration-500">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-neutral-200 pb-8">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="sm" className="h-8 md:h-10 text-[8px] md:text-[10px] font-black uppercase tracking-widest text-neutral-400" onClick={() => setStep(1)}>
+                      &larr; Categories
+                    </Button>
+                    <Badge variant="outline" className="border-accent/20 text-accent uppercase font-black tracking-[0.2em] px-3 py-0.5 text-[8px] md:text-[10px]">Phase: Market Insight</Badge>
+                  </div>
+                  <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter text-black leading-none">TBJ Property Hub</h2>
+                  <p className="uppercase-soft text-neutral-500 max-w-xl text-[10px] md:text-sm">
                     Investasi Properti Strategis, Titip Bangun, dan Solusi Legalitas IMB/PBG dalam satu platform.
                   </p>
                 </div>
-                <div className="flex gap-2 p-1 bg-neutral-100 rounded-full">
+                <div className="flex flex-wrap gap-2 p-1 bg-neutral-100/50 rounded-2xl w-full md:w-auto">
                   {(['all', 'jual', 'legal', 'kerjasama'] as const).map((cat) => (
                     <Button 
                       key={cat}
                       variant="ghost" 
                       size="sm" 
                       className={cn(
-                        "rounded-full text-[8px] uppercase font-black px-4 h-8",
+                        "rounded-xl text-[7px] md:text-[8px] uppercase font-black px-3 md:px-4 h-8 flex-grow md:flex-grow-0",
                         (propFilter === cat || (cat === 'all' && !propFilter)) ? "bg-black text-white" : "text-neutral-400"
                       )}
                       onClick={() => setPropFilter(cat === 'all' ? null : cat as any)}
@@ -2529,26 +3063,26 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
               </div>
 
               {properties.filter(p => (p.published !== false) && (!propFilter || p.type === propFilter)).length > 0 ? (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="grid gap-6 md:gap-8 md:grid-cols-2 lg:grid-cols-3">
                   {properties
                     .filter(p => (p.published !== false) && (!propFilter || p.type === propFilter))
                     .map(p => (
-                    <Card key={p.id} className="border-2 border-black rounded-3xl overflow-hidden group hover:shadow-[0_20px_50px_rgba(255,107,0,0.1)] transition-all duration-500">
-                      <div className="h-48 relative overflow-hidden">
+                    <Card key={p.id} className="border border-neutral-200 rounded-2xl md:rounded-3xl overflow-hidden group hover:shadow-xl transition-all duration-500 bg-white">
+                      <div className="h-40 md:h-48 relative overflow-hidden">
                         <img 
                           src={getDriveImageUrl(p.photos[0]) || "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=800"} 
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
                           referrerPolicy="no-referrer" 
                         />
-                        <Badge className="absolute top-4 left-4 bg-black text-white px-3 py-1 rounded-md uppercase-soft text-[8px]">
+                        <Badge className="absolute top-3 md:top-4 left-3 md:left-4 bg-black/80 backdrop-blur-sm text-white px-2 md:px-3 py-1 rounded-lg uppercase-soft text-[7px] md:text-[8px] border-none">
                           {p.type === 'kerjasama' ? 'Synergy Lab' : p.type === 'jual' ? 'Jual & Sewa' : p.type === 'legal' ? 'Legal & Perizinan' : p.type}
                         </Badge>
                       </div>
-                      <CardContent className="p-6 space-y-4">
+                      <CardContent className="p-4 md:p-6 space-y-3 md:space-y-4">
                         <div className="flex justify-between items-start gap-4">
-                          <h3 className="text-lg font-black uppercase tracking-tighter leading-tight border-b-2 border-transparent hover:border-accent transition-all cursor-pointer">{p.title}</h3>
+                          <h3 className="text-base md:text-lg font-black uppercase tracking-tighter leading-tight group-hover:text-accent transition-colors cursor-pointer">{p.title}</h3>
                         </div>
-                        <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                        <div className="flex items-center gap-3 md:gap-4 text-[8px] md:text-[10px] font-black uppercase tracking-widest text-neutral-400">
                           <div className="flex items-center gap-1">
                             <MapPin className="w-3 h-3" /> {p.location || "Jakarta"}
                           </div>
@@ -2556,9 +3090,9 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                             <Layers className="w-3 h-3" /> {p.area} m2
                           </div>
                         </div>
-                        <div className="pt-4 border-t border-neutral-100 flex justify-between items-center">
-                          <p className="text-xl font-black text-accent">Rp {p.price.toLocaleString('id-ID')}</p>
-                          <Button variant="outline" size="sm" className="rounded-xl border-black text-[10px] font-black uppercase px-4 h-9" onClick={() => window.open(`https://wa.me/6281213496672?text=Halo Admin TBJ, saya tertarik dengan unit *${p.title}* yang ada di Property Hub. Mohon info lebih lanjut.`, '_blank')}>
+                        <div className="pt-3 md:pt-4 border-t border-neutral-100 flex justify-between items-center">
+                          <p className="text-lg md:text-xl font-black text-accent">Rp {p.price.toLocaleString('id-ID')}</p>
+                          <Button variant="outline" size="sm" className="rounded-xl border-neutral-200 text-[10px] md:text-[11px] font-black uppercase px-3 md:px-4 h-8 md:h-9" onClick={() => window.open(`https://wa.me/6281213496672?text=Halo Admin TBJ, saya tertarik dengan unit *${p.title}* yang ada di Property Hub. Mohon info lebih lanjut.`, '_blank')}>
                             Inquiry
                           </Button>
                         </div>
@@ -2567,18 +3101,18 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-20 space-y-6 bg-neutral-50 rounded-[40px] border-4 border-black border-dashed">
-                  <div className="w-24 h-24 bg-accent/10 text-accent rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                    <Home className="w-12 h-12" />
+                <div className="text-center py-16 md:py-20 space-y-6 bg-neutral-50 rounded-3xl md:rounded-[40px] border-2 md:border-4 border-neutral-200 border-dashed">
+                  <div className="w-20 md:w-24 h-20 md:h-24 bg-accent/10 text-accent rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                    <Home className="w-10 md:w-12 h-10 md:h-12" />
                   </div>
-                  <div className="space-y-4">
-                    <h3 className="text-3xl font-black uppercase tracking-tighter text-black">Listing Sedang Diperbarui</h3>
-                    <p className="uppercase-soft text-neutral-500 max-w-md mx-auto leading-relaxed">
+                  <div className="space-y-4 px-6">
+                    <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-black">Listing Sedang Diperbarui</h3>
+                    <p className="uppercase-soft text-neutral-500 max-w-md mx-auto leading-relaxed text-[10px] md:text-xs">
                       Katalog properti strategis sedang dalam fase sinkronisasi. Kami sedang memverifikasi unit baru untuk menjamin keamanan investasi Anda.
                     </p>
                   </div>
                   <Button 
-                    className="btn-accent h-14 px-10 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl"
+                    className="btn-accent h-12 md:h-14 px-8 md:px-10 rounded-xl md:rounded-2xl font-black uppercase tracking-widest text-[10px] md:text-xs shadow-xl shadow-accent/10"
                     onClick={() => window.open('https://wa.me/6281213496672', '_blank')}
                   >
                     Konsultasi Unit Offline
@@ -2586,9 +3120,9 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                 </div>
               )}
 
-              <div className="pt-10 flex justify-center">
-                <Button variant="ghost" className="h-14 px-10 uppercase font-black tracking-widest text-xs text-neutral-400 hover:text-black" onClick={() => setStep(1)}>
-                  &larr; Kembali ke Layanan Utama
+              <div className="pt-8 flex justify-center">
+                <Button variant="ghost" className="h-12 md:h-14 px-8 md:px-10 uppercase font-black tracking-widest text-[10px] md:text-xs text-neutral-400 hover:text-black" onClick={() => setStep(1)}>
+                  &larr; General Categories
                 </Button>
               </div>
             </div>
@@ -2671,6 +3205,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
 };
 
 const ClientDashboard = ({ user }: { user: any }) => {
+  const navigate = useNavigate();
   const { projects, loading } = useProjects(user.uid);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const { project, categories, items } = useProjectDetails(selectedProject || undefined);
@@ -2680,31 +3215,56 @@ const ClientDashboard = ({ user }: { user: any }) => {
 
   if (!selectedProject && projects.length > 0) {
     return (
-      <div className="space-y-8">
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Proyek Aktif Anda</h1>
-          <p className="text-neutral-500">Pantau progress pembangunan Anda secara real-time.</p>
+      <div className="space-y-12 animate-in fade-in duration-500">
+        <div className="text-center space-y-3">
+          <Badge variant="outline" className="border-black font-black uppercase text-[10px] tracking-[0.2em] px-6 py-1">Project Command Center</Badge>
+          <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tighter text-black">Monitoring Real-Time</h1>
+          <p className="text-neutral-500 uppercase-soft text-xs max-w-xl mx-auto leading-relaxed">
+            Pantau progress harian, transparansi RAB, dan dokumentasi visual proyek Anda 
+            langsung dari database TBJ OS.
+          </p>
         </div>
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-2 max-w-6xl mx-auto">
           {projects.map(p => (
-            <Card key={p.id} className="cursor-pointer hover:border-black transition-all" onClick={() => setSelectedProject(p.id)}>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle>{p.name}</CardTitle>
-                    <CardDescription>{p.description}</CardDescription>
-                  </div>
-                  <Badge className={cn(
-                    p.status === "active" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-                  )}>
-                    {p.status === "active" ? "Sedang Dikerjakan" : "Tahap Survey"}
-                  </Badge>
+            <Card 
+              key={p.id} 
+              className="cursor-pointer border-4 border-black group hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 transition-all duration-300 rounded-[2.5rem] overflow-hidden" 
+              onClick={() => navigate(`/projects/${p.id}`)}
+            >
+              <div className="h-48 relative overflow-hidden bg-neutral-100 border-b-4 border-black">
+                 {p.thumbnail ? (
+                   <img src={getDriveImageUrl(p.thumbnail)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
+                 ) : (
+                   <div className="w-full h-full flex items-center justify-center bg-black/5">
+                      <Building2 className="w-12 h-12 text-black/10" />
+                   </div>
+                 )}
+                 <div className="absolute top-4 right-4">
+                    <Badge className={cn(
+                      "uppercase font-black text-[9px] px-4 py-1.5 shadow-md border-none",
+                      p.status === "active" ? "bg-green-500 text-white" : 
+                      p.status === "survey" ? "bg-blue-500 text-white" : "bg-neutral-400 text-white"
+                    )}>
+                      {p.status === "active" ? "Operational" : 
+                       p.status === "survey" ? "Survey Phase" : "Draft Report"}
+                    </Badge>
+                 </div>
+              </div>
+              <CardHeader className="p-8 pb-4">
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black uppercase tracking-tighter group-hover:text-accent transition-colors">{p.name}</h3>
+                  <p className="text-[10px] font-bold uppercase-soft text-neutral-400 line-clamp-1">{p.description}</p>
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-neutral-500">Total Anggaran:</span>
-                  <span className="font-bold">Rp {p.totalBudget.toLocaleString('id-ID')}</span>
+              <CardContent className="p-8 pt-0 space-y-6">
+                <div className="flex justify-between items-end border-t-2 border-black/5 pt-6">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-1">Total Budgeting</p>
+                    <p className="text-xl font-black italic">Rp {p.totalBudget.toLocaleString('id-ID')}</p>
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-12 w-12 rounded-full border-2 border-black group-hover:bg-black group-hover:text-white transition-all">
+                    <ArrowRight className="w-5 h-5" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -2950,19 +3510,49 @@ const LoginPage = ({ onLogin, onGuestLogin, cmsConfig }: { onLogin: () => void; 
       </div>
     </div>
 
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border border-black w-full max-w-5xl">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-7xl px-4 relative">
+      <div className="absolute inset-0 bg-neutral-100/50 -skew-y-3 -z-10 translate-y-20 rounded-[8rem]" />
       {[
-        { label: "Identity", val: "BOLD" },
-        { label: "Service", val: "RELIABLE" },
-        { label: "Platform", val: "MODERN" }
+        { 
+          label: "Smart Estimation", 
+          val: "PRECISION", 
+          icon: Brain, 
+          desc: "Analisis RAB akurat berbasis AI & database material terkini untuk efisiensi biaya maksimal.",
+          color: "text-orange-500",
+          bg: "bg-orange-50"
+        },
+        { 
+          label: "Project Control", 
+          val: "REAL-TIME", 
+          icon: LayoutDashboard, 
+          desc: "Monitoring progress harian & manajemen keuangan secara transparan langsung dari genggaman.",
+          color: "text-blue-500",
+          bg: "bg-blue-50"
+        },
+        { 
+          label: "Quality Shield", 
+          val: "TRUSTED", 
+          icon: ShieldCheck, 
+          desc: "Garansi hasil pengerjaan dengan standarisasi teknik TBJ & pengawasan ketat Proyek Manajer.",
+          color: "text-green-500",
+          bg: "bg-green-50"
+        }
       ].map((item, idx) => (
-        <div key={idx} className={cn(
-          "p-10 text-center space-y-2",
-          idx !== 2 && "md:border-r border-black"
-        )}>
-          <p className="font-black text-4xl tracking-tighter italic">{item.val}</p>
-          <p className="text-[10px] text-neutral-400 uppercase tracking-[0.3em] font-mono">{item.label}</p>
-        </div>
+        <Card key={idx} className="group p-10 border-2 border-black rounded-[2.5rem] bg-white hover:bg-black hover:text-white transition-all duration-500 hover:-translate-y-4 shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] hover:shadow-none overflow-hidden relative">
+          <div className="absolute -right-8 -top-8 w-32 h-32 bg-neutral-50 rounded-full opacity-0 group-hover:opacity-10 transition-opacity" />
+          <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center mb-8 border-2 border-black/5 group-hover:border-white/20 transition-colors", item.bg, "group-hover:bg-white/10")}>
+            <item.icon className={cn("w-8 h-8", item.color, "group-hover:text-white")} />
+          </div>
+          <p className="font-black text-5xl tracking-tighter italic mb-3 leading-none">{item.val}</p>
+          <p className="text-[10px] text-neutral-400 uppercase tracking-[0.4em] font-black mb-6 group-hover:text-neutral-500">{item.label}</p>
+          <p className="text-xs font-medium lowercase leading-relaxed opacity-60 group-hover:opacity-100">
+            {item.desc}
+          </p>
+          <div className="mt-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0">
+             <div className="h-0.5 w-8 bg-accent" />
+             <span className="text-[10px] font-black uppercase tracking-widest text-accent">Learn More</span>
+          </div>
+        </Card>
       ))}
     </div>
   </div>

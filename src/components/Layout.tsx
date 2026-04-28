@@ -6,8 +6,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Ticker from "./Ticker";
 import { TBJ_LOGO } from "@/constants";
-import { useMediaAssets, useCampaigns } from "@/lib/hooks";
-import { Campaign } from "@/types";
 
 interface LayoutProps {
   children: ReactNode;
@@ -47,31 +45,13 @@ export default function Layout({ children, user, onLogout, onLogin }: LayoutProp
     ] : []),
   ];
 
-  const { campaigns } = useCampaigns();
-  const activeCampaign = campaigns.find(c => 
-    c.status === "Active" && 
-    (c.locations?.includes("Landing Page") || c.locations?.includes("User Dashboard"))
-  );
-
   return (
-    <div className="min-h-screen bg-white flex flex-col sleek-grid">
+    <div className="min-h-screen bg-white flex flex-col sleek-grid overflow-x-hidden">
+      {/* Floating Ticker handled internally with fixed positioning */}
       <Ticker />
       
-      {activeCampaign && (
-        <div className="bg-accent text-white py-2 px-4 text-center overflow-hidden relative group">
-          <div className="max-w-7xl mx-auto flex items-center justify-center gap-4 animate-in slide-in-from-top duration-500">
-            <Zap className="w-3 h-3 fill-white animate-pulse" />
-            <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em]">
-              {activeCampaign.name}: {activeCampaign.content}
-            </p>
-            <Zap className="w-3 h-3 fill-white animate-pulse" />
-          </div>
-          <div className="absolute inset-0 bg-white/5 translate-x-[100%] group-hover:translate-x-[-100%] transition-transform duration-[2000ms] ease-linear" />
-        </div>
-      )}
-
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-black sticky top-0 z-40">
+      <header className="bg-white/80 backdrop-blur-md border-b border-neutral-100 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-20">
             <div className="flex items-center">
@@ -173,18 +153,18 @@ export default function Layout({ children, user, onLogout, onLogin }: LayoutProp
       </header>
 
       {/* Main Content */}
-      <main className="flex-grow">
-        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <main className="flex-grow overflow-hidden">
+        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 overflow-hidden">
           {children}
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-black py-12">
+      <footer className="bg-white border-t border-neutral-100 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex flex-col items-center md:items-start gap-2">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 flex items-center justify-center rounded-xl overflow-hidden border border-black bg-white">
+              <div className="w-10 h-10 flex items-center justify-center rounded-xl overflow-hidden border border-neutral-200 bg-white">
                 <img 
                   src={footerLogo} 
                   alt="TBJ Logo" 

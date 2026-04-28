@@ -31,9 +31,9 @@ export default function Profile() {
         <div className="w-24 h-24 bg-accent/10 rounded-full flex items-center justify-center mb-6">
           <Lock className="w-12 h-12 text-accent" />
         </div>
-        <div className="space-y-4 max-w-2xl">
-          <h1 className="text-5xl font-black uppercase tracking-tighter">Dashboard Locked</h1>
-          <p className="uppercase-soft text-neutral-500 text-lg">
+        <div className="space-y-4 max-w-2xl px-4">
+          <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tighter">Dashboard Locked</h1>
+          <p className="uppercase-soft text-neutral-500 text-base md:text-lg">
             Dashboard eksklusif hanya tersedia untuk member Tier 2 & 3. 
             Silahkan lakukan pembayaran Digital Assessment untuk membuka akses penuh.
           </p>
@@ -67,35 +67,35 @@ export default function Profile() {
           <ArrowLeft className="w-4 h-4" /> Back to Admin Panel
         </Button>
       )}
-      <div className="flex justify-between items-end border-b-2 border-black pb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b-2 border-black pb-8 gap-4 px-4 md:px-0">
         <div className="space-y-2">
-          <h1 className="text-5xl font-black uppercase tracking-tighter">{id ? "Client View" : "Client Dashboard"}</h1>
-          <p className="uppercase-soft text-neutral-500">
+          <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tighter">{id ? "Client View" : "Client Dashboard"}</h1>
+          <p className="uppercase-soft text-neutral-500 text-xs md:text-sm">
             {id ? `Viewing dashboard for ${user?.displayName}` : `Selamat datang, ${user?.displayName}. Pantau progres proyek Anda secara real-time.`}
           </p>
         </div>
-        <div className="text-right">
+        <div className="w-full md:w-auto text-right md:text-right">
           <Badge className="bg-accent text-white rounded-md px-4 py-1 uppercase-soft">Tier {(user?.tier as string) === 'prospect' ? '1' : user?.tier === 'survey' ? '2' : '3'}</Badge>
         </div>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-8 px-4 md:px-0">
         <Card className="border-2 border-black rounded-2xl">
           <CardHeader className="pb-2">
-            <CardDescription className="uppercase-soft">Total Proyek</CardDescription>
-            <CardTitle className="text-4xl font-black">{projects.length}</CardTitle>
+            <CardDescription className="uppercase-soft text-[8px] md:text-[10px]">Total Proyek</CardDescription>
+            <CardTitle className="text-2xl md:text-4xl font-black">{projects.length}</CardTitle>
           </CardHeader>
         </Card>
         <Card className="border-2 border-black rounded-2xl">
           <CardHeader className="pb-2">
-            <CardDescription className="uppercase-soft">Proyek Aktif</CardDescription>
-            <CardTitle className="text-4xl font-black">{projects.filter(p => p.status === 'active').length}</CardTitle>
+            <CardDescription className="uppercase-soft text-[8px] md:text-[10px]">Proyek Aktif</CardDescription>
+            <CardTitle className="text-2xl md:text-4xl font-black">{projects.filter(p => p.status === 'active').length}</CardTitle>
           </CardHeader>
         </Card>
-        <Card className="border-2 border-black rounded-2xl bg-black text-white">
+        <Card className="border-2 border-black rounded-2xl bg-black text-white col-span-2 md:col-span-1">
           <CardHeader className="pb-2">
-            <CardDescription className="uppercase-soft text-white/60">Total Investasi</CardDescription>
-            <CardTitle className="text-4xl font-black">Rp {projects.reduce((sum, p) => sum + p.totalBudget, 0).toLocaleString('id-ID')}</CardTitle>
+            <CardDescription className="uppercase-soft text-white/60 text-[8px] md:text-[10px]">Total Investasi</CardDescription>
+            <CardTitle className="text-xl md:text-2xl lg:text-3xl font-black truncate">{formatRupiah(projects.reduce((sum, p) => sum + p.totalBudget, 0))}</CardTitle>
           </CardHeader>
         </Card>
       </div>

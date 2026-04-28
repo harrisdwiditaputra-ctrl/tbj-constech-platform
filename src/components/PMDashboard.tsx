@@ -12,7 +12,7 @@ import {
   Loader2, Calendar, CheckCircle2, Clock, MapPin, User, MessageSquare, 
   Phone, HardHat, Package, Camera, BarChart3, ChevronRight, Plus, 
   AlertCircle, LayoutDashboard, History, Send, CameraOff, Briefcase, ShieldCheck,
-  Zap, Settings, Image as ImageIcon, Trash2, DollarSign, TrendingUp, Brain, Sparkles
+  Zap, Settings, Image as ImageIcon, Trash2, DollarSign, TrendingUp, Brain, Sparkles, ExternalLink
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { toast } from "sonner";
@@ -180,16 +180,16 @@ export default function PMDashboard() {
   return (
     <div className="space-y-8 py-8">
       {/* PM Header */}
-      <div className="flex justify-between items-end border-b-2 border-dark-grey/20 pb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b-2 border-dark-grey/20 pb-8 gap-6">
         <div className="space-y-2">
-          <h1 className="text-5xl font-black uppercase tracking-tighter">PM Dashboard</h1>
-          <p className="uppercase-soft text-neutral-500">Autonomous Project Management & Site Monitoring.</p>
+          <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter">PM Dashboard</h1>
+          <p className="uppercase-soft text-neutral-500 text-xs">Autonomous Project Management & Site Monitoring.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
           <Button 
             variant="outline"
             onClick={() => navigate("/assistant")}
-            className="h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] border-2 border-space-grey/20 hover:border-accent"
+            className="h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] border-2 border-space-grey/20 hover:border-accent w-full sm:w-auto"
           >
             <Zap className="w-4 h-4 mr-2 text-accent" />
             AI Estimator
@@ -197,24 +197,42 @@ export default function PMDashboard() {
           <Button 
             onClick={handleAttendance}
             className={cn(
-              "h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all",
+              "h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all w-full sm:w-auto",
               attendance.find(a => a.userId === user?.uid && !a.checkOut) 
                 ? "bg-red-500 hover:bg-red-600 text-white" 
                 : "bg-accent hover:bg-space-grey text-white"
             )}
           >
             <Clock className="w-4 h-4 mr-2" />
-            {attendance.find(a => a.userId === user?.uid && !a.checkOut) ? "Check Out (Site Exit)" : "Check In (Site Entry)"}
+            {attendance.find(a => a.userId === user?.uid && !a.checkOut) ? "Site Exit" : "Site Entry"}
           </Button>
-          <div className="flex items-center gap-2 bg-space-grey text-white px-4 py-2 rounded-xl">
+          <div className="flex items-center gap-2 bg-space-grey text-white px-4 py-2 rounded-xl w-full sm:w-auto justify-center">
             <HardHat className="w-5 h-5 text-accent" />
-            <span className="text-xs font-black uppercase tracking-widest">PM: {user?.displayName}</span>
+            <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[100px]">{user?.displayName}</span>
           </div>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex gap-2 p-1 bg-neutral-100 rounded-2xl w-fit">
+      <div className="md:hidden w-full">
+        <select 
+          className="w-full h-12 bg-white border-2 border-black rounded-xl px-4 font-black uppercase text-xs tracking-widest outline-none"
+          value={activeTab}
+          onChange={(e) => setActiveTab(e.target.value as any)}
+        >
+          <option value="overview">Overview</option>
+          <option value="projects">My Projects</option>
+          <option value="materials">Materials</option>
+          <option value="attendance">Attendance</option>
+          <option value="cctv">Live CCTV</option>
+          <option value="timeline">S-Curve</option>
+          <option value="rab">Project RAB</option>
+          <option value="safety">Safety & HSE</option>
+          <option value="pm-ai">PM AI Assistant</option>
+        </select>
+      </div>
+
+      <div className="hidden md:flex gap-2 p-1 bg-neutral-100 rounded-2xl w-fit overflow-x-auto max-w-full">
         {[
           { id: "overview", label: "Overview", icon: LayoutDashboard },
           { id: "projects", label: "My Projects", icon: Briefcase },
@@ -230,7 +248,7 @@ export default function PMDashboard() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={cn(
-              "flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+              "flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0",
               activeTab === tab.id ? "bg-black text-white shadow-md" : "text-neutral-500 hover:bg-titanium/10"
             )}
           >
@@ -242,51 +260,51 @@ export default function PMDashboard() {
 
       {activeTab === "overview" && (
         <div className="space-y-8">
-          <div className="grid md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <Card className="border border-black/10 rounded-2xl shadow-sm">
               <CardHeader className="pb-2">
-                <CardDescription className="uppercase-soft">Active Sites</CardDescription>
-                <CardTitle className="text-4xl font-black">{myProjects.filter(p => p.status === 'active').length}</CardTitle>
+                <CardDescription className="uppercase-soft text-[8px]">Active Sites</CardDescription>
+                <CardTitle className="text-2xl md:text-4xl font-black">{myProjects.filter(p => p.status === 'active').length}</CardTitle>
               </CardHeader>
             </Card>
             <Card className="border border-black/10 rounded-2xl shadow-sm">
               <CardHeader className="pb-2">
-                <CardDescription className="uppercase-soft">Pending Requests</CardDescription>
-                <CardTitle className="text-4xl font-black text-accent">{requests.filter(r => r.status === 'pending').length}</CardTitle>
+                <CardDescription className="uppercase-soft text-[8px]">Pending Requests</CardDescription>
+                <CardTitle className="text-2xl md:text-4xl font-black text-accent">{requests.filter(r => r.status === 'pending').length}</CardTitle>
               </CardHeader>
             </Card>
             <Card className="border border-black/10 rounded-2xl shadow-sm">
               <CardHeader className="pb-2">
-                <CardDescription className="uppercase-soft">Workers on Site</CardDescription>
-                <CardTitle className="text-4xl font-black">28</CardTitle>
+                <CardDescription className="uppercase-soft text-[8px]">Workers on Site</CardDescription>
+                <CardTitle className="text-2xl md:text-4xl font-black">28</CardTitle>
               </CardHeader>
             </Card>
             <Card className="border border-black/10 rounded-2xl bg-black text-white shadow-sm">
               <CardHeader className="pb-2">
-                <CardDescription className="uppercase-soft text-white/60">KPI Performance</CardDescription>
-                <CardTitle className="text-4xl font-black text-green-400">92%</CardTitle>
+                <CardDescription className="uppercase-soft text-white/60 text-[8px]">KPI Performance</CardDescription>
+                <CardTitle className="text-2xl md:text-4xl font-black text-green-400">92%</CardTitle>
               </CardHeader>
             </Card>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <Card className="border border-black/10 rounded-2xl overflow-hidden shadow-sm">
               <CardHeader className="bg-neutral-50 border-b border-black/10">
-                <CardTitle className="text-xl font-black uppercase tracking-tighter">Project Timeline (Gantt)</CardTitle>
+                <CardTitle className="text-lg md:text-xl font-black uppercase tracking-tighter">Project Timeline (Gantt)</CardTitle>
               </CardHeader>
-              <CardContent className="p-8 h-64 flex items-center justify-center text-neutral-300">
-                <BarChart3 className="w-12 h-12" />
-                <span className="uppercase-soft ml-2">Timeline Visualization</span>
+              <CardContent className="p-8 h-48 md:h-64 flex items-center justify-center text-neutral-300">
+                <BarChart3 className="w-10 h-10 md:w-12 md:h-12" />
+                <span className="uppercase-soft ml-2 text-[10px]">Timeline Visualization</span>
               </CardContent>
             </Card>
             <Card className="border border-black/10 rounded-2xl overflow-hidden shadow-sm">
               <CardHeader className="bg-neutral-50 border-b border-black/10">
-                <CardTitle className="text-xl font-black uppercase tracking-tighter">Site Security (CCTV)</CardTitle>
+                <CardTitle className="text-lg md:text-xl font-black uppercase tracking-tighter">Site Security (CCTV)</CardTitle>
               </CardHeader>
               <CardContent className="p-0 aspect-video bg-neutral-900 flex items-center justify-center text-white/20">
-                <div className="text-center">
-                  <CameraOff className="w-12 h-12 mx-auto mb-2" />
-                  <p className="text-[10px] font-black uppercase tracking-widest">Select project to view feed</p>
+                <div className="text-center p-4">
+                  <CameraOff className="w-10 h-10 md:w-12 md:h-12 mx-auto mb-2" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[8px] md:text-[10px]">Select project to view feed</p>
                 </div>
               </CardContent>
             </Card>
@@ -328,23 +346,28 @@ export default function PMDashboard() {
                 <Card className="border border-black/10 rounded-3xl overflow-hidden min-h-[600px] shadow-sm">
                   <CardHeader className="bg-neutral-50 border-b border-black/10 flex flex-row justify-between items-center">
                     <div>
-                      <CardTitle className="text-2xl font-black uppercase tracking-tighter">{selectedProject.name}</CardTitle>
+                      <CardTitle className="text-xl md:text-2xl font-black uppercase tracking-tighter">{selectedProject.name}</CardTitle>
                       <CardDescription className="uppercase-soft">Project Details & Site Management</CardDescription>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" className="border border-black/10 rounded-xl h-10 text-[10px] font-black uppercase">
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      <Button 
+                        variant="default" 
+                        size="sm"
+                        className="bg-black text-white rounded-xl h-10 text-[10px] font-black uppercase w-full sm:w-auto" 
+                        onClick={() => navigate(`/projects/${selectedProject.id}`)}
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2" /> Full Console
+                      </Button>
+                      <Button variant="outline" className="border border-black/10 rounded-xl h-10 text-[10px] font-black uppercase w-full sm:w-auto">
                         <MessageSquare className="w-4 h-4 mr-2" /> WA Client
                       </Button>
-                      <Button className="btn-orange rounded-xl h-10 text-[10px] font-black uppercase" onClick={() => setShowBulkRequest(true)}>
-                        <Plus className="w-4 h-4 mr-2" /> Bulk Order Material
-                      </Button>
-                      <Button variant="outline" className="border-2 border-black rounded-xl h-10 text-[10px] font-black uppercase" onClick={() => setShowRequestForm(true)}>
-                        <Plus className="w-4 h-4 mr-2" /> Single Req
+                      <Button className="btn-orange rounded-xl h-10 text-[10px] font-black uppercase w-full sm:w-auto" onClick={() => setShowBulkRequest(true)}>
+                        <Plus className="w-4 h-4 mr-2" /> Bulk Order
                       </Button>
                     </div>
                   </CardHeader>
                   <CardContent className="p-8 space-y-8">
-                    <div className="grid grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8">
                       <div className="space-y-1">
                         <p className="uppercase-soft text-[10px]">Progress</p>
                         <p className="text-2xl font-black">{(selectedProject.progress || 0).toFixed(1)}%</p>
@@ -355,7 +378,7 @@ export default function PMDashboard() {
                       <div className="space-y-1">
                         <p className="uppercase-soft text-[10px]">Budget Used</p>
                         <p className="text-2xl font-black text-red-500">{formatRupiah(calculateAdminPrice(selectedProject.releasedAmount || 0))}</p>
-                        <p className="text-[9px] text-neutral-400 uppercase font-bold">of {formatRupiah(calculateAdminPrice(selectedProject.totalBudget || 0))} Total (Adm)</p>
+                        <p className="text-[9px] text-neutral-400 uppercase font-bold text-xs">of {formatRupiah(calculateAdminPrice(selectedProject.totalBudget || 0))} Total</p>
                       </div>
                       <div className="space-y-1">
                         <p className="uppercase-soft text-[10px]">Deadline</p>
@@ -470,7 +493,8 @@ export default function PMDashboard() {
           </div>
 
           <Card className="border-2 border-black rounded-2xl overflow-hidden shadow-sm">
-            <Table>
+            <div className="overflow-x-auto">
+              <Table>
               <TableHeader>
                 <TableRow className="bg-neutral-50">
                   <TableHead className="uppercase-soft">Project</TableHead>
@@ -532,8 +556,9 @@ export default function PMDashboard() {
                 ))}
               </TableBody>
             </Table>
-          </Card>
-        </div>
+          </div>
+        </Card>
+      </div>
       )}
 
       {activeTab === "attendance" && (
@@ -543,7 +568,7 @@ export default function PMDashboard() {
               <CardHeader className="bg-neutral-50 border-b-2 border-black">
                 <CardTitle className="text-xl font-black uppercase tracking-tighter">Attendance Log</CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -594,10 +619,10 @@ export default function PMDashboard() {
 
       {activeTab === "cctv" && (
         <div className="space-y-8">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-black uppercase tracking-tighter">Live Site Monitoring</h2>
-            <div className="flex gap-2">
-              <Button variant="outline" className="border-2 border-black rounded-xl h-10 text-[10px] font-black uppercase">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <h2 className="text-xl md:text-2xl font-black uppercase tracking-tighter text-white">Live Site Monitoring</h2>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button variant="outline" className="border-2 border-white/20 text-white hover:bg-white/10 rounded-xl h-10 text-[10px] font-black uppercase w-full">
                 <Settings className="w-4 h-4 mr-2" /> Config CCTV
               </Button>
             </div>
@@ -697,11 +722,11 @@ export default function PMDashboard() {
 
       {activeTab === "rab" && (
         <div className="space-y-8">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-black uppercase tracking-tighter">Project RAB & Timeline</h2>
-            <div className="flex gap-2">
-              <Button variant="outline" className="border border-black/10 rounded-xl h-10 text-[10px] font-black uppercase">
-                <History className="w-4 h-4 mr-2" /> View Revision History
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <h2 className="text-xl md:text-2xl font-black uppercase tracking-tighter text-white">Project RAB & Timeline</h2>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button variant="outline" className="border border-white/20 text-white hover:bg-white/10 rounded-xl h-10 text-[10px] font-black uppercase w-full">
+                <History className="w-4 h-4 mr-2" /> Revision History
               </Button>
             </div>
           </div>
@@ -714,7 +739,7 @@ export default function PMDashboard() {
                   <Plus className="w-3 h-3 mr-1" /> Add Item
                 </Button>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>

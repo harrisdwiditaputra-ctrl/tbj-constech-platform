@@ -1,0 +1,13 @@
+src/types.ts:  heroTitle: string;
+src/types.ts:  heroSubtitle: string;
+src/components/AdminPanel.tsx:    heroTitle: "Membangun Masa Depan Konstruksi Indonesia",
+src/components/AdminPanel.tsx:    heroSubtitle: "Platform All-in-One untuk Renovasi, Interior, dan Bangun Baru dengan Teknologi AI.",
+src/components/AdminPanel.tsx:                  <CardTitle className="text-xl font-black uppercase tracking-tighter">Hero Banner & Promo Settings</CardTitle>
+src/components/AdminPanel.tsx:                      <label className="uppercase-soft text-[10px]">Hero Title</label>
+src/components/AdminPanel.tsx:                      <Input value={cmsForm?.heroTitle} onChange={e => setCmsForm({ ...cmsForm, heroTitle: e.target.value })} />
+src/components/AdminPanel.tsx:                      <label className="uppercase-soft text-[10px]">Hero Subtitle</label>
+src/components/AdminPanel.tsx:                      <Input value={cmsForm?.heroSubtitle} onChange={e => setCmsForm({ ...cmsForm, heroSubtitle: e.target.value })} />
+src/lib/hooks.ts:          heroTitle: "Membangun Masa Depan Konstruksi Indonesia",
+src/lib/hooks.ts:          heroSubtitle: "Platform All-in-One untuk Renovasi, Interior, dan Bangun Baru dengan Teknologi AI.",
+src/App.tsx:        {cmsConfig?.heroTitle || "Tukang Bangunan Jakarta"}
+src/App.tsx:        {cmsConfig?.heroSubtitle || "Platform konstruksi modern dengan integrasi AI Estimator & Real-time Management."}
