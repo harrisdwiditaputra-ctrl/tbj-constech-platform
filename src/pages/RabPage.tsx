@@ -195,30 +195,30 @@ export default function RabPage({ user }: { user: any }) {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 py-12 px-6 bg-white min-h-screen">
+    <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 py-6 md:py-12 px-4 md:px-6 bg-white min-h-screen">
       {/* Sleek Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-8 pb-12 border-b border-neutral-100">
-        <div className="space-y-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 md:gap-8 pb-8 md:pb-12 border-b border-neutral-100">
+        <div className="space-y-4 w-full md:w-auto">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 flex items-center justify-center rounded-xl overflow-hidden border-2 border-black bg-white">
+            <div className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-xl overflow-hidden border-2 border-black bg-white shrink-0">
               <img src={headerLogo} alt="TBJ Logo" className="w-full h-full object-cover" />
             </div>
-            <div className="h-8 w-[1px] bg-neutral-200" />
-            <Badge variant="outline" className="border-neutral-200 text-neutral-400 uppercase-soft text-[9px] h-6">Master RAB Engine v2.0</Badge>
+            <div className="h-6 md:h-8 w-[1px] bg-neutral-200" />
+            <Badge variant="outline" className="border-neutral-200 text-neutral-400 uppercase-soft text-[8px] md:text-[9px] h-6">Master RAB Engine v2.0</Badge>
           </div>
           <div className="space-y-1">
-            <h1 className="text-5xl font-black tracking-tighter uppercase leading-none text-neutral-900">Rencana Anggaran Biaya</h1>
-            <p className="text-neutral-400 uppercase-soft text-[10px] tracking-[0.2em] font-bold">Build with Intelligence • Design with Soul</p>
+            <h1 className="text-3xl md:text-5xl font-black tracking-tighter uppercase leading-tight md:leading-none text-neutral-900">Rencana Anggaran Biaya</h1>
+            <p className="text-neutral-400 uppercase-soft text-[9px] md:text-[10px] tracking-[0.1em] md:tracking-[0.2em] font-bold">Build with Intelligence • Design with Soul</p>
           </div>
         </div>
         
-        <div className="flex gap-3">
-          <Button variant="outline" className="border-neutral-200 text-neutral-600 hover:bg-neutral-50 rounded-full gap-2 h-12 px-8 uppercase-soft text-[10px] font-black" onClick={exportToPDF}>
+        <div className="flex flex-wrap gap-3 w-full md:w-auto">
+          <Button variant="outline" className="flex-1 md:flex-none border-neutral-200 text-neutral-600 hover:bg-neutral-50 rounded-full gap-2 h-10 md:h-12 px-4 md:px-8 uppercase-soft text-[9px] md:text-[10px] font-black" onClick={exportToPDF}>
             <Download className="w-4 h-4" /> Export PDF
           </Button>
           {canEdit && (
             <Button 
-              className="bg-black text-white hover:bg-neutral-800 rounded-full gap-2 h-12 px-8 uppercase-soft text-[10px] font-black shadow-xl shadow-black/10"
+              className="flex-1 md:flex-none bg-black text-white hover:bg-neutral-800 rounded-full gap-2 h-10 md:h-12 px-4 md:px-8 uppercase-soft text-[9px] md:text-[10px] font-black shadow-xl shadow-black/10"
               onClick={handleSaveDraft}
             >
               <Save className="w-4 h-4" /> Simpan Draft
@@ -227,11 +227,11 @@ export default function RabPage({ user }: { user: any }) {
         </div>
       </div>
 
-      <div className="flex gap-2 p-1 bg-neutral-100 rounded-2xl w-fit mb-8">
+      <div className="flex gap-2 p-1 bg-neutral-100 rounded-2xl w-full sm:w-fit mb-6 md:mb-8 overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveTab("editor")}
           className={cn(
-            "flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+            "flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap",
             activeTab === "editor" ? "bg-black text-white shadow-md" : "text-neutral-500 hover:bg-black/5"
           )}
         >
@@ -241,7 +241,7 @@ export default function RabPage({ user }: { user: any }) {
         <button
           onClick={() => setActiveTab("archive")}
           className={cn(
-            "flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+            "flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap",
             activeTab === "archive" ? "bg-black text-white shadow-md" : "text-neutral-500 hover:bg-black/5"
           )}
         >
@@ -255,15 +255,15 @@ export default function RabPage({ user }: { user: any }) {
 
       {activeTab === "archive" ? (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8 bg-neutral-50 p-8 rounded-[32px] border border-black/5">
-            <div className="space-y-1">
-              <h2 className="text-3xl font-black uppercase tracking-tighter">Arsip Estimasi</h2>
-              <p className="uppercase-soft text-[10px] text-neutral-400">Kelola dan tinjau kembali draf project Anda</p>
+          <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8 bg-neutral-50 p-6 md:p-8 rounded-[24px] md:rounded-[32px] border border-black/5">
+            <div className="space-y-1 text-center md:text-left">
+              <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Arsip Estimasi</h2>
+              <p className="uppercase-soft text-[9px] md:text-[10px] text-neutral-400">Kelola dan tinjau kembali draf project Anda</p>
             </div>
             
-            <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+            <div className="grid grid-cols-1 md:flex items-center gap-4 w-full md:w-auto">
               <select
-                className="h-12 px-4 rounded-full border-black/10 text-[10px] font-black uppercase tracking-widest outline-none bg-white min-w-[140px]"
+                className="h-10 md:h-12 px-4 rounded-full border-black/10 text-[9px] md:text-[10px] font-black uppercase tracking-widest outline-none bg-white min-w-[140px]"
                 value={archiveType}
                 onChange={e => setArchiveType(e.target.value)}
               >
@@ -278,13 +278,13 @@ export default function RabPage({ user }: { user: any }) {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                 <Input 
                   placeholder="Search estimates..." 
-                  className="pl-10 h-12 rounded-full border-black/10 bg-white"
+                  className="pl-10 h-10 md:h-12 rounded-full border-black/10 bg-white text-[11px]"
                   value={archiveSearch}
                   onChange={e => setArchiveSearch(e.target.value)}
                 />
               </div>
               <Button 
-                className="btn-orange h-14 px-10 rounded-full text-[11px] uppercase font-black tracking-[0.2em] shadow-xl shadow-accent/20 hover:scale-105 transition-transform w-full md:w-auto"
+                className="btn-orange h-10 md:h-14 px-6 md:px-10 rounded-full text-[10px] md:text-[11px] uppercase font-black tracking-[0.2em] shadow-xl shadow-accent/20 hover:scale-105 transition-transform w-full md:w-auto"
                 onClick={() => {
                   setRabItems([]);
                   setProjectInfo({
@@ -298,11 +298,11 @@ export default function RabPage({ user }: { user: any }) {
                   toast.success("Mulai membuat RAB baru.");
                 }}
               >
-                <Plus className="w-5 h-5 mr-3" /> Buat RAB Baru
+                <Plus className="w-5 h-5 mr-2 md:mr-3" /> Buat RAB Baru
               </Button>
             </div>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {estimates.filter(est => {
               const matchesSearch = (est.projectName || "").toLowerCase().includes(archiveSearch.toLowerCase()) ||
                                     (est.clientName || "").toLowerCase().includes(archiveSearch.toLowerCase());
@@ -378,19 +378,19 @@ export default function RabPage({ user }: { user: any }) {
           </div>
         </div>
       ) : (
-        <div className="grid lg:grid-cols-4 gap-12 animate-in fade-in slide-in-from-bottom-4">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 md:gap-12 animate-in fade-in slide-in-from-bottom-4">
         {/* Project Info - Thinner Design */}
-        <div className="lg:col-span-1 space-y-8">
-          <div className="space-y-6">
+        <div className="lg:col-span-1 space-y-6 md:space-y-8">
+          <div className="space-y-4 md:space-y-6">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 border-b border-neutral-100 pb-2">Project Dossier</h3>
-            <div className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 md:gap-6">
               <div className="space-y-1.5">
                 <Label className="text-[9px] uppercase font-black text-neutral-300">Client Name</Label>
                 <Input 
                   disabled={!canEdit}
                   value={projectInfo.clientName} 
                   onChange={e => setProjectInfo({...projectInfo, clientName: e.target.value})} 
-                  className="rounded-none border-0 border-b border-neutral-100 focus-visible:ring-0 focus-visible:border-black px-0 h-8 text-sm font-bold uppercase" 
+                  className="rounded-none border-0 border-b border-neutral-100 focus-visible:ring-0 focus-visible:border-black px-0 h-8 text-sm font-bold uppercase w-full" 
                 />
               </div>
               <div className="space-y-1.5">
@@ -399,7 +399,7 @@ export default function RabPage({ user }: { user: any }) {
                   disabled={!canEdit}
                   value={projectInfo.projectName} 
                   onChange={e => setProjectInfo({...projectInfo, projectName: e.target.value})} 
-                  className="rounded-none border-0 border-b border-neutral-100 focus-visible:ring-0 focus-visible:border-black px-0 h-8 text-sm font-bold uppercase" 
+                  className="rounded-none border-0 border-b border-neutral-100 focus-visible:ring-0 focus-visible:border-black px-0 h-8 text-sm font-bold uppercase w-full" 
                 />
               </div>
               <div className="space-y-1.5">
@@ -408,7 +408,7 @@ export default function RabPage({ user }: { user: any }) {
                   disabled={!canEdit}
                   value={projectInfo.address} 
                   onChange={e => setProjectInfo({...projectInfo, address: e.target.value})} 
-                  className="rounded-none border-0 border-b border-neutral-100 focus-visible:ring-0 focus-visible:border-black px-0 h-8 text-sm font-bold uppercase" 
+                  className="rounded-none border-0 border-b border-neutral-100 focus-visible:ring-0 focus-visible:border-black px-0 h-8 text-sm font-bold uppercase w-full" 
                 />
               </div>
               <div className="space-y-1.5">
@@ -417,26 +417,26 @@ export default function RabPage({ user }: { user: any }) {
                   disabled={!canEdit}
                   value={projectInfo.contact} 
                   onChange={e => setProjectInfo({...projectInfo, contact: e.target.value})} 
-                  className="rounded-none border-0 border-b border-neutral-100 focus-visible:ring-0 focus-visible:border-black px-0 h-8 text-sm font-bold uppercase" 
+                  className="rounded-none border-0 border-b border-neutral-100 focus-visible:ring-0 focus-visible:border-black px-0 h-8 text-sm font-bold uppercase w-full" 
                 />
               </div>
             </div>
           </div>
 
-          <div className="p-6 bg-neutral-50 rounded-2xl space-y-4">
+          <div className="p-5 md:p-6 bg-neutral-50 rounded-2xl space-y-4">
             <p className="text-[9px] font-black uppercase tracking-widest text-neutral-400">Financial Summary</p>
             <div className="space-y-1">
-              <p className="text-3xl font-black tracking-tighter">Rp {(grandTotal || 0).toLocaleString('id-ID')}</p>
+              <p className="text-2xl md:text-3xl font-black tracking-tighter">Rp {(grandTotal || 0).toLocaleString('id-ID')}</p>
               <p className="text-[10px] font-bold text-neutral-400 uppercase">Total Estimated Budget</p>
             </div>
           </div>
         </div>
 
         {/* Main RAB Table - Sleek & Light */}
-        <div className="lg:col-span-3 space-y-6">
-          <div className="flex justify-between items-center">
+        <div className="lg:col-span-3 space-y-4 md:space-y-6 min-w-0">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Work Items Breakdown</h3>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
               {canEdit && (
                 <Dialog open={showAddCategory} onOpenChange={setShowAddCategory}>
                   <DialogTrigger render={
@@ -638,23 +638,23 @@ export default function RabPage({ user }: { user: any }) {
       )}
 
       {/* Footer Branding */}
-      <div className="flex flex-col md:flex-row justify-between items-center py-12 border-t-2 border-black/5 gap-8">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center text-white font-black text-xl">TBJ</div>
+      <div className="flex flex-col md:flex-row justify-between items-center py-8 md:py-12 border-t-2 border-black/5 gap-6 md:gap-8">
+        <div className="flex items-center gap-4 text-center md:text-left">
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-black rounded-2xl flex items-center justify-center text-white font-black text-lg md:text-xl shrink-0">TBJ</div>
           <div>
-            <p className="font-black uppercase tracking-tighter">TBJ Contractor Hub</p>
-            <p className="text-[10px] uppercase-soft text-neutral-400">Build with Intelligence • Design with Soul</p>
+            <p className="font-black uppercase tracking-tighter text-sm md:text-base">TBJ Contractor Hub</p>
+            <p className="text-[9px] md:text-[10px] uppercase-soft text-neutral-400">Build with Intelligence • Design with Soul</p>
           </div>
         </div>
-        <div className="flex gap-6">
-          <a href="https://www.instagram.com/tukang.bangunan.jakarta/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-bold uppercase hover:text-neutral-500 transition-colors">
-            <Instagram className="w-4 h-4" /> @tukang.bangunan.jakarta
+        <div className="flex flex-wrap justify-center md:justify-end gap-4 md:gap-6">
+          <a href="https://www.instagram.com/tukang.bangunan.jakarta/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[10px] md:text-xs font-bold uppercase hover:text-neutral-500 transition-colors">
+            <Instagram className="w-3 h-3 md:w-4 md:h-4" /> @tukang.bangunan.jakarta
           </a>
-          <a href="#" className="flex items-center gap-2 text-xs font-bold uppercase hover:text-neutral-500 transition-colors">
-            <Share2 className="w-4 h-4" /> Share Project
+          <a href="#" className="flex items-center gap-2 text-[10px] md:text-xs font-bold uppercase hover:text-neutral-500 transition-colors">
+            <Share2 className="w-3 h-3 md:w-4 md:h-4" /> Share Project
           </a>
-          <a href="#" className="flex items-center gap-2 text-xs font-bold uppercase hover:text-neutral-500 transition-colors">
-            <Phone className="w-4 h-4" /> WhatsApp Support
+          <a href="#" className="flex items-center gap-2 text-[10px] md:text-xs font-bold uppercase hover:text-neutral-500 transition-colors">
+            <Phone className="w-3 h-3 md:w-4 md:h-4" /> WhatsApp Support
           </a>
         </div>
       </div>

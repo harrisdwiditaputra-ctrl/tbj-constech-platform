@@ -1,11 +1,12 @@
 import { useMemo, useState, useEffect } from "react";
-import { useFinance, useProjects, useCMSConfig } from "@/lib/hooks";
+import { useFinance, useProjects, useCMSConfig, useAuth } from "@/lib/hooks";
 import { Zap, TrendingUp, Search, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function Ticker() {
+  const { user } = useAuth();
   const { transactions } = useFinance();
-  const { projects } = useProjects();
+  const { projects } = useProjects(user?.uid, user?.role);
   const { config: cmsConfig } = useCMSConfig();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(true);

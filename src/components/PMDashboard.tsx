@@ -1,5 +1,10 @@
-import { useState, useMemo } from "react";
-import { useProjects, useAuth, useUsers, useAttendance, useMaterialRequests, useWorkforce, useFinance, useWorkerWages, useProjectDetails, useSiteLogs } from "@/lib/hooks";
+import { useState, useMemo, useRef } from "react";
+import { 
+  useProjects, useAuth, useUsers, useAttendance, 
+  useMaterialRequests, useWorkforce, useFinance, 
+  useWorkerWages, useProjectDetails, useSiteLogs,
+  uploadImage 
+} from "@/lib/hooks";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,10 +12,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
+import { 
+  Dialog, DialogContent, DialogHeader, DialogTitle, 
+  DialogTrigger, DialogFooter, DialogDescription 
+} from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import { 
   Loader2, Calendar, CheckCircle2, Clock, MapPin, User, MessageSquare, 
-  Phone, HardHat, Package, Camera, BarChart3, ChevronRight, Plus, 
+  Phone, HardHat, Package, Camera, BarChart3, ChevronRight, ChevronLeft, Plus, 
   AlertCircle, LayoutDashboard, History, Send, CameraOff, Briefcase, ShieldCheck,
   Zap, Settings, Image as ImageIcon, Trash2, DollarSign, TrendingUp, Brain, Sparkles, ExternalLink
 } from "lucide-react";
@@ -21,7 +30,7 @@ import { Project, MaterialRequest, Attendance, Workforce } from "@/types";
 
 import { ImageUpload } from "@/components/ImageUpload";
 
-export default function PMDashboard() {
+export default function PMDashboard({ isOverscreen }: { isOverscreen?: boolean }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { projects, loading: projectsLoading, updateProject } = useProjects(undefined, user?.role);
@@ -30,9 +39,19 @@ export default function PMDashboard() {
   const { requests, addRequest, updateRequest, updateRequestStatus, deleteRequest } = useMaterialRequests(user?.role);
   const { workforce } = useWorkforce(user?.role);
 
-  const [activeTab, setActiveTab] = useState<"overview" | "projects" | "materials" | "attendance" | "cctv" | "timeline" | "safety" | "rab" | "pm-ai">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "projects" | "materials" | "attendance" | "cctv" | "timeline" | "safety" | "rab" | "pm-ai" | "awaiting">("overview");
+  const [activePage, setActivePage] = useState<number>(0);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const { project: projectDetails, categories, items, releaseMilestone, addSiteLog, updateItemProgress, addTimelineEvent } = useProjectDetails(selectedProject?.id);
+  const { 
+    project: projectDetails, 
+    categories, 
+    items, 
+    releaseMilestone, 
+    addSiteLog, 
+    updateItemProgress, 
+    addTimelineEvent,
+    updateItem 
+  } = useProjectDetails(selectedProject?.id);
   const { logs: siteLogs } = useSiteLogs(selectedProject?.id);
   const { transactions, addTransaction } = useFinance(selectedProject?.id);
   const { wages, addWage, updateWageStatus } = useWorkerWages(selectedProject?.id);
@@ -175,88 +194,220 @@ export default function PMDashboard() {
     toast.success("Milestone added to project timeline");
   };
 
+  const tabGroups = [
+    {
+      title: "Core Operations",
+      tabs: [
+        { id: "overview", label: "Overview", icon: LayoutDashboard },
+        { id: "awaiting", label: "Awaiting", icon: Clock },
+        { id: "projects", label: "My Projects", icon: Briefcase },
+        { id: "materials", label: "Materials", icon: Package },
+      ]
+    },
+    {
+      title: "Site Monitoring",
+      tabs: [
+        { id: "attendance", label: "Attendance", icon: Clock },
+        { id: "cctv", label: "Live CCTV", icon: Camera },
+        { id: "timeline", label: "S-Curve", icon: BarChart3 },
+      ]
+    },
+    {
+      title: "Administrative",
+      tabs: [
+        { id: "rab", label: "Project RAB", icon: Briefcase },
+        { id: "safety", label: "Safety & HSE", icon: ShieldCheck },
+        { id: "pm-ai", label: "PM AI Assistant", icon: Brain },
+      ]
+    }
+  ];
+
+  const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  const [uploadType, setUploadType] = useState<"progress" | "icon">("progress");
+  const fileInputRefArr = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadingItemId || !selectedProject) return;
+
+    setUploadingItemId(uploadingItemId);
+    const item = items.find(i => i.id === uploadingItemId);
+    if (!item) return;
+
+    toast.loading(`Uploading ${uploadType} photo...`);
+
+    try {
+      const path = `projects/${selectedProject.id}/items/${uploadingItemId}/${uploadType}_${Date.now()}`;
+      const url = await uploadImage(file, path);
+      
+      if (uploadType === "progress") {
+        const currentPhotos = item.photos?.progress || [];
+        await updateItem(uploadingItemId, {
+          photos: {
+            ...item.photos,
+            progress: [...currentPhotos, url]
+          }
+        });
+        toast.dismiss();
+        toast.success("Progress photo added!");
+      } else {
+        // Icon Photo
+        await updateItem(uploadingItemId, {
+          icon: url
+        });
+        toast.dismiss();
+        toast.success("Item icon updated!");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.dismiss();
+      toast.error("Upload failed.");
+    } finally {
+      setUploadingItemId(null);
+      if (fileInputRefArr.current) fileInputRefArr.current.value = "";
+    }
+  };
+
+  const triggerUpload = (itemId: string, type: "progress" | "icon") => {
+    setUploadingItemId(itemId);
+    setUploadType(type);
+    fileInputRefArr.current?.click();
+  };
+
   if (projectsLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>;
 
   return (
-    <div className="space-y-8 py-8">
-      {/* PM Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b-2 border-dark-grey/20 pb-8 gap-6">
-        <div className="space-y-2">
-          <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter">PM Dashboard</h1>
-          <p className="uppercase-soft text-neutral-500 text-xs">Autonomous Project Management & Site Monitoring.</p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-          <Button 
-            variant="outline"
-            onClick={() => navigate("/assistant")}
-            className="h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] border-2 border-space-grey/20 hover:border-accent w-full sm:w-auto"
-          >
-            <Zap className="w-4 h-4 mr-2 text-accent" />
-            AI Estimator
-          </Button>
-          <Button 
-            onClick={handleAttendance}
-            className={cn(
-              "h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all w-full sm:w-auto",
-              attendance.find(a => a.userId === user?.uid && !a.checkOut) 
-                ? "bg-red-500 hover:bg-red-600 text-white" 
-                : "bg-accent hover:bg-space-grey text-white"
-            )}
-          >
-            <Clock className="w-4 h-4 mr-2" />
-            {attendance.find(a => a.userId === user?.uid && !a.checkOut) ? "Site Exit" : "Site Entry"}
-          </Button>
-          <div className="flex items-center gap-2 bg-space-grey text-white px-4 py-2 rounded-xl w-full sm:w-auto justify-center">
-            <HardHat className="w-5 h-5 text-accent" />
-            <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[100px]">{user?.displayName}</span>
+    <div className={cn("space-y-8", isOverscreen ? "py-0" : "py-8")}>
+      {!isOverscreen && (
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b-2 border-dark-grey/20 pb-8 gap-6">
+          <div className="space-y-2">
+            <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter">PM Dashboard</h1>
+            <p className="uppercase-soft text-neutral-500 text-xs">Autonomous Project Management & Site Monitoring.</p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+            <Button 
+              variant="outline"
+              onClick={() => navigate("/assistant")}
+              className="h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] border-2 border-space-grey/20 hover:border-accent w-full sm:w-auto"
+            >
+              <Zap className="w-4 h-4 mr-2 text-accent" />
+              AI Estimator
+            </Button>
+            <Button 
+              onClick={handleAttendance}
+              className={cn(
+                "h-12 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all w-full sm:w-auto",
+                attendance.find(a => a.userId === user?.uid && !a.checkOut) 
+                  ? "bg-red-500 hover:bg-red-600 text-white" 
+                  : "bg-accent hover:bg-space-grey text-white"
+              )}
+            >
+              <Clock className="w-4 h-4 mr-2" />
+              {attendance.find(a => a.userId === user?.uid && !a.checkOut) ? "Site Exit" : "Site Entry"}
+            </Button>
+            <div className="flex items-center gap-2 bg-space-grey text-white px-4 py-2 rounded-xl w-full sm:w-auto justify-center">
+              <HardHat className="w-5 h-5 text-accent" />
+              <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[100px]">{user?.displayName}</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Navigation Tabs */}
+      {/* Mobile Navigation */}
       <div className="md:hidden w-full">
         <select 
           className="w-full h-12 bg-white border-2 border-black rounded-xl px-4 font-black uppercase text-xs tracking-widest outline-none"
           value={activeTab}
           onChange={(e) => setActiveTab(e.target.value as any)}
         >
-          <option value="overview">Overview</option>
-          <option value="projects">My Projects</option>
-          <option value="materials">Materials</option>
-          <option value="attendance">Attendance</option>
-          <option value="cctv">Live CCTV</option>
-          <option value="timeline">S-Curve</option>
-          <option value="rab">Project RAB</option>
-          <option value="safety">Safety & HSE</option>
-          <option value="pm-ai">PM AI Assistant</option>
+          {tabGroups.flatMap(g => g.tabs).map(t => (
+            <option key={t.id} value={t.id}>{t.label}</option>
+          ))}
         </select>
       </div>
 
-      <div className="hidden md:flex gap-2 p-1 bg-neutral-100 rounded-2xl w-fit overflow-x-auto max-w-full">
-        {[
-          { id: "overview", label: "Overview", icon: LayoutDashboard },
-          { id: "projects", label: "My Projects", icon: Briefcase },
-          { id: "materials", label: "Materials", icon: Package },
-          { id: "attendance", label: "Attendance", icon: Clock },
-          { id: "cctv", label: "Live CCTV", icon: Camera },
-          { id: "timeline", label: "S-Curve", icon: BarChart3 },
-          { id: "rab", label: "Project RAB", icon: Briefcase },
-          { id: "safety", label: "Safety & HSE", icon: ShieldCheck },
-          { id: "pm-ai", label: "PM AI Assistant", icon: Brain },
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={cn(
-              "flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0",
-              activeTab === tab.id ? "bg-black text-white shadow-md" : "text-neutral-500 hover:bg-titanium/10"
-            )}
-          >
-            <tab.icon className="w-4 h-4" />
-            {tab.label}
-          </button>
-        ))}
+      {/* Desktop Paginated Navigation */}
+      <div className="hidden md:flex flex-col gap-4">
+        <div className="flex items-center justify-between border-b border-black/5 pb-4">
+          <div className="flex gap-4">
+            {tabGroups.map((group, idx) => (
+              <Button
+                key={idx}
+                variant="ghost"
+                onClick={() => {
+                  setActivePage(idx);
+                  setActiveTab(group.tabs[0].id as any);
+                }}
+                className={cn(
+                  "h-8 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
+                  activePage === idx ? "bg-black text-white" : "text-neutral-400 hover:bg-neutral-100"
+                )}
+              >
+                {group.title}
+              </Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className="h-8 w-8 rounded-lg border-black/10"
+              disabled={activePage === 0}
+              onClick={() => {
+                const next = activePage - 1;
+                setActivePage(next);
+                setActiveTab(tabGroups[next].tabs[0].id as any);
+              }}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <div className="flex flex-col items-center px-1 min-w-[32px]">
+              <span className="text-[9px] font-black font-mono leading-none">{activePage + 1}/{tabGroups.length}</span>
+              <span className="text-[6px] font-black text-neutral-400 uppercase tracking-tighter mt-0.5">PG</span>
+            </div>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className="h-8 w-8 rounded-lg border-black/10"
+              disabled={activePage === tabGroups.length - 1}
+              onClick={() => {
+                const next = activePage + 1;
+                setActivePage(next);
+                setActiveTab(tabGroups[next].tabs[0].id as any);
+              }}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex gap-2 p-1 bg-neutral-100 rounded-2xl w-full border border-black/5">
+          {tabGroups[activePage].tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                activeTab === tab.id 
+                  ? "bg-black text-white shadow-lg border-b-2 border-accent transform scale-[1.02]" 
+                  : "text-neutral-500 hover:bg-white/50"
+              )}
+            >
+              <tab.icon className={cn("w-4 h-4", activeTab === tab.id ? "text-accent" : "text-neutral-400")} />
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Hidden File Input for Item Photos */}
+      <input 
+        type="file" 
+        className="hidden" 
+        ref={fileInputRefArr} 
+        onChange={handleFileChange}
+        accept="image/*"
+      />
 
       {activeTab === "overview" && (
         <div className="space-y-8">
@@ -312,33 +463,166 @@ export default function PMDashboard() {
         </div>
       )}
 
+      {activeTab === "awaiting" && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+          <div className="flex justify-between items-center bg-black text-white p-8 rounded-[2rem] shadow-[8px_8px_0px_0px_rgba(255,255,255,1),8px_8px_0px_2px_rgba(0,0,0,1)]">
+            <div>
+              <h2 className="text-3xl font-black uppercase tracking-tighter">Awaiting Assignment</h2>
+              <p className="text-[10px] uppercase font-bold text-neutral-400 mt-2">New registration projects requiring Admin/PM approval.</p>
+            </div>
+            <Badge className="bg-accent text-white h-8 px-4 rounded-xl text-xs">{projects.filter(p => p.status === 'awaiting').length} New</Badge>
+          </div>
+
+          <div className="flex overflow-x-auto pb-6 gap-4 scrollbar-hide snap-x snap-mandatory md:grid md:gap-6 md:pb-0">
+            {projects.filter(p => p.status === 'awaiting').length === 0 && (
+              <div className="w-full py-20 text-center border-2 border-dashed border-black/5 rounded-3xl">
+                <p className="uppercase-soft text-neutral-400">Tidak ada proyek dalam antrean (Awaiting).</p>
+              </div>
+            )}
+            {projects.filter(p => p.status === 'awaiting').map(p => (
+              <Card key={p.id} className="min-w-[300px] md:min-w-0 snap-center border-2 border-black rounded-[2rem] overflow-hidden group hover:border-accent transition-all duration-500 shadow-sm md:shadow-none">
+                <div className="p-5 md:p-8 flex flex-col md:flex-row justify-between gap-4 md:gap-8">
+                  <div className="flex-grow space-y-4 md:space-y-6">
+                    <div className="flex items-center gap-3 md:gap-4">
+                      <div className="w-10 h-10 md:w-12 md:h-12 bg-neutral-100 rounded-2xl flex items-center justify-center border-2 border-black/5 shrink-0">
+                        <Plus className="w-5 h-5 md:w-6 md:h-6 text-accent" />
+                      </div>
+                      <div className="truncate">
+                        <h3 className="text-xl md:text-2xl font-black uppercase tracking-tighter leading-none truncate">{p.name || 'Proyek Baru'}</h3>
+                        <div className="flex items-center gap-2 mt-1 md:mt-2">
+                          <p className="text-[8px] md:text-[10px] font-black uppercase text-neutral-400 flex items-center gap-1">
+                            <Clock className="w-2.5 h-2.5 md:w-3 md:h-3" /> {new Date(p.createdAt).toLocaleDateString('id-ID')}
+                          </p>
+                          <Badge variant="outline" className="text-[7px] md:text-[8px] uppercase font-black border-black/10 py-0">{p.type || 'Umum'}</Badge>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 md:gap-6 p-4 md:p-6 bg-neutral-50 rounded-2xl border border-black/5">
+                      <div className="space-y-0.5">
+                        <p className="text-[7px] md:text-[8px] font-black uppercase text-neutral-400">Klien</p>
+                        <p className="text-[10px] md:text-xs font-bold uppercase truncate">{p.clientName || 'N/A'}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[7px] md:text-[8px] font-black uppercase text-neutral-400">WA</p>
+                        <p className="text-[10px] md:text-xs font-bold font-mono">{p.clientPhone || 'N/A'}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[7px] md:text-[8px] font-black uppercase text-neutral-400">Area</p>
+                        <p className="text-[10px] md:text-xs font-bold">{p.area || 0} m2</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[7px] md:text-[8px] font-black uppercase text-neutral-400">Alamat</p>
+                        <p className="text-[10px] md:text-xs font-bold truncate max-w-[100px]">{p.clientAddress || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="md:w-48 space-y-3 flex flex-col justify-center border-t md:border-t-0 md:border-l border-black/5 pt-4 md:pt-0 md:pl-8">
+                    <Dialog>
+                      <DialogTrigger render={
+                        <Button className="w-full btn-orange h-14 rounded-2xl flex items-center justify-center gap-3 group">
+                           <HardHat className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                           <div className="text-left">
+                             <p className="text-[10px] font-black uppercase tracking-widest leading-none">Assign PM</p>
+                             <p className="text-[8px] opacity-60 uppercase font-medium mt-1">Kelola Proyek</p>
+                           </div>
+                        </Button>
+                      } />
+                      <DialogContent className="max-w-md border-2 border-black rounded-[2rem]">
+                        <DialogHeader>
+                          <DialogTitle className="text-3xl font-black uppercase tracking-tighter">Assign Manager</DialogTitle>
+                          <DialogDescription className="uppercase-soft">Pilih personil untuk bertanggung jawab atas proyek ini.</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-8">
+                          <label className="text-[10px] font-black uppercase text-neutral-400">Pilih Project Manager</label>
+                          <div className="grid gap-3">
+                            {workforce.filter(w => w.role === 'pm').map(pm => (
+                              <button 
+                                key={pm.id}
+                                onClick={async () => {
+                                  await updateProject(p.id, { 
+                                    pmId: pm.id, 
+                                    status: 'draft', // Move to draft after assignment
+                                    pmName: pm.name // Store PM name for display
+                                  });
+                                  toast.success(`Proyek berhasil ditugaskan ke ${pm.name}`);
+                                }}
+                                className="flex items-center gap-4 p-4 rounded-2xl border-2 border-black hover:bg-neutral-50 transition-colors text-left"
+                              >
+                                <div className="w-10 h-10 bg-neutral-100 rounded-xl overflow-hidden border border-black/10">
+                                   <img src={getDriveImageUrl(pm.photoUrl)} className="w-full h-full object-cover" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-black uppercase tracking-tight">{pm.name}</p>
+                                  <p className="text-[9px] uppercase-soft text-neutral-400">Current Projects: {projects.filter(pr => pr.pmId === pm.id).length}</p>
+                                </div>
+                                <ChevronRight className="w-4 h-4 ml-auto text-neutral-300" />
+                              </button>
+                            ))}
+                            <button 
+                                onClick={async () => {
+                                  await updateProject(p.id, { 
+                                    pmId: user?.uid, 
+                                    status: 'draft',
+                                    pmName: user?.displayName
+                                  });
+                                  toast.success(`Proyek berhasil ditugaskan ke diri Anda sendiri`);
+                                }}
+                                className="flex items-center gap-4 p-4 rounded-2xl border-2 border-accent bg-accent/5 hover:bg-accent/10 transition-colors text-left"
+                              >
+                                <div className="w-10 h-10 bg-accent text-white rounded-xl flex items-center justify-center">
+                                   <User className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-black uppercase tracking-tight">Assign to Me</p>
+                                  <p className="text-[9px] uppercase-soft text-accent">Self Assignment</p>
+                                </div>
+                                <ChevronRight className="w-4 h-4 ml-auto text-accent" />
+                              </button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                    <Button variant="outline" className="w-full h-12 rounded-2xl border-2 border-black/10 uppercase-soft text-[10px] font-black">
+                      Reject Proyek
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       {activeTab === "projects" && (
-        <div className="space-y-8">
-          <div className="grid md:grid-cols-3 gap-8">
+        <div className="flex flex-col md:grid md:grid-cols-3 gap-8">
             <div className="md:col-span-1 space-y-4">
               <h3 className="text-lg font-black uppercase tracking-tighter">Project List</h3>
-              {myProjects.map(p => (
-                <Card 
-                  key={p.id} 
-                  className={cn(
-                    "border border-black/10 rounded-2xl p-4 cursor-pointer transition-all hover:shadow-md",
-                    selectedProject?.id === p.id ? "bg-black text-white" : "bg-white"
-                  )}
-                  onClick={() => setSelectedProject(p)}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-black text-xs uppercase tracking-widest">{p.name}</h4>
-                      <p className={cn("text-[9px] uppercase-soft mt-1", selectedProject?.id === p.id ? "text-white/60" : "text-neutral-400")}>
-                        {p.location || "Jakarta"}
-                      </p>
+              <div className="flex overflow-x-auto pb-4 gap-3 scrollbar-hide snap-x snap-mandatory md:flex-col md:overflow-visible md:pb-0 md:space-y-3">
+                {myProjects.map(p => (
+                  <Card 
+                    key={p.id} 
+                    className={cn(
+                      "min-w-[200px] md:min-w-0 snap-center border border-black/10 rounded-xl p-3 md:p-4 cursor-pointer transition-all hover:shadow-md",
+                      selectedProject?.id === p.id ? "bg-black text-white" : "bg-white"
+                    )}
+                    onClick={() => setSelectedProject(p)}
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="truncate">
+                        <h4 className="font-black text-[10px] md:text-xs uppercase tracking-widest truncate">{p.name}</h4>
+                        <p className={cn("text-[8px] md:text-[9px] uppercase-soft mt-0.5 truncate", selectedProject?.id === p.id ? "text-white/60" : "text-neutral-400")}>
+                          {p.location || "Jakarta"}
+                        </p>
+                      </div>
+                      <Badge className={cn("text-[7px] md:text-[9px] uppercase-soft shrink-0", p.status === 'active' ? "bg-green-500" : "bg-blue-500")}>
+                        {p.status}
+                      </Badge>
                     </div>
-                    <Badge className={cn("text-[9px] uppercase-soft", p.status === 'active' ? "bg-green-500" : "bg-blue-500")}>
-                      {p.status}
-                    </Badge>
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                ))}
+              </div>
             </div>
 
             <div className="md:col-span-2">
@@ -480,7 +764,6 @@ export default function PMDashboard() {
               )}
             </div>
           </div>
-        </div>
       )}
 
       {activeTab === "materials" && (
@@ -752,7 +1035,16 @@ export default function PMDashboard() {
                   <TableBody>
                     {items.map((item) => (
                       <TableRow key={item.id}>
-                        <TableCell className="text-[10px] font-black uppercase tracking-widest">{item.name}</TableCell>
+                        <TableCell className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px]">
+                          <div className="flex items-center gap-2">
+                            {item.icon && (
+                              <div className="w-5 h-5 rounded-sm bg-neutral-100 flex-shrink-0 overflow-hidden border border-black/10">
+                                <img src={getDriveImageUrl(item.icon)} className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                            <span className="truncate">{item.name}</span>
+                          </div>
+                        </TableCell>
                         <TableCell className="w-48">
                           <div className="space-y-1">
                             <div className="flex justify-between text-[8px] font-black">
@@ -770,8 +1062,14 @@ export default function PMDashboard() {
                                 <img src={getDriveImageUrl(img)} className="w-full h-full object-cover" />
                               </div>
                             ))}
-                            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full bg-neutral-100 border-2 border-white">
-                              <Plus className="w-3 h-3" />
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6 rounded-full bg-neutral-100 border-2 border-white"
+                              onClick={() => triggerUpload(item.id, "progress")}
+                              disabled={uploadingItemId === item.id && uploadType === "progress"}
+                            >
+                              {uploadingItemId === item.id && uploadType === "progress" ? <Loader2 className="w-3 h-3 animate-spin text-neutral-400" /> : <Plus className="w-3 h-3" />}
                             </Button>
                           </div>
                         </TableCell>
@@ -783,8 +1081,14 @@ export default function PMDashboard() {
                               value={item.progress || 0}
                               onChange={(e) => updateItemProgress(item.id, Number(e.target.value))}
                             />
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <Camera className="w-4 h-4" />
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className={cn("h-8 w-8", (item as any).icon && "text-accent")}
+                              onClick={() => triggerUpload(item.id, "icon")}
+                              disabled={uploadingItemId === item.id && uploadType === "icon"}
+                            >
+                              {uploadingItemId === item.id && uploadType === "icon" ? <Loader2 className="w-4 h-4 animate-spin text-accent" /> : <Camera className="w-4 h-4" />}
                             </Button>
                           </div>
                         </TableCell>

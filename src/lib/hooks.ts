@@ -189,7 +189,7 @@ export function useProjects(userId?: string, userRole?: string) {
     return () => unsubscribe();
   }, [auth.currentUser, userId, userRole]);
 
-  const createProject = async (name: string, description: string) => {
+  const createProject = async (name: string, description: string, extraData: Partial<Project> = {}) => {
     if (!userId) return null;
     try {
       const newProject = {
@@ -206,7 +206,8 @@ export function useProjects(userId?: string, userRole?: string) {
           { id: "progress60", label: "Progress 60%", percentage: 35, amount: 0, status: "pending", requiredProgress: 60 },
           { id: "retention", label: "Retensi 5%", percentage: 5, amount: 0, status: "pending", requiredProgress: 100 }
         ],
-        status: "draft"
+        status: "draft",
+        ...extraData
       };
       const docRef = await addDoc(collection(db, "projects"), newProject);
       return docRef.id;

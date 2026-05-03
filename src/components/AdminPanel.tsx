@@ -36,7 +36,7 @@ import MediaWarehouse from "./MediaWarehouse";
 import { cn, getDriveImageUrl, formatRupiah, calculateAdminPrice, calculateClientPrice } from "@/lib/utils";
 import { toast } from "sonner";
 import { WorkItemMaster, UserProfile, Project, Workforce, MaterialRequest, Property, Campaign, SystemConfig, CMSConfig, Vendor, GalleryItem } from "@/types";
-import { generateRABPDF, generatePOPDF, generateInvoicePDF } from "@/lib/pdfUtils";
+import { generateRABPDF, generatePOPDF, generateInvoicePDF, generateReceiptPDF } from "@/lib/pdfUtils";
 import { ImageUpload } from "@/components/ImageUpload";
 import { WORK_ITEMS_MASTER, TBJ_LOGO } from "@/constants";
 import { nuclearWipe } from "@/lib/database";
@@ -317,6 +317,10 @@ export default function AdminPanel() {
   const [editingMasterSpecs, setEditingMasterSpecs] = useState<{id: string, name: string, specs: string} | any>(null);
   const [selectedProjectAI, setSelectedProjectAI] = useState<Project | any>({});
   const [selectedProjectFinance, setSelectedProjectFinance] = useState<Project | any>({});
+  const [editingMilestoneIndex, setEditingMilestoneIndex] = useState<number | null>(null);
+  const [milestoneEditPercentage, setMilestoneEditPercentage] = useState<number>(0);
+  const [showAddCustomMilestone, setShowAddCustomMilestone] = useState(false);
+  const [newCustomMilestone, setNewCustomMilestone] = useState({ label: "", percentage: 0 });
   const [showRecordPayment, setShowRecordPayment] = useState(false);
   const [bulkOrderItems, setBulkOrderItems] = useState([{ name: "", quantity: 0, unit: "m3" }]);
   const [selectedBulkProject, setSelectedBulkProject] = useState("");
@@ -1114,21 +1118,49 @@ export default function AdminPanel() {
                         </div>
                       </div>
                     </div>
-                    <div className="pt-6 border-t border-black/5">
-                      <h4 className="text-[10px] font-black uppercase tracking-widest mb-4">Gallery & Portfolio Impact</h4>
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="text-center p-4 bg-neutral-50 rounded-2xl border-2 border-black">
-                          <p className="text-2xl font-black">{gallery.length}</p>
-                          <p className="text-[8px] font-bold uppercase text-neutral-400">Items</p>
+                <div className="pt-6 border-t border-black/5">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="text-[9px] font-black uppercase tracking-widest text-neutral-400">Recent Project Requests (Awaiting)</h4>
+                    <Button variant="ghost" size="sm" className="text-[7px] font-black uppercase h-auto py-0 hover:text-accent opacity-60 hover:opacity-100" onClick={() => setActiveTab("projects")}>View All</Button>
+                  </div>
+                  <div className="flex overflow-x-auto pb-4 gap-3 scrollbar-hide snap-x snap-mandatory md:grid md:grid-cols-1 md:space-y-2 md:overflow-visible md:pb-0">
+                    {projects.filter(p => p.status === 'awaiting').slice(0, 5).map(p => (
+                      <div key={p.id} className="min-w-[220px] md:min-w-0 snap-center p-2.5 bg-neutral-50 rounded-xl border-2 border-black/5 flex justify-between items-center group hover:bg-white hover:border-black transition-all cursor-pointer shadow-sm md:shadow-none" onClick={() => { setActiveTab("projects"); setProjectStatus("awaiting"); }}>
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <div className="w-6 h-6 rounded-lg bg-accent/10 flex items-center justify-center text-accent shrink-0">
+                            <Briefcase className="w-3 h-3" />
+                          </div>
+                          <div className="flex-grow min-w-0">
+                            <p className="text-[8px] md:text-[9px] font-black uppercase truncate leading-tight">{p.name}</p>
+                            <p className="text-[7px] text-neutral-400 font-bold uppercase truncate opacity-70">{p.location || "No Location"}</p>
+                          </div>
                         </div>
-                        <div className="text-center p-4 bg-neutral-50 rounded-2xl border-2 border-black">
-                          <p className="text-2xl font-black">1.2k</p>
-                          <p className="text-[8px] font-bold uppercase text-neutral-400">Views</p>
-                        </div>
-                        <div className="text-center p-4 bg-neutral-50 rounded-2xl border-2 border-black">
-                          <p className="text-2xl font-black">15%</p>
-                          <p className="text-[8px] font-bold uppercase text-neutral-400">Conv. Rate</p>
-                        </div>
+                        <Badge className="bg-black text-white text-[6px] uppercase font-black px-1.5 py-0 shrink-0 ml-2">NEW</Badge>
+                      </div>
+                    ))}
+                    {projects.filter(p => p.status === 'awaiting').length === 0 && (
+                      <div className="w-full py-4 text-center bg-neutral-50 rounded-xl border-2 border-dashed border-neutral-200">
+                        <p className="text-[7px] font-black uppercase text-neutral-400 tracking-widest opacity-50">No pending requests.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-black/5">
+                  <h4 className="text-[9px] font-black uppercase tracking-widest text-neutral-400 mb-4">Gallery & Portfolio Impact</h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="text-center p-2 bg-neutral-50 rounded-xl border-2 border-black">
+                      <p className="text-lg font-black">{gallery.length}</p>
+                      <p className="text-[7px] font-bold uppercase text-neutral-400">Items</p>
+                    </div>
+                    <div className="text-center p-2 bg-neutral-50 rounded-xl border-2 border-black">
+                      <p className="text-lg font-black">{gallery.length > 0 ? "1.2k" : "0"}</p>
+                      <p className="text-[7px] font-bold uppercase text-neutral-400">Views</p>
+                    </div>
+                    <div className="text-center p-2 bg-neutral-50 rounded-xl border-2 border-black">
+                      <p className="text-lg font-black">{gallery.length > 0 ? "15%" : "0%"}</p>
+                      <p className="text-[7px] font-bold uppercase text-neutral-400">Rate</p>
+                    </div>
                       </div>
                     </div>
                   </CardContent>
@@ -1152,26 +1184,26 @@ export default function AdminPanel() {
                   <CardContent className="space-y-6">
                     <div className="space-y-4">
                       <div className="p-4 bg-black/20 rounded-xl border border-white/10">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-accent mb-2 flex items-center gap-2">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-accent mb-2 flex items-center gap-2">
                           <DollarSign className="w-3 h-3" /> Finance Summary
                         </p>
-                        <p className="text-[10px] leading-relaxed opacity-90">
+                        <p className="text-[9px] leading-relaxed opacity-90">
                           Revenue bulan ini diproyeksikan mencapai Rp 2.4B. Cash flow aman dengan cadangan operasional untuk 3 bulan ke depan.
                         </p>
                       </div>
                       <div className="p-4 bg-black/20 rounded-xl border border-white/10">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-2 flex items-center gap-2">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-blue-400 mb-2 flex items-center gap-2">
                           <BarChart3 className="w-3 h-3" /> Progress & Content
                         </p>
-                        <p className="text-[10px] leading-relaxed opacity-90">
+                        <p className="text-[9px] leading-relaxed opacity-90">
                           Rata-rata progress proyek aktif: 64%. Konten gallery baru (12 item) meningkatkan engagement leads sebesar 18%.
                         </p>
                       </div>
                       <div className="p-4 bg-black/20 rounded-xl border border-white/10">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-green-400 mb-2 flex items-center gap-2">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-green-400 mb-2 flex items-center gap-2">
                           <Package className="w-3 h-3" /> Material & Supply
                         </p>
-                        <p className="text-[10px] leading-relaxed opacity-90">
+                        <p className="text-[9px] leading-relaxed opacity-90">
                           Harga besi naik 5% di pasar. AI menyarankan bulk purchase untuk proyek Pondok Indah dan Menteng.
                         </p>
                       </div>
@@ -2259,6 +2291,7 @@ export default function AdminPanel() {
                       onChange={e => setProjectStatus(e.target.value)}
                     >
                       <option value="all">ANY STATUS</option>
+                      <option value="awaiting">AWAITING</option>
                       <option value="active">ACTIVE</option>
                       <option value="survey">SURVEY</option>
                       <option value="deal">DEAL / GOLD</option>
@@ -2293,10 +2326,12 @@ export default function AdminPanel() {
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
                 {projects.filter(p => {
-                  const matchesSearch = p.name.toLowerCase().includes(projectSearch.toLowerCase()) || 
-                                        p.location.toLowerCase().includes(projectSearch.toLowerCase());
+                  const nameStr = (p.name || "").toLowerCase();
+                  const locStr = (p.location || "").toLowerCase();
+                  const searchStr = projectSearch.toLowerCase();
+                  const matchesSearch = nameStr.includes(searchStr) || locStr.includes(searchStr);
                   const matchesCategory = projectCategory === "all" || p.category === projectCategory || p.type === projectCategory;
                   const matchesStatus = projectStatus === "all" || p.status === projectStatus;
                   return matchesSearch && matchesCategory && matchesStatus;
@@ -2308,13 +2343,13 @@ export default function AdminPanel() {
                     <Card 
                       key={p.id} 
                       className={cn(
-                        "border-2 rounded-3xl overflow-hidden shadow-sm group transition-all relative cursor-pointer",
+                        "border-2 rounded-[2rem] overflow-hidden shadow-sm group transition-all relative cursor-pointer",
                         selectedProjects.includes(p.id) ? "border-accent bg-accent/5" : "border-black hover:border-accent hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]",
                         isOver && "border-red-500 shadow-red-500/20"
                       )}
                       onClick={() => navigate(`/projects/${p.id}`)}
                     >
-                      <div className="h-48 bg-neutral-100 relative">
+                      <div className="h-40 md:h-48 bg-neutral-100 relative">
                         <div className="absolute top-4 left-4 z-10 flex items-center gap-2" onClick={e => e.stopPropagation()}>
                           <Checkbox 
                             checked={selectedProjects.includes(p.id)}
@@ -2329,9 +2364,9 @@ export default function AdminPanel() {
                         <img src={getDriveImageUrl(p.imageUrl) || `https://picsum.photos/seed/${p.id}/400/300`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                         
                         <div className="absolute top-4 right-4 flex gap-2">
-                           {isOver && <div className="bg-red-500 text-white p-1.5 rounded-full animate-bounce"><AlertCircle className="w-3 h-3" /></div>}
+                           {isOver && <div className="bg-red-500 text-white p-1 rounded-full animate-bounce"><AlertCircle className="w-3 h-3" /></div>}
                            <Badge className={cn(
-                             "uppercase font-black text-[8px] border-none px-3 py-1",
+                             "uppercase font-black text-[7px] md:text-[8px] border-none px-2 md:px-3 py-1",
                              p.status === 'active' ? "bg-green-500 text-white" : 
                              p.status === 'survey' ? "bg-blue-500 text-white" :
                              p.status === 'completed' ? "bg-purple-500 text-white" :
@@ -2339,51 +2374,51 @@ export default function AdminPanel() {
                            )}>{p.status}</Badge>
                         </div>
 
-                        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+                        <div className="absolute bottom-0 left-0 right-0 p-3 md:p-4 bg-gradient-to-t from-black/80 to-transparent">
                            <div className="flex justify-between items-end">
-                             <div className="space-y-1">
-                               <p className="text-[10px] text-white/80 font-black uppercase tracking-widest flex items-center gap-2">
-                                 <Clock className="w-3 h-3 text-accent" /> {p.createdAt ? new Date(p.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
+                             <div className="space-y-0.5">
+                               <p className="text-[8px] md:text-[10px] text-white/80 font-black uppercase tracking-widest flex items-center gap-1.5">
+                                 <Clock className="w-2.5 h-2.5 md:w-3 md:h-3 text-accent" /> {p.createdAt ? new Date(p.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
                                </p>
-                               <h3 className="text-lg font-black uppercase tracking-tighter text-white leading-none">{p.name}</h3>
+                               <h3 className="text-base md:text-lg font-black uppercase tracking-tighter text-white leading-none truncate w-56 md:w-auto">{p.name}</h3>
                              </div>
                            </div>
                         </div>
                       </div>
-                      <CardContent className="p-6 space-y-4">
+                      <CardContent className="p-4 md:p-6 space-y-3 md:space-y-4">
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-[10px] text-neutral-400 uppercase font-black">
-                              <MapPin className="w-3 h-3" /> {p.location || "Jakarta"}
+                            <div className="flex items-center gap-2 text-[9px] md:text-[10px] text-neutral-400 uppercase font-black truncate max-w-[150px]">
+                              <MapPin className="w-2.5 h-2.5 shrink-0" /> {p.location || "Jakarta"}
                             </div>
-                            <div className="flex items-center gap-1.5">
-                               <Users className="w-3 h-3 text-neutral-400" />
-                               <span className="text-[9px] font-black uppercase text-neutral-600">PM: {users.find(u => u.uid === p.pmId)?.displayName?.split(' ')[0] || "None"}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                               <Users className="w-2.5 h-2.5 text-neutral-400" />
+                               <span className="text-[8px] md:text-[9px] font-black uppercase text-neutral-600">PM: {users.find(u => u.uid === p.pmId)?.displayName?.split(' ')[0] || "None"}</span>
                             </div>
                         </div>
                         
-                        <div className="space-y-2 py-3 border-y border-black/5">
-                          <div className="flex justify-between items-center text-[9px] font-black uppercase">
-                            <span className="text-neutral-400">Activity: {p.updatedAt ? "Syncing Updates" : "Project Initialized"}</span>
+                        <div className="space-y-2 py-2 md:py-3 border-y border-black/5">
+                          <div className="flex justify-between items-center text-[8px] md:text-[9px] font-black uppercase">
+                            <span className="text-neutral-400">Activity: {p.updatedAt ? "Updates" : "Init"}</span>
                             <span className={cn("font-black", isOver ? "text-red-500" : "text-black")}>
                                {Math.round((projectExpenses / (p.totalBudget || 1)) * 100)}% Spent
                             </span>
                           </div>
-                          <Progress value={p.totalBudget ? (projectExpenses / p.totalBudget) * 100 : 0} className={cn("h-1.5", isOver && "bg-red-100")} />
+                          <Progress value={p.totalBudget ? (projectExpenses / p.totalBudget) * 100 : 0} className={cn("h-1 md:h-1.5", isOver && "bg-red-100")} />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 text-[10px]">
-                          <div className="space-y-1">
-                            <p className="font-black uppercase text-neutral-400 tracking-tighter">Budget Balance</p>
+                        <div className="grid grid-cols-2 gap-4 text-[9px] md:text-[10px]">
+                          <div className="space-y-0.5">
+                            <p className="font-black uppercase text-neutral-400 tracking-tighter">Budget</p>
                             <p className="font-black text-black">{formatRupiah(p.totalBudget || 0)}</p>
                           </div>
-                          <div className="space-y-1 text-right">
-                            <p className="font-black uppercase text-neutral-400 tracking-tighter">Profit Meta</p>
+                          <div className="space-y-0.5 text-right">
+                            <p className="font-black uppercase text-neutral-400 tracking-tighter">MetaProfit</p>
                             <p className="font-black text-green-600">+{formatRupiah((p.totalBudget || 0) * 0.1)}</p>
                           </div>
                         </div>
 
-                        <div className="flex gap-2 pt-2">
-                          <Button className="flex-grow btn-sleek h-10 text-[9px] font-black uppercase tracking-widest border-2 border-black" onClick={(e) => {
+                        <div className="flex gap-2 pt-1 md:pt-2">
+                          <Button className="flex-grow btn-sleek h-9 md:h-10 text-[8px] md:text-[9px] font-black uppercase tracking-widest border-2 border-black" onClick={(e) => {
                             e.stopPropagation();
                             setSelectedProjectTeam(p);
                             setShowManageTeam(true);
@@ -2392,7 +2427,7 @@ export default function AdminPanel() {
                           </Button>
                           <Button 
                             variant="outline" 
-                            className="h-10 w-10 border-2 border-black text-red-500 hover:bg-neutral-900 hover:text-white rounded-xl p-0 flex items-center justify-center transition-colors"
+                            className="h-9 w-9 md:h-10 md:w-10 border-2 border-black text-red-500 hover:bg-neutral-900 hover:text-white rounded-xl p-0 flex items-center justify-center transition-colors"
                             onClick={async (e) => {
                               e.stopPropagation();
                               if (confirm(`Hapus proyek ${p.name}?`)) {
@@ -2401,16 +2436,16 @@ export default function AdminPanel() {
                               }
                             }}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                           </Button>
                           <Button 
-                             className="h-10 w-10 border-2 border-black bg-black text-white hover:bg-accent rounded-xl p-0 flex items-center justify-center"
+                             className="h-9 w-9 md:h-10 md:w-10 border-2 border-black bg-black text-white hover:bg-accent rounded-xl p-0 flex items-center justify-center"
                              onClick={(e) => {
                                e.stopPropagation();
                                setSelectedProjectAI(p);
                              }}
                           >
-                             <Brain className="w-4 h-4" />
+                             <Brain className="w-3.5 h-3.5 md:w-4 md:h-4" />
                           </Button>
                         </div>
                       </CardContent>
@@ -4799,24 +4834,167 @@ export default function AdminPanel() {
                                   <span className="text-[10px] font-black uppercase block">{m.label}</span>
                                   <span className="text-[8px] uppercase-soft text-neutral-400">Status: {m.status}</span>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-xs font-black text-accent">{m.percentage}%</span>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={async () => {
-                                    const newMilestones = selectedProjectFinance.paymentMilestones.filter((_, idx) => idx !== i);
-                                    await updateProject(selectedProjectFinance.id, { paymentMilestones: newMilestones });
-                                    setSelectedProjectFinance({...selectedProjectFinance, paymentMilestones: newMilestones});
-                                    toast.success("Milestone removed");
-                                  }}>
-                                    <Trash2 className="w-3 h-3" />
-                                  </Button>
+                                <div className="flex items-center gap-2">
+                                  {editingMilestoneIndex === i ? (
+                                    <div className="flex items-center gap-1">
+                                      <Input 
+                                        type="number" 
+                                        className="h-8 w-16 text-[10px] font-black border-2 border-accent" 
+                                        value={milestoneEditPercentage}
+                                        onChange={(e) => setMilestoneEditPercentage(Number(e.target.value))}
+                                      />
+                                      <span className="text-[10px] font-black">%</span>
+                                      <Button 
+                                        size="sm" 
+                                        className="h-8 w-8 p-0 bg-accent text-white" 
+                                        onClick={async () => {
+                                          const newMilestones = [...selectedProjectFinance.paymentMilestones];
+                                          newMilestones[i] = { ...newMilestones[i], percentage: milestoneEditPercentage };
+                                          await updateProject(selectedProjectFinance.id, { paymentMilestones: newMilestones });
+                                          setSelectedProjectFinance({...selectedProjectFinance, paymentMilestones: newMilestones});
+                                          setEditingMilestoneIndex(null);
+                                          toast.success("Milestone updated");
+                                        }}
+                                      >
+                                        <Save className="w-3 h-3" />
+                                      </Button>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-8 w-8 p-0 text-red-500" 
+                                        onClick={() => setEditingMilestoneIndex(null)}
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div 
+                                      className="flex items-center gap-1 cursor-pointer hover:bg-neutral-50 p-1 rounded"
+                                      onClick={() => {
+                                        setEditingMilestoneIndex(i);
+                                        setMilestoneEditPercentage(m.percentage);
+                                      }}
+                                    >
+                                      <span className="text-xs font-black text-accent">{m.percentage}%</span>
+                                      <FileEdit className="w-2.5 h-2.5 text-neutral-400" />
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-1 ml-2">
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="h-8 px-2 text-[8px] font-black uppercase border-black"
+                                      onClick={async () => {
+                                        const client = users.find(u => u.uid === selectedProjectFinance.clientId);
+                                        const date = new Date();
+                                        const invNum = `INV-${m.label.split(' ')[0]}-${selectedProjectFinance.id.substring(0,4).toUpperCase()}`;
+                                        generateInvoicePDF({
+                                          number: invNum,
+                                          date: date.toLocaleDateString('id-ID'),
+                                          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('id-ID'),
+                                          clientName: client?.displayName || "Klien Terhormat",
+                                          clientPhone: client?.whatsapp || "081213496672",
+                                          projectName: selectedProjectFinance.name,
+                                          items: [{ desc: m.label, qty: 1, unit: 'Milestone', price: selectedProjectFinance.totalBudget * (m.percentage/100), total: selectedProjectFinance.totalBudget * (m.percentage/100) }],
+                                          total: selectedProjectFinance.totalBudget * (m.percentage/100),
+                                          bankInfo: { bank: cmsConfig?.paymentBankName || 'BRI', accNo: cmsConfig?.paymentAccountNumber || '479201031488535', accName: cmsConfig?.paymentAccountHolder || 'TBJ CONTRACTOR' }
+                                        });
+                                        toast.success("Milestone Invoice Generated");
+                                      }}
+                                    >
+                                      <FileText className="w-3 h-3 mr-1" /> Inv
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      className="h-8 px-2 text-[8px] font-black uppercase bg-green-600 hover:bg-green-700 text-white"
+                                      onClick={async () => {
+                                        const client = users.find(u => u.uid === selectedProjectFinance.clientId);
+                                        const date = new Date();
+                                        const rectNum = `RECT-${m.label.split(' ')[0]}-${selectedProjectFinance.id.substring(0,4).toUpperCase()}`;
+                                        generateReceiptPDF({
+                                          number: rectNum,
+                                          date: date.toLocaleDateString('id-ID'),
+                                          paymentDate: date.toLocaleDateString('id-ID'),
+                                          clientName: client?.displayName || "Klien Terhormat",
+                                          clientPhone: client?.whatsapp || "081213496672",
+                                          projectName: selectedProjectFinance.name,
+                                          items: [{ desc: m.label, qty: 1, unit: 'Milestone', price: selectedProjectFinance.totalBudget * (m.percentage/100), total: selectedProjectFinance.totalBudget * (m.percentage/100) }],
+                                          total: selectedProjectFinance.totalBudget * (m.percentage/100),
+                                          method: 'Bank Transfer'
+                                        });
+                                        toast.success("Milestone Receipt Generated");
+                                      }}
+                                    >
+                                      <CheckCircle2 className="w-3 h-3 mr-1" /> Rect
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={async () => {
+                                      const newMilestones = selectedProjectFinance.paymentMilestones.filter((_, idx) => idx !== i);
+                                      await updateProject(selectedProjectFinance.id, { paymentMilestones: newMilestones });
+                                      setSelectedProjectFinance({...selectedProjectFinance, paymentMilestones: newMilestones});
+                                      toast.success("Milestone removed");
+                                    }}>
+                                      <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                             ))}
-                            <Button variant="outline" className="w-full border-2 border-black border-dashed h-10 text-[10px] font-black uppercase" onClick={() => {
-                              toast.info("Add milestone feature coming soon...");
-                            }}>
-                              <Plus className="w-3 h-3 mr-2" /> Add Custom Milestone
-                            </Button>
+                            <Dialog open={showAddCustomMilestone} onOpenChange={setShowAddCustomMilestone}>
+                              <DialogTrigger render={
+                                <Button variant="outline" className="w-full border-2 border-black border-dashed h-10 text-[10px] font-black uppercase">
+                                  <Plus className="w-3 h-3 mr-2" /> Add Custom Milestone
+                                </Button>
+                              } />
+                              <DialogContent className="border-4 border-black rounded-3xl">
+                                <DialogHeader>
+                                  <DialogTitle className="text-xl font-black uppercase tracking-tighter">Add Custom Milestone</DialogTitle>
+                                  <DialogDescription className="text-xs uppercase-soft">Enter milestone details for {selectedProjectFinance.name}</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                  <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase">Milestone Name</Label>
+                                    <Input 
+                                      placeholder="e.g. Pembayaran Termin 3" 
+                                      className="border-2 border-black rounded-xl h-12"
+                                      value={newCustomMilestone.label}
+                                      onChange={(e) => setNewCustomMilestone({...newCustomMilestone, label: e.target.value})}
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase">Percentage (%)</Label>
+                                    <Input 
+                                      type="number" 
+                                      placeholder="e.g. 20" 
+                                      className="border-2 border-black rounded-xl h-12"
+                                      value={newCustomMilestone.percentage}
+                                      onChange={(e) => setNewCustomMilestone({...newCustomMilestone, percentage: Number(e.target.value)})}
+                                    />
+                                  </div>
+                                </div>
+                                <DialogFooter>
+                                  <Button className="btn-black h-12 rounded-xl uppercase font-black tracking-widest text-xs px-8" onClick={async () => {
+                                    if (!newCustomMilestone.label || newCustomMilestone.percentage <= 0) {
+                                      toast.error("Please fill milestone details correctly");
+                                      return;
+                                    }
+                                    const currentMilestones = selectedProjectFinance.paymentMilestones || [];
+                                    const newM = {
+                                      label: newCustomMilestone.label,
+                                      percentage: newCustomMilestone.percentage,
+                                      status: 'pending'
+                                    };
+                                    const newMilestones = [...currentMilestones, newM];
+                                    await updateProject(selectedProjectFinance.id, { paymentMilestones: newMilestones });
+                                    setSelectedProjectFinance({...selectedProjectFinance, paymentMilestones: newMilestones});
+                                    setShowAddCustomMilestone(false);
+                                    setNewCustomMilestone({ label: "", percentage: 0 });
+                                    toast.success("Custom milestone added");
+                                  }}>
+                                    Save Milestone
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
                           </>
                         ) : (
                           [

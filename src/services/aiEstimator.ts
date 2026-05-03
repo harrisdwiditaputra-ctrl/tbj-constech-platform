@@ -5,39 +5,29 @@ export async function getAIEstimation(userProblem: string, category: string, mas
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error("API Key for Gemini is missing. Please check your environment settings.");
+      throw new Error("GEMINI_API_KEY is not configured.");
     }
 
     const ai = new GoogleGenAI({ apiKey });
-    
     const masterDataString = (masterData || []).map((item: any) => {
       return `- [${item.code || 'N/A'}] ${item.name} (${item.unit}): Rp ${item.price?.toLocaleString('id-ID')}`;
     }).join('\n');
 
     const promptText = `
-      Identitas: Anda adalah "TBJ Constech OS", Chief Estimator AI Eksklusif untuk TBJ Constech.
-      Prinsip: "Everything is Connected". Semua item harus merujuk pada Master Data.
-      
-      User Role: ${userRole || 'Client'}
-      Kategori Proyek: ${category}
-      Problem/Request User: "${userProblem}"
+      PROMPT UTAMA:
+      Anda adalah "TBJ Constech OS", sistem operasi AI eksklusif untuk platform konstruksi dan renovasi TBJ Constech.
+      Tugas Anda adalah membuat estimasi RAB profesional untuk proyek: ${category}.
+      Detail tambahan: ${userProblem}
 
-      ATURAN HARGA:
-      1. DATA ACUAN: Gunakan Master Data di bawah sebagai satu-satunya sumber harga modal (price_base).
-      2. PENYESUAIAN HARGA: Naikkan semua harga master di bawah sebesar ${globalMarkup || 20}% secara otomatis.
-      3. BULLatKAN: Hasil akhir harus dibulatkan ke ribuan terdekat.
-      
-      MASTER DATA TERSEDIA:
+      MASTER DATA ACUAN:
       ${masterDataString}
 
       GUARDRAILS:
-      - HANYA jawab urusan konstruksi/renovasi.
+      - Anda adalah pakar konstruksi, renovasi, desain interior, arsitektur, perencanaan, dan infrastruktur.
+      - Sangat diperbolehkan memberikan estimasi untuk ${category} dan layanan terkait lainnya.
       - JANGAN bocorkan price_base (harga modal) ke user Non-Admin.
-      - JANGAN PERNAH menyebutkan bahwa harga telah dinaikkan 20% atau dibulatkan ke ribuan. Ini adalah RAHASIA PERUSAHAAN.
+      - JANGAN PERNAH menyebutkan bahwa harga telah dinaikkan atau dibulatkan. Ini adalah RAHASIA PERUSAHAAN. (Konteks: Semua harga di master data sudah termasuk penyesuaian markup ${globalMarkup}%).
       - Jika ditanya tentang asal usul harga, katakan bahwa ini adalah estimasi standar profesional TBJ Constech.
-      - Jika item TIDAK ADA di Master Data, gunakan kode 'GEN-001' dan beri catatan "Item tersebut belum terdata di sistem kami. Silakan hubungi Admin untuk konsultasi manual."
-
-      Tugas: Berikan analisa teknis dan estimasi RAB dalam format JSON.
     `;
 
     const response = await ai.models.generateContent({
@@ -47,44 +37,49 @@ export async function getAIEstimation(userProblem: string, category: string, mas
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
+          required: ["summary", "items", "total"],
           properties: {
-            analysis: { type: Type.STRING },
+            summary: { type: Type.STRING, description: "Penjelasan singkat pendekatan teknis" },
             items: {
               type: Type.ARRAY,
               items: {
                 type: Type.OBJECT,
+                required: ["code", "name", "volume", "unit", "price", "total", "reasoning"],
                 properties: {
+                  code: { type: Type.STRING },
                   name: { type: Type.STRING },
-                  quantity: { type: Type.NUMBER },
+                  volume: { type: Type.NUMBER },
                   unit: { type: Type.STRING },
-                  pricePerUnit: { type: Type.NUMBER },
-                  totalPrice: { type: Type.NUMBER },
-                  reasoning: { type: Type.STRING },
-                  priority: { 
-                    type: Type.STRING,
-                    description: "Prioritas: Low, Medium, High, Urgent"
-                  },
-                  code: { type: Type.STRING }
-                },
-                required: ["name", "quantity", "unit", "pricePerUnit", "totalPrice", "reasoning", "priority", "code"]
+                  price: { type: Type.NUMBER },
+                  total: { type: Type.NUMBER },
+                  reasoning: { type: Type.STRING, description: "Alasan teknis pemilihan item ini" },
+                  priority: { type: Type.STRING, enum: ["High", "Medium", "Low"] }
+                }
               }
             },
-            totalEstimatedCost: { type: Type.NUMBER }
-          },
-          required: ["analysis", "items", "totalEstimatedCost"]
+            total: { type: Type.NUMBER },
+            tips: { type: Type.ARRAY, items: { type: Type.STRING } }
+          }
         }
       }
     });
 
-    const responseText = response.text;
-    if (!responseText) throw new Error("AI returned empty response");
+    const data = JSON.parse(response.text || "{}");
     
-    try {
-      return JSON.parse(responseText.trim());
-    } catch (e) {
-      console.error("Failed to parse AI estimation response as JSON:", responseText);
-      throw new Error("Hasil analisa AI tidak valid. Silakan coba lagi.");
-    }
+    return {
+      analysis: data.summary,
+      items: (data.items || []).map((item: any) => ({
+        name: item.name,
+        quantity: item.volume,
+        unit: item.unit,
+        pricePerUnit: item.price,
+        totalPrice: item.total,
+        reasoning: item.reasoning || "Estimasi AI standar TBJ",
+        priority: item.priority || "Medium",
+        code: item.code || "GEN-001"
+      })),
+      totalEstimatedCost: data.total
+    };
   } catch (error: any) {
     console.error("AI Estimation Service Error:", error);
     throw new Error(error.message || "Gagal melakukan Analisa AI");

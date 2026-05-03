@@ -4,7 +4,6 @@
  */
 
 import { BrowserRouter as Router, Routes, Route, useNavigate, useParams, Link } from "react-router-dom";
-import { motion, AnimatePresence } from "motion/react";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import ErrorBoundary from "@/components/ErrorBoundary.tsx";
@@ -25,8 +24,8 @@ import { Progress } from "@/components/ui/progress";
 import { WorkItemMaster, Property, AIEstimateResponse, BudgetItem, TimelineEvent } from "@/types";
 import { cn, getDriveImageUrl, calculateAdminPrice, calculateClientPrice, formatRupiah } from "@/lib/utils";
 import { getAIEstimation } from "./services/aiEstimator";
-import { generateAIPDF, generateRABPDF, generateInvoicePDF } from "@/lib/pdfUtils";
-import { Plus, Trash2, ChevronRight, ChevronLeft, Loader2, Calculator, Search, CheckCircle2, Phone, Mail, Lock, CreditCard, Image as ImageIcon, Calendar, FileCheck, Clock, ExternalLink, ChevronDown, ChevronUp, Home, Wrench, PenTool, Building2, MapPin, Ruler, Layers, FileText, Gavel, Key, Camera, Upload, UserCheck, Map as MapIcon, Share2, Instagram, Download, Star, Settings, User, MessageSquare, ShieldCheck, Sparkles, Minus, Brain, Quote, Zap, LayoutDashboard, DollarSign, Edit2, ArrowRight, UserPlus, Fingerprint, History, Package } from "lucide-react";
+import { generateAIPDF, generateRABPDF, generateInvoicePDF, generateReceiptPDF } from "@/lib/pdfUtils";
+import { Plus, Trash2, ChevronRight, ChevronLeft, Loader2, Calculator, Search, CheckCircle2, Phone, Mail, Lock, CreditCard, Image as ImageIcon, Calendar, FileCheck, Clock, ExternalLink, ChevronDown, ChevronUp, Home, Wrench, PenTool, Building2, MapPin, Ruler, Layers, FileText, Gavel, Key, Camera, Upload, UserCheck, Map as MapIcon, Share2, Instagram, Download, Star, Settings, User, MessageSquare, ShieldCheck, Sparkles, Minus, Brain, Quote, Zap, LayoutDashboard, DollarSign, Edit2, ArrowRight, UserPlus, Fingerprint, History, Package, Terminal, X, Briefcase } from "lucide-react";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import Gallery from "./components/Gallery";
@@ -229,7 +228,7 @@ const ProjectsPage = ({ user }: { user: any }) => {
 
   if (showLockedView) {
     return (
-      <div className="py-20 flex flex-col items-center text-center space-y-6 max-w-2xl mx-auto translate-y-10 animate-in fade-in duration-700">
+      <div className="py-20 flex flex-col items-center text-center space-y-6 max-w-2xl mx-auto translate-y-10 focus:outline-none">
         <div className="w-24 h-24 bg-accent/5 rounded-full flex items-center justify-center relative border-2 border-accent/20">
           <Lock className="w-10 h-10 text-accent" />
           <div className="absolute -top-2 -right-2 bg-accent text-white p-1 rounded-full border-2 border-white">
@@ -501,9 +500,10 @@ const ProjectDetail = () => {
           <Lock className="w-10 h-10 text-accent" />
         </div>
         <div className="space-y-4">
+          <Badge className="bg-neutral-100 text-neutral-500 uppercase-soft text-[10px]">{project?.name || "Proyek Baru"}</Badge>
           <h2 className="text-4xl font-black uppercase tracking-tighter">Access Denied</h2>
           <p className="text-neutral-500 uppercase font-bold text-xs tracking-widest leading-loose max-w-sm mx-auto">
-            Halaman ini dikunci. Silakan lakukan pembayaran <span className="text-black underline font-black">Digital Assessment & Survey</span> seharga <span className="bg-accent text-white px-2 py-0.5 rounded">Rp399.000</span> untuk mengaktifkan dashboard proyek Anda.
+            Halaman ini dikunci. Silakan lakukan pembayaran <span className="text-black underline font-black">Digital Assessment & Survey</span> seharga <span className="bg-accent text-white px-2 py-0.5 rounded">Rp399.000</span> untuk mengaktifkan dashboard proyek <span className="font-bold">{project?.name}</span> Anda.
           </p>
         </div>
         <Button onClick={() => navigate("/assistant")} className="btn-accent h-16 px-12 rounded-2xl gap-3 font-black uppercase text-xs tracking-widest shadow-2xl shadow-accent/30 animate-bounce">
@@ -610,7 +610,7 @@ const ProjectDetail = () => {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
+    <div className="space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="space-y-1 w-full overflow-hidden">
           <div className="flex items-center gap-3">
@@ -853,7 +853,7 @@ const ProjectDetail = () => {
       )}
 
       {activeTab === "timeline" && (
-        <Card className="border-2 border-black rounded-2xl p-6 bg-neutral-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-in slide-in-from-bottom-4 duration-500">
+        <Card className="border-2 border-black rounded-2xl p-6 bg-neutral-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
           <div className="flex items-center justify-between mb-8">
              <div>
                <h3 className="text-2xl font-black uppercase tracking-tighter">Project Timeline</h3>
@@ -1020,7 +1020,7 @@ const ProjectDetail = () => {
       )}
 
       {activeTab === "finance" && (
-        <div className="grid md:grid-cols-3 gap-8 animate-in slide-in-from-bottom-4 duration-500">
+        <div className="grid md:grid-cols-3 gap-8">
            <div className="md:col-span-2 space-y-6">
               <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
                 <CardHeader className="bg-neutral-50 border-b-2 border-black flex justify-between items-center">
@@ -1126,9 +1126,97 @@ const ProjectDetail = () => {
                     ))}
                  </div>
                  <div className="mt-8 pt-8 border-t border-white/20">
-                    <Button className="w-full h-14 bg-black text-white hover:bg-neutral-900 rounded-2xl font-black uppercase tracking-widest text-[10px] gap-2">
-                      <FileText className="w-4 h-4" /> Invoice & Receipt Portal
-                    </Button>
+                    <Dialog>
+                      <DialogTrigger render={
+                        <Button className="w-full h-14 bg-black text-white hover:bg-neutral-900 rounded-2xl font-black uppercase tracking-widest text-[10px] gap-2">
+                          <FileText className="w-4 h-4" /> Invoice & Receipt Portal
+                        </Button>
+                      } />
+                      <DialogContent className="max-w-2xl rounded-3xl border-none p-0 overflow-hidden shadow-2xl">
+                        <DialogHeader className="p-8 bg-neutral-950 text-white">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center">
+                              <DollarSign className="w-6 h-6 text-white" />
+                            </div>
+                            <DialogTitle className="text-2xl font-black uppercase tracking-tighter italic">Billing Dashboard</DialogTitle>
+                          </div>
+                          <DialogDescription className="text-white/40 uppercase-soft text-xs">Official Invoices & Payment Receipts for {project.name}</DialogDescription>
+                        </DialogHeader>
+                        <div className="p-8 space-y-6 bg-white overflow-y-auto max-h-[60vh] custom-scrollbar">
+                          {[
+                            { label: 'Booking Fee (Digital Assessment)', value: 399000, status: 'paid', termin: 'DA-SURVEY' },
+                            { label: 'Termin I (DP 30%)', value: project.totalBudget * 0.3, status: project.escrowBalance >= project.totalBudget * 0.3 ? 'paid' : 'unpaid', termin: 'TERMIN-1' },
+                            { label: 'Termin II (Mid 40%)', value: project.totalBudget * 0.4, status: 'unpaid', termin: 'TERMIN-2' },
+                            { label: 'Termin III (Final 30%)', value: project.totalBudget * 0.3, status: 'unpaid', termin: 'TERMIN-3' },
+                          ].map((bill, i) => (
+                            <div key={i} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 border-2 border-black/5 rounded-2xl hover:border-black transition-all group">
+                              <div className="space-y-1 mb-4 sm:mb-0">
+                                <div className="flex items-center gap-2">
+                                  <h5 className="font-black uppercase text-xs tracking-tight">{bill.label}</h5>
+                                  <Badge className={cn(
+                                    "text-[8px] font-black uppercase px-2 py-0",
+                                    bill.status === 'paid' ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"
+                                  )}>
+                                    {bill.status}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm font-black text-black">{formatRupiah(calculateClientPrice(bill.value, sysConfig?.globalMarkup))}</p>
+                              </div>
+                              <div className="flex gap-2 w-full sm:w-auto">
+                                <Button 
+                                  variant="outline" 
+                                  className="flex-1 sm:flex-none h-10 px-4 rounded-xl border-2 border-black uppercase font-black text-[9px] gap-2 hover:bg-black hover:text-white"
+                                  onClick={async () => {
+                                    const invData = {
+                                      number: `INV-${bill.termin}-${project.id.substring(0, 4).toUpperCase()}`,
+                                      date: new Date().toLocaleDateString('id-ID'),
+                                      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('id-ID'),
+                                      clientName: project.clientName || user?.displayName || "Klien Terhormat",
+                                      clientPhone: project.clientPhone || "0812XXX",
+                                      projectName: project.name,
+                                      items: [{ desc: bill.label, qty: 1, unit: 'Lot', price: calculateClientPrice(bill.value, sysConfig?.globalMarkup), total: calculateClientPrice(bill.value, sysConfig?.globalMarkup) }],
+                                      total: calculateClientPrice(bill.value, sysConfig?.globalMarkup),
+                                      bankInfo: { bank: 'BRI', accNo: '479201031488535', accName: 'TBJ Architect & Constech' }
+                                    };
+                                    generateInvoicePDF(invData);
+                                    toast.success(`Invoice ${bill.termin} generated!`);
+                                  }}
+                                >
+                                  <FileText className="w-3.5 h-3.5" /> Invoice
+                                </Button>
+                                <Button 
+                                  className={cn(
+                                    "flex-1 sm:flex-none h-10 px-4 rounded-xl uppercase font-black text-[9px] gap-2 shadow-lg",
+                                    bill.status === 'paid' ? "bg-green-600 hover:bg-green-700 text-white shadow-green-500/20" : "bg-neutral-100 text-neutral-300 border-dashed border border-black/10 cursor-not-allowed"
+                                  )}
+                                  disabled={bill.status !== 'paid'}
+                                  onClick={async () => {
+                                    const rectData = {
+                                      number: `RECT-${bill.termin}-${project.id.substring(0, 4).toUpperCase()}`,
+                                      date: new Date().toLocaleDateString('id-ID'),
+                                      paymentDate: new Date().toLocaleDateString('id-ID'),
+                                      clientName: project.clientName || user?.displayName || "Klien Terhormat",
+                                      clientPhone: project.clientPhone || "0812XXX",
+                                      projectName: project.name,
+                                      items: [{ desc: bill.label, qty: 1, unit: 'Lot', price: calculateClientPrice(bill.value, sysConfig?.globalMarkup), total: calculateClientPrice(bill.value, sysConfig?.globalMarkup) }],
+                                      total: calculateClientPrice(bill.value, sysConfig?.globalMarkup),
+                                      method: 'Digital Transfer'
+                                    };
+                                    generateReceiptPDF(rectData);
+                                    toast.success(`Receipt ${bill.termin} generated!`);
+                                  }}
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Receipt
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="p-6 bg-neutral-50 border-t border-black/5 flex justify-center">
+                           <p className="text-[9px] text-neutral-400 uppercase font-black tracking-widest leading-none">Security Verified by TBJ Constech OS</p>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                  </div>
               </Card>
               
@@ -1243,7 +1331,7 @@ const ProjectDetail = () => {
       )}
 
       {activeTab === "rab" && (
-        <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-8">
           <div className="bg-neutral-50 p-4 md:p-6 rounded-[2rem] border-2 border-black/5 space-y-4">
              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="w-full md:w-auto">
@@ -1256,12 +1344,9 @@ const ProjectDetail = () => {
                         Actions Menu
                         {showRABActions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </Button>
-                      <AnimatePresence>
+                      <div>
                         {showRABActions && (
-                          <motion.div 
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
+                          <div 
                             className="overflow-hidden mt-3 space-y-3"
                           >
                              <Button variant="outline" className="w-full h-12 px-6 border border-neutral-200 rounded-2xl gap-2 font-black uppercase text-[10px] shadow-sm" onClick={() => {
@@ -1353,9 +1438,9 @@ const ProjectDetail = () => {
                                  </Dialog>
                                </>
                              )}
-                          </motion.div>
+                          </div>
                         )}
-                      </AnimatePresence>
+                      </div>
                    </div>
 
                    <div className="hidden md:flex flex-wrap gap-4">
@@ -1621,6 +1706,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false); // New state for registration
   const [showOtpDialog, setShowOtpDialog] = useState(false);
   const [expandedRenovasi, setExpandedRenovasi] = useState(false);
   const [leadData, setLeadData] = useState({
@@ -1635,6 +1721,11 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
     subType: "",
     floors: 1,
     finishing: "Standard",
+    clientName: user.displayName || "",
+    clientEmail: user.email || "",
+    clientPhone: user.whatsapp || user.phoneNumber || "",
+    clientAddress: user.address || "",
+    description: ""
   });
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedItems, setSelectedItems] = useState<{ item: WorkItemMaster; qty: number }[]>([]);
@@ -1701,10 +1792,15 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
         projectData.type === "Arsitektur" ||
         projectData.type === "Lain-lain" ||
         projectData.type === "Lain-Lain" ||
-        (projectData.type === "Interior" && projectData.subType === "jasa-desain")
+        projectData.type === "Interior"
       ));
 
     if (isAIRequired) {
+      if (!projectData.location) {
+        toast.error("Mohon pilih lokasi proyek terlebih dahulu.");
+        return;
+      }
+
       // Tier 1 AI Analysis Limit Check
       const isStaff = user?.role === "admin" || user?.role === "pm";
       const isPro = user?.tier === "survey" || user?.tier === "deal";
@@ -1712,6 +1808,8 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
       const freeLimit = user?.waVerified ? (systemConfig?.aiVerifiedLimit || 5) : (systemConfig?.aiFreeLimit || 1);
       
       setIsAnalyzing(true);
+      const loadingToast = toast.loading("AI sedang menganalisa data proyek Anda...");
+
       try {
         let prompt = userProblem || `Konsultasi & Estimasi untuk proyek ${projectData.type} ${projectData.subType ? `(${projectData.subType})` : ""} di ${projectData.location || "lokasi strategis"}.`;
         
@@ -1734,6 +1832,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
         setAiEstimation(result);
         
         if (!isStaff && !isPro && (user?.aiUsageCount || 0) >= freeLimit) {
+          toast.dismiss(loadingToast);
           toast.info("Limit Analisa AI Tercapai.", { description: "Silakan hubungi Admin atau booking survey untuk melanjutkan." });
           setStep(6); 
           return;
@@ -1744,6 +1843,9 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
           await incrementAIUsage();
         }
         
+        toast.dismiss(loadingToast);
+        toast.success("Analisa AI Selesai!", { description: "Estimasi anggaran telah disusun secara otomatis." });
+
         // If already verified, go straight to result (Step 5), else go to verification (Step 4)
         if (user?.waVerified) {
           setStep(5);
@@ -1752,6 +1854,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
         }
       } catch (error) {
         console.error("AI Estimation failed", error);
+        toast.dismiss(loadingToast);
         toast.error(error instanceof Error ? error.message : "Gagal melakukan analisa AI. Silakan coba lagi.");
       } finally {
         setIsAnalyzing(false);
@@ -1812,6 +1915,55 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
     setStep(6); // Survey booking
   };
 
+  const { createProject } = useProjects(user?.uid, user?.role);
+
+  const handleRegisterProject = async () => {
+    if (!user || user.uid.startsWith("guest-")) {
+      toast.error("Anda harus Login dengan Google untuk mendaftarkan proyek ke Command Center.");
+      return;
+    }
+
+    if (!projectData.clientName || !projectData.clientPhone) {
+      toast.error("Mohon lengkapi data nama dan nomor telepon.");
+      return;
+    }
+
+    setIsRegistering(true);
+    const registerToastId = "register-toast";
+    toast.loading("Sedang mendaftarkan proyek Anda ke Command Center...", { id: registerToastId });
+
+    try {
+      const projectId = await createProject(
+        projectData.name || `Proyek ${projectData.type} - ${projectData.clientName}`,
+        userProblem || projectData.description || `Permintaan proyek ${projectData.type}`,
+        {
+          status: 'awaiting',
+          area: Number(projectData.area),
+          location: projectData.location,
+          type: projectData.type,
+          clientName: projectData.clientName,
+          clientEmail: projectData.clientEmail,
+          clientPhone: projectData.clientPhone,
+          clientAddress: projectData.clientAddress,
+          imageUrl: problemPhotos[0] || "",
+          totalBudget: totalEstimate,
+        }
+      );
+
+      if (projectId) {
+        toast.success("Registrasi Berhasil! Proyek Anda kini diproses oleh tim PM TBJ Constech.", { id: registerToastId });
+        setStep(7); // Registration Success step
+      } else {
+        toast.error("Gagal mendaftarkan proyek. Data tidak valid atau sesi berakhir.", { id: registerToastId });
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      toast.error("Gagal mendaftarkan proyek. Pastikan Anda memiliki koneksi yang stabil.", { id: registerToastId });
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
   const updateInteriorItem = (room: string, itemName: string, updates: any, basePrice?: number) => {
     setInteriorDetails(prev => {
       const roomData = prev[room] || {};
@@ -1827,15 +1979,15 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-12 py-12">
+    <div className="max-w-5xl mx-auto space-y-8 md:space-y-12 py-6 md:py-12 px-4 md:px-0 relative min-h-[80vh]">
       <div className="text-center space-y-4">
-        <div className="tag-tech">
+        <div className="tag-tech inline-block">
           Tech Const & AI Design
         </div>
-        <h1 className="text-7xl font-light tracking-tighter text-black uppercase leading-[0.8] heading-edge">
-          Virtual<br/>Assistant
+        <h1 className="text-4xl sm:text-5xl md:text-7xl font-light tracking-tighter text-black uppercase leading-tight md:leading-[0.8] heading-edge">
+          Virtual<br className="hidden sm:block"/> Assistant
         </h1>
-        <p className="text-neutral-400 uppercase-soft max-w-md mx-auto">
+        <p className="text-neutral-400 uppercase-soft max-w-sm sm:max-w-md mx-auto text-[10px] md:text-sm">
           TBJ Digital Ecosystem: AI-Powered Construction & Design
         </p>
       </div>
@@ -1851,10 +2003,12 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
         </div>
       )}
 
-      <Card className="border border-black/10 shadow-xl overflow-hidden rounded-2xl">
+      <Card className="border-4 border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] rounded-[2.5rem] relative bg-white sm:overflow-hidden overflow-visible">
         <CardContent className="p-0">
           {user?.role === "admin" && step === 1 && (
-            <div className="bg-black text-white p-4 flex justify-between items-center">
+            <div 
+              className="bg-black text-white p-4 flex justify-between items-center"
+            >
               <div className="flex items-center gap-2">
                 <Lock className="w-4 h-4" />
                 <p className="uppercase-soft text-white/60">Admin Mode Active</p>
@@ -1866,14 +2020,17 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
               </Link>
             </div>
           )}
+          
           {step === 1 && (
-            <div className="p-12 space-y-12">
+            <div 
+              className="p-6 md:p-12 space-y-8 md:space-y-12"
+            >
               <div className="text-center space-y-4">
-                <h2 className="text-4xl font-black uppercase tracking-tighter">Layanan Konstruksi</h2>
-                <p className="text-neutral-400 uppercase-soft">Pilih kategori proyek untuk memulai estimasi AI</p>
+                <h2 className="text-2xl md:text-4xl font-black uppercase tracking-tighter italic">Layanan Konstruksi</h2>
+                <p className="text-neutral-400 uppercase-soft text-[10px] md:text-sm">Pilih kategori proyek untuk memulai estimasi AI</p>
               </div>
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {MAIN_CATEGORIES.map(cat => (
+              <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {MAIN_CATEGORIES.map((cat, idx) => (
                   <div 
                     key={cat.id}
                     onClick={() => {
@@ -1886,6 +2043,9 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         return;
                       }
                       setProjectData({...projectData, type: cat.id});
+                      toast.success(`Kategori ${cat.label} Dipilih`, {
+                        description: "Mohon lengkapi detail proyek di tahap berikutnya."
+                      });
                       if (cat.id === "Property") {
                         setStep(10); // Property Page
                       } else {
@@ -1893,23 +2053,23 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                       }
                     }}
                     className={cn(
-                      "p-8 border-2 border-black cursor-pointer transition-all group relative overflow-hidden rounded-3xl",
+                      "p-6 md:p-8 border-2 border-black cursor-pointer transition-all group relative overflow-hidden rounded-3xl",
                       cat.cosmic 
-                        ? "bg-[#FF6B00] text-white border-[#FF6B00] shadow-[0_0_20px_rgba(255,107,0,0.3)] hover:bg-[#E65F00]" 
-                        : "hover:bg-titanium hover:text-white"
+                        ? "bg-[#FF6B00] text-white border-[#FF6B00] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-[#E65F00] active:translate-y-1 active:shadow-none" 
+                        : "hover:bg-titanium hover:text-white hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none"
                     )}
                   >
                     <cat.icon className={cn(
-                      "w-12 h-12 mb-6 transition-transform group-hover:-translate-y-1",
+                      "w-10 h-10 md:w-12 md:h-12 mb-4 md:mb-6 transition-transform group-hover:-translate-y-1",
                       cat.cosmic ? "text-white" : ""
                     )} />
-                    <h3 className="font-black text-xl uppercase tracking-tighter">{cat.label}</h3>
+                    <h3 className="font-black text-lg md:text-xl uppercase tracking-tighter">{cat.label}</h3>
                     <p className={cn(
-                      "uppercase-soft mt-2 opacity-60",
+                      "uppercase-soft mt-2 opacity-60 text-[9px] md:text-[10px]",
                       cat.cosmic ? "text-white/80" : ""
                     )}>{cat.desc}</p>
                     <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <ChevronRight className="w-6 h-6" />
+                      <ChevronRight className="w-5 h-5 md:w-6 md:h-6" />
                     </div>
                   </div>
                 ))}
@@ -1918,13 +2078,15 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
           )}
 
           {step === 2 && (
-            <div className="p-6 md:p-12 space-y-8 md:space-y-12">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-neutral-100 pb-6 gap-4">
-                <h2 className="text-xl md:text-4xl font-black uppercase tracking-tighter flex items-center gap-3">
-                  <MapPin className="w-8 md:w-10 h-8 md:h-10" /> Detail Proyek
+            <div 
+               className="p-4 md:p-12 space-y-8 md:space-y-12"
+            >
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-2 border-black pb-4 md:pb-6 gap-4">
+                <h2 className="text-xl md:text-3xl font-black uppercase tracking-tighter flex items-center gap-2 italic">
+                  <MapPin className="w-8 h-8 md:w-10 md:h-10 text-accent" /> Detail Proyek
                 </h2>
                 <div className="flex items-center gap-4">
-                  <Button variant="ghost" size="sm" className="h-8 md:h-10 text-[8px] md:text-[10px] font-black uppercase tracking-widest text-neutral-400" onClick={() => setStep(1)}>
+                  <Button variant="ghost" size="sm" className="h-8 md:h-10 text-[9px] md:text-[11px] font-black uppercase tracking-widest text-neutral-400" onClick={() => setStep(1)}>
                     &larr; Categories
                   </Button>
                   <p className="uppercase-soft text-neutral-400 text-[10px] md:text-xs">Step 02 / 05</p>
@@ -1954,7 +2116,9 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         {isSearchingLocation ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                       </Button>
                     </div>
-                    <MapPicker position={mapPosition} setPosition={setMapPosition} />
+                    <div className="rounded-2xl border-2 border-black overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                      <MapPicker position={mapPosition} setPosition={setMapPosition} />
+                    </div>
                   </div>
 
                   {projectData.type === "Renovasi" && (
@@ -1975,7 +2139,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         </div>
                         {expandedRenovasi && (
                           <div className="p-4 md:p-6 bg-neutral-50 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
-                            {["Dinding", "Lantai", "Atap", "Plafon", "Cat", "Kamar Mandi"].map(item => (
+                            {["Dinding", "Lantai", "Atap", "Plafon", "Cat", "Lain-Lain"].map(item => (
                               <div 
                                 key={item}
                                 onClick={() => toggleCategory(item)}
@@ -1999,7 +2163,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                           <p className="uppercase-soft text-neutral-400 text-[10px] md:text-xs">Ceritakan detail renovasi Anda dan upload foto untuk analisa AI yang lebih akurat.</p>
                         </div>
                         
-                        <div className="space-y-6 p-6 md:p-8 border border-neutral-200 bg-white animate-in fade-in slide-in-from-top-4 rounded-2xl shadow-sm">
+                        <div className="space-y-6 p-6 md:p-8 border border-neutral-200 bg-white rounded-2xl shadow-sm">
                           <div className="space-y-2">
                             <label className="uppercase-soft text-neutral-400">Luas Area Renovasi (m2)</label>
                               <Input 
@@ -2181,9 +2345,9 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         </div>
                         
                         <div className="space-y-6 p-4 md:p-8 border border-neutral-200 animate-in fade-in slide-in-from-top-4 rounded-2xl bg-white/50">
-                          <div className="grid grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="space-y-2">
-                              <label className="uppercase-soft text-neutral-400">Luas Area (m2)</label>
+                              <label className="uppercase-soft text-neutral-400 text-[10px] md:text-xs">Luas Area (m2)</label>
                               <Input 
                                 type="number" 
                                 value={projectData.area} 
@@ -2193,7 +2357,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                               />
                             </div>
                             <div className="space-y-2">
-                              <label className="uppercase-soft text-neutral-400">Jumlah Lantai / Segmen</label>
+                              <label className="uppercase-soft text-neutral-400 text-[10px] md:text-xs">Jumlah Lantai</label>
                               <Input 
                                 type="number" 
                                 value={projectData.floors} 
@@ -2202,9 +2366,9 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                               />
                             </div>
                             <div className="space-y-2">
-                              <label className="uppercase-soft text-neutral-400">Tipe Kualitas</label>
+                              <label className="uppercase-soft text-neutral-400 text-[10px] md:text-xs">Tipe Kualitas</label>
                               <select 
-                                className="w-full h-12 border-2 border-black/10 rounded-md px-4 text-xs font-bold uppercase tracking-widest"
+                                className="w-full h-12 border-2 border-black/10 rounded-md px-4 text-[10px] font-bold uppercase tracking-widest bg-white"
                                 value={projectData.finishing}
                                 onChange={e => setProjectData({...projectData, finishing: e.target.value})}
                               >
@@ -2272,7 +2436,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         <p className="uppercase-soft text-neutral-400">Jelaskan kebutuhan proyek spesifik Anda untuk estimasi AI instan.</p>
                       </div>
                       
-                      <div className="space-y-6 p-8 border-2 border-black rounded-2xl animate-in fade-in slide-in-from-top-4">
+                      <div className="space-y-6 p-8 border-2 border-black rounded-2xl">
                         <div className="space-y-2">
                           <label className="uppercase-soft text-neutral-400">Deskripsi Proyek (Landscape/Event/Lainnya)</label>
                           <Textarea 
@@ -2362,7 +2526,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                       </div>
                       
                       {projectData.subType === "custom-furniture" && (
-                        <div className="space-y-8 pt-6 border-t-2 border-black/5 animate-in fade-in slide-in-from-top-4">
+                        <div className="space-y-8 pt-6 border-t-2 border-black/5">
                           <div className="space-y-4">
                             <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
                               <Calculator className="w-6 h-6 text-accent" /> AI Furniture Analysis
@@ -2496,7 +2660,7 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                       )}
 
                       {projectData.subType === "jasa-desain" && (
-                        <div className="space-y-6 pt-6 border-t-2 border-black/5 animate-in fade-in slide-in-from-top-4">
+                        <div className="space-y-6 pt-6 border-t-2 border-black/5">
                           <div className="space-y-4">
                             <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
                               <Calculator className="w-6 h-6 text-accent" /> AI Interior Analysis
@@ -2610,6 +2774,19 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                             </div>
                           )}
                         </Button>
+                        <Button 
+                          variant="outline"
+                          className="w-full h-12 md:h-14 border-2 border-black rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black hover:text-white transition-all"
+                          onClick={() => {
+                            setProjectData({
+                              ...projectData,
+                              description: userProblem || ""
+                            });
+                            setStep(4); // Skip to form registration
+                          }}
+                        >
+                          <Briefcase className="w-4 h-4 mr-2" /> Daftar Langsung (Tanpa AI)
+                        </Button>
                     <Button 
                       variant="ghost" 
                       className="w-full text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-neutral-400 hover:text-black" 
@@ -2625,27 +2802,29 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
           )}
 
           {step === 3 && (
-            <div className="p-6 md:p-12 space-y-8 md:space-y-12">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-2 border-neutral-200 pb-6 gap-4">
-                <h2 className="text-2xl md:text-4xl font-black uppercase tracking-tighter">Volume Pekerjaan</h2>
-                <p className="uppercase-soft text-neutral-400 text-[10px] md:text-xs">Step 03 / 05</p>
+            <div 
+               className="p-4 md:p-12 space-y-6 md:space-y-12"
+            >
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-2 border-black pb-4 md:pb-6 gap-2">
+                <h2 className="text-xl md:text-4xl font-black uppercase tracking-tighter">Volume Pekerjaan</h2>
+                <p className="uppercase-soft text-neutral-400 text-[8px] md:text-xs">Step 03 / 05</p>
               </div>
-              <div className="grid gap-8 md:gap-12 md:grid-cols-3">
-                <div className="md:col-span-2 space-y-8 max-h-[50vh] md:max-h-[60vh] overflow-auto pr-4 md:pr-6 custom-scrollbar">
+              <div className="grid gap-6 md:gap-12 grid-cols-1 lg:grid-cols-3">
+                <div className="lg:col-span-2 space-y-6 md:space-y-8 overflow-x-hidden">
                   {projectData.type === "Interior" ? (
                     <div className="space-y-6 md:space-y-8">
-                      <div className="p-6 md:p-8 border border-neutral-200 bg-neutral-50/50 rounded-2xl space-y-4">
-                        <p className="uppercase-soft text-neutral-400 text-[9px]">Interior Note</p>
-                        <p className="text-xs md:text-sm font-bold leading-relaxed italic opacity-70">"Detail interior telah diinput pada tahap sebelumnya. Silakan tinjau kembali ringkasan di samping atau lanjutkan ke verifikasi."</p>
+                      <div className="p-4 md:p-8 border-2 border-black bg-neutral-50 rounded-2xl space-y-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                        <p className="uppercase-soft text-neutral-400 text-[8px]">Interior Note</p>
+                        <p className="text-[10px] md:text-sm font-bold leading-relaxed italic opacity-70">"Detail interior telah diinput pada tahap sebelumnya. Silakan tinjau kembali ringkasan di samping atau lanjutkan ke verifikasi."</p>
                       </div>
                       {Object.entries(interiorDetails).map(([room, items]) => (
-                        <div key={room} className="p-6 md:p-8 border border-neutral-200 rounded-2xl space-y-6 bg-white">
-                          <h4 className="text-lg md:text-xl font-black uppercase tracking-tighter border-b border-black/5 pb-4">{room}</h4>
-                          <div className="grid gap-3 md:gap-4 text-[11px] md:text-sm">
+                        <div key={room} className="p-4 md:p-8 border-2 border-black rounded-2xl space-y-4 md:space-y-6 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                          <h4 className="text-lg md:text-xl font-black uppercase tracking-tighter border-b border-black/5 pb-2 md:pb-4">{room}</h4>
+                          <div className="grid gap-2 md:gap-4 text-[10px] md:text-sm">
                             {Object.entries(items).map(([name, detail]) => (
-                              <div key={name} className="flex justify-between items-center">
-                                <span className="font-bold uppercase tracking-widest opacity-60">{name}</span>
-                                <span className="font-mono font-bold">{detail.size} {masterData.find(i => i.name === name)?.unit || "m2"}</span>
+                              <div key={name} className="flex justify-between items-center gap-2">
+                                <span className="font-bold uppercase tracking-widest opacity-60 truncate">{name}</span>
+                                <span className="font-mono font-bold whitespace-nowrap">{detail.size} {masterData.find(i => i.name === name)?.unit || "m2"}</span>
                               </div>
                             ))}
                           </div>
@@ -2654,22 +2833,22 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                     </div>
                   ) : (
                     selectedCategories.length > 0 ? selectedCategories.map(cat => (
-                      <div key={cat} className="space-y-6">
-                        <h3 className="font-black uppercase tracking-tighter text-lg md:text-xl flex items-center gap-3">
-                          <Layers className="w-5 md:w-6 h-5 md:h-6" /> {cat}
+                      <div key={cat} className="space-y-4 md:space-y-6">
+                        <h3 className="font-black uppercase tracking-tighter text-base md:text-xl flex items-center gap-2">
+                          <Layers className="w-5 h-5" /> {cat}
                         </h3>
                         <div className="grid gap-3 md:gap-4">
-                          {(masterData.length > 0 ? masterData : WORK_ITEMS_MASTER).filter(i => i.category.toLowerCase().includes(cat.toLowerCase())).slice(0, 3).map(item => {
+                          {(masterData.length > 0 ? masterData : WORK_ITEMS_MASTER).filter(i => i.category.toLowerCase().includes(cat.toLowerCase())).slice(0, 5).map(item => {
                             const selected = selectedItems.find(si => si.item.id === item.id);
                             return (
-                              <div key={item.id} className="flex items-center gap-4 md:gap-6 p-5 md:p-6 border border-neutral-200 bg-white rounded-2xl shadow-sm">
+                              <div key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 md:p-6 border-2 border-black bg-white rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                                 <div className="flex-grow">
                                   <p className="font-black uppercase tracking-widest text-[9px] md:text-[10px]">{item.name}</p>
-                                  <p className="uppercase-soft text-neutral-400 mt-1">{item.unit}</p>
+                                  <p className="uppercase-soft text-neutral-400 mt-0.5">{item.unit}</p>
                                 </div>
                                 <Input 
                                   type="number" 
-                                  className="w-24 md:w-32 h-10 md:h-12 border-neutral-200 focus:border-black rounded-lg font-bold text-center" 
+                                  className="w-full sm:w-32 h-10 md:h-12 border-2 border-black rounded-xl font-bold text-center" 
                                   placeholder="Vol"
                                   value={selected?.qty || ""}
                                   onChange={e => {
@@ -2687,8 +2866,8 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         </div>
                       </div>
                     )) : (
-                      <div className="text-center py-20 border-2 border-dashed border-neutral-200 rounded-[2rem]">
-                        <p className="uppercase-soft text-neutral-400 px-8">
+                      <div className="text-center py-12 border-4 border-dashed border-neutral-100 rounded-[2rem]">
+                        <p className="uppercase-soft text-neutral-400 px-6 text-[10px] md:text-xs">
                           Gunakan input luas area untuk kalkulasi otomatis atau pilih kategori di tahap sebelumnya.
                         </p>
                       </div>
@@ -2696,44 +2875,45 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                   )}
                 </div>
 
-                <div className="space-y-8 bg-neutral-50 p-6 md:p-12 border border-black/5 rounded-2xl">
-                  <div className="space-y-6">
-                    <h3 className="font-black uppercase tracking-tighter text-xl md:text-2xl">Project Summary</h3>
-                    <div className="space-y-3 md:space-y-4">
-                      <div className="flex justify-between uppercase-soft border-b border-black/5 pb-2">
-                        <span className="text-neutral-400">Type</span>
-                        <span className="font-black text-xs md:text-sm">{projectData.type}</span>
+                <div className="lg:col-span-1 border-t-4 lg:border-t-0 lg:border-l-4 border-black pt-8 lg:pt-0 lg:pl-12 space-y-6">
+                  <div className="space-y-4 md:space-y-6">
+                    <h3 className="font-black uppercase tracking-tighter text-xl md:text-2xl italic">Summary</h3>
+                    <div className="grid gap-3 pt-2">
+                      <div className="flex justify-between items-center bg-black/5 p-3 rounded-xl border border-black/5">
+                        <span className="uppercase-soft text-neutral-500 text-[9px]">Layanan</span>
+                        <span className="font-black text-[10px] uppercase">{projectData.type}</span>
                       </div>
-                      <div className="flex justify-between uppercase-soft border-b border-black/5 pb-2">
-                        <span className="text-neutral-400">Area</span>
-                        <span className="font-black text-xs md:text-sm">{projectData.area} m2</span>
+                      <div className="flex justify-between items-center bg-black/5 p-3 rounded-xl border border-black/5">
+                        <span className="uppercase-soft text-neutral-500 text-[9px]">Estimasi Luas</span>
+                        <span className="font-black text-[10px] uppercase">{projectData.area} m2</span>
                       </div>
                     </div>
                   </div>
-                  <div className="pt-6 md:pt-12 flex flex-col gap-4">
+                  
+                  <div className="pt-4 flex flex-col gap-3">
                     <Button 
-                      className="w-full btn-orange h-16 md:h-20 text-sm md:text-base font-black uppercase tracking-widest shadow-xl shadow-accent/20" 
+                      className="w-full btn-accent h-16 md:h-20 text-xs md:text-sm font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" 
                       onClick={handleNext}
                       disabled={isAnalyzing}
                     >
                       {isAnalyzing ? (
-                        <>
-                          <Loader2 className="mr-2 h-5 md:h-6 w-5 md:h-6 animate-spin" />
-                          <span className="text-sm md:text-base">Analyzing...</span>
-                        </>
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span>Analyzing...</span>
+                        </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <span className="text-sm md:text-base">Verify Data</span> 
-                          <ChevronRight className="w-5 md:w-6 h-5 md:h-6" />
+                          <span>Verifikasi & Daftar</span> 
+                          <ChevronRight className="w-5 h-5" />
                         </div>
                       )}
                     </Button>
                     <Button 
                       variant="ghost" 
-                      className="w-full text-[9px] md:text-[11px] font-bold uppercase tracking-widest text-neutral-400 hover:text-black" 
+                      className="w-full text-[9px] font-bold uppercase tracking-widest text-neutral-400" 
                       onClick={handleBack}
                     >
-                      &larr; Previous Step
+                      &larr; Kembali
                     </Button>
                   </div>
                 </div>
@@ -2742,75 +2922,140 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
           )}
 
           {step === 4 && (
-            <div className="p-6 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4">
-              <div className="text-center space-y-3">
-                <div className="w-12 md:w-16 h-12 md:h-16 bg-black text-white flex items-center justify-center mx-auto mb-4 rounded-xl shadow-xl shadow-black/10">
-                  <UserCheck className="w-6 md:w-8 h-6 md:h-8" />
+            <div 
+               className="p-4 md:p-12 space-y-8"
+            >
+              <div className="text-center space-y-4 px-4">
+                <div className="w-12 h-12 bg-black text-white flex items-center justify-center mx-auto mb-4 rounded-xl shadow-[4px_4px_0px_0px_rgba(255,107,0,1)]">
+                  <Briefcase className="w-6 h-6" />
                 </div>
-                <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Tier 01: Verifikasi Data</h2>
-                <p className="text-neutral-500 text-[10px] md:text-sm px-6">Mohon lengkapi data kontak Anda untuk menerima hasil estimasi lengkap.</p>
+                <h2 className="text-xl md:text-3xl font-black uppercase tracking-tighter italic">Registrasi Command Center</h2>
+                <p className="text-neutral-500 text-[9px] md:text-sm max-w-sm mx-auto uppercase-soft">Satu langkah lagi untuk mendaftarkan proyek Anda secara resmi ke sistem monitoring TBJ Constech.</p>
               </div>
-              <div className="max-w-md mx-auto space-y-6">
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="uppercase-soft text-neutral-400">WhatsApp Number</label>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 max-w-4xl mx-auto overflow-x-hidden">
+                <div className="space-y-6 p-5 md:p-0 bg-neutral-100/50 md:bg-transparent rounded-2xl border-2 border-black/10 md:border-0 shadow-sm md:shadow-none">
+                  <div className="space-y-1.5 px-1 md:px-0">
+                    <label className="uppercase-soft text-neutral-400 text-[10px] font-black">Identitas Klien</label>
                     <Input 
-                      placeholder="0812..." 
-                      className="h-12 md:h-14 border border-neutral-200 rounded-xl font-bold bg-white px-6"
-                      value={leadData.whatsapp}
-                      onChange={e => setLeadData({...leadData, whatsapp: e.target.value})}
+                      placeholder="Nama Lengkap..." 
+                      className="h-14 border-2 border-black rounded-xl font-bold bg-white px-4 focus:ring-0"
+                      value={projectData.clientName}
+                      onChange={e => setProjectData({...projectData, clientName: e.target.value})}
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="uppercase-soft text-neutral-400">Email Address</label>
-                    <Input 
-                      placeholder="email@example.com" 
-                      className="h-12 md:h-14 border border-neutral-200 rounded-xl font-bold bg-white px-6"
-                      value={leadData.email}
-                      onChange={e => setLeadData({...leadData, email: e.target.value})}
-                    />
-                  </div>
-                </div>
-                {!isOtpSent ? (
-                  <Button 
-                    className="w-full btn-orange h-14 md:h-16 text-sm md:text-base"
-                    onClick={handleLeadSubmit}
-                    disabled={!leadData.whatsapp || !leadData.email}
-                  >
-                    Kirim Kode Verifikasi
-                  </Button>
-                ) : (
-                  <div className="space-y-6 md:space-y-4 animate-in fade-in slide-in-from-bottom-4">
-                    <div className="space-y-1">
-                      <label className="uppercase-soft text-neutral-400">Kode Verifikasi (Cek WA)</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-1 md:px-0">
+                    <div className="space-y-1.5">
+                      <label className="uppercase-soft text-neutral-400 text-[10px] font-black">No. WhatsApp</label>
                       <Input 
-                        placeholder="---" 
-                        className="h-14 md:h-16 border border-neutral-200 rounded-xl text-center text-xl md:text-2xl tracking-[0.5em] md:tracking-[1em] font-black bg-white"
-                        value={otp}
-                        onChange={e => setOtp(e.target.value)}
+                        placeholder="0812..." 
+                        className="h-14 border-2 border-black rounded-xl font-bold bg-white px-4 focus:ring-0"
+                        value={projectData.clientPhone}
+                        onChange={e => setProjectData({...projectData, clientPhone: e.target.value})}
                       />
                     </div>
-                    <Button 
-                      className="w-full btn-orange h-14 md:h-16" 
-                      onClick={() => handleVerifyOtp(otp)}
-                    >
-                      Verifikasi & Lihat Hasil
-                    </Button>
+                    <div className="space-y-1.5">
+                      <label className="uppercase-soft text-neutral-400 text-[10px] font-black">Email</label>
+                      <Input 
+                        placeholder="email@example.com" 
+                        className="h-14 border-2 border-black rounded-xl font-bold bg-white px-4 focus:ring-0"
+                        value={projectData.clientEmail}
+                        onChange={e => setProjectData({...projectData, clientEmail: e.target.value})}
+                      />
+                    </div>
                   </div>
-                )}
+                  <div className="space-y-1.5 px-1 md:px-0">
+                    <label className="uppercase-soft text-neutral-400 text-[10px] font-black">Alamat Lokasi Proyek</label>
+                    <Textarea 
+                      placeholder="Alamat lengkap lokasi konstruksi..." 
+                      className="min-h-[120px] border-2 border-black rounded-xl font-bold bg-white px-4 py-3 focus:ring-0"
+                      value={projectData.clientAddress}
+                      onChange={e => setProjectData({...projectData, clientAddress: e.target.value})}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-6 p-5 md:p-0 bg-accent/5 md:bg-transparent rounded-2xl border-2 border-accent/20 md:border-0">
+                  <div className="space-y-1.5 px-1 md:px-0">
+                    <label className="uppercase-soft text-neutral-400 text-[10px] font-black">Spesifikasi Proyek</label>
+                    <Input 
+                      placeholder="Judul Proyek (e.g. Renovasi Rumah)" 
+                      className="h-14 border-2 border-black rounded-xl font-bold bg-white px-4 focus:ring-0"
+                      value={projectData.name}
+                      onChange={e => setProjectData({...projectData, name: e.target.value})}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 px-1 md:px-0">
+                    <div className="space-y-1.5">
+                      <label className="uppercase-soft text-neutral-400 text-[10px] font-black">Luas (m2)</label>
+                      <Input 
+                        type="number"
+                        placeholder="0" 
+                        className="h-14 border-2 border-black rounded-xl font-bold bg-white px-4 focus:ring-0 shadow-inner"
+                        value={projectData.area}
+                        onChange={e => setProjectData({...projectData, area: Number(e.target.value)})}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="uppercase-soft text-neutral-400 text-[10px] font-black">Kategori</label>
+                      <select 
+                        className="w-full h-14 border-2 border-black rounded-xl px-4 text-[11px] font-black uppercase tracking-widest bg-white"
+                        value={projectData.type}
+                        onChange={e => setProjectData({...projectData, type: e.target.value})}
+                      >
+                        <option value="Renovasi">Renovasi</option>
+                        <option value="Bangun Baru">Bangun Baru</option>
+                        <option value="Interior">Interior</option>
+                        <option value="Property">Property</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5 px-1 md:px-0">
+                    <label className="uppercase-soft text-neutral-400 text-[10px] font-black">Catatan Tambahan</label>
+                    <Textarea 
+                      placeholder="Detail pekerjaan atau kebutuhan khusus..." 
+                      className="min-h-[120px] border-2 border-black rounded-xl font-bold bg-white px-4 py-3 focus:ring-0"
+                      value={projectData.description}
+                      onChange={e => setProjectData({...projectData, description: e.target.value})}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="max-w-md mx-auto pt-6 px-4">
+                <Button 
+                  className="w-full btn-accent h-16 md:h-20 text-xs md:text-sm font-black uppercase tracking-widest shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all"
+                  onClick={handleRegisterProject}
+                  disabled={isRegistering}
+                >
+                  {isRegistering ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="animate-spin w-5 h-5 md:w-6 md:h-6" />
+                      <span>Syncing to Command Center...</span>
+                    </div>
+                  ) : (
+                     <div className="flex items-center gap-3">
+                        <span>Konfirmasi Pendaftaran</span>
+                        <ChevronRight className="w-5 h-5" />
+                     </div>
+                  )}
+                </Button>
+                
                 <Button 
                   variant="ghost" 
-                  className="w-full text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-neutral-400" 
+                  className="w-full text-[9px] md:text-[10px] font-black uppercase tracking-widest text-neutral-400 mt-4 underline decoration-2 decoration-neutral-100 underline-offset-4" 
                   onClick={handleBack}
                 >
-                  &larr; Previous Step
+                  &larr; Review Hasil Analisa
                 </Button>
               </div>
             </div>
           )}
 
           {step === 5 && (
-            <div className="p-4 md:p-8 space-y-12 animate-in fade-in zoom-in duration-700">
+            <div 
+               className="p-4 md:p-8 space-y-8 md:space-y-12"
+            >
               {/* AI Results Content */}
               <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b-4 border-black pb-8 gap-6">
                 <div className="space-y-2">
@@ -2818,56 +3063,56 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                     <Sparkles className="w-5 h-5 fill-current" />
                     <span className="text-[10px] font-black uppercase tracking-[0.3em]">AI Analysis Complete</span>
                   </div>
-                  <h2 className="text-5xl font-black uppercase tracking-tighter leading-none text-black">Estimasi<br/>Proyek Anda</h2>
-                  <p className="text-neutral-500 uppercase-soft text-xs">Generated by TBJ Constech AI System OS v2.0</p>
+                  <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter leading-tight md:leading-none text-black">Estimasi<br/>Proyek Anda</h2>
+                  <p className="text-neutral-500 uppercase-soft text-[10px] md:text-xs">Generated by TBJ Constech AI System OS v2.0</p>
                 </div>
-                <div className="text-left md:text-right bg-black text-white p-6 rounded-2xl shadow-xl shadow-black/10 min-w-[300px]">
-                  <p className="uppercase-soft text-white/60 text-[10px] mb-1 text-white">Total Biaya</p>
-                  <p className="text-5xl font-black tracking-tighter text-primary">Rp {(totalEstimate || 0).toLocaleString('id-ID')}</p>
+                <div className="text-left md:text-right bg-black text-white p-6 rounded-2xl shadow-xl shadow-black/10 w-full md:min-w-[300px]">
+                  <p className="uppercase-soft text-white/60 text-[9px] md:text-[10px] mb-1 text-white">Total Biaya</p>
+                  <p className="text-3xl md:text-5xl font-black tracking-tighter text-primary">Rp {(totalEstimate || 0).toLocaleString('id-ID')}</p>
                   <div className="mt-4 pt-4 border-t border-white/10 flex justify-between items-center text-white">
-                    <span className="text-[8px] font-black uppercase tracking-widest text-white/40">Accuracy: 94% | QA/QC Verified</span>
-                    <Badge className="bg-green-500 text-[8px] uppercase font-black border-none text-white">TBJ OS v2.4</Badge>
+                    <span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest text-white/40">Accuracy: 94% | Verified</span>
+                    <Badge className="bg-green-500 text-[7px] md:text-[8px] uppercase font-black border-none text-white">TBJ OS v2.4</Badge>
                   </div>
                 </div>
               </div>
 
-              <div className="grid gap-12 md:grid-cols-12">
-                <div className="md:col-span-8 space-y-12">
+              <div className="grid gap-8 md:gap-12 grid-cols-1 md:grid-cols-12">
+                <div className="md:col-span-8 space-y-8 md:space-y-12">
                   {aiEstimation ? (
-                    <div className="border-4 border-black p-8 md:p-12 space-y-10 relative overflow-hidden bg-white shadow-[20px_20px_0px_0px_rgba(0,0,0,1)] rounded-3xl group" id="ai-result-card">
+                    <div className="border-2 md:border-4 border-black p-6 md:p-12 space-y-8 md:space-y-10 relative overflow-hidden bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] md:shadow-[20px_20px_0px_0px_rgba(0,0,0,1)] rounded-3xl group" id="ai-result-card">
                       {/* Document Elements */}
-                      <div className="absolute top-0 right-0 bg-black text-white px-8 py-3 text-[12px] font-black uppercase tracking-[0.4em] rotate-0">OFFICIAL REPORT</div>
+                      <div className="absolute top-0 right-0 bg-black text-white px-4 md:px-8 py-2 md:py-3 text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] rotate-0">OFFICIAL REPORT</div>
                       
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 bg-accent text-white rounded-2xl flex items-center justify-center shadow-lg shadow-accent/20">
-                            <Brain className="w-8 h-8" />
+                          <div className="w-12 h-12 md:w-16 md:h-16 bg-accent text-white rounded-2xl flex items-center justify-center shadow-lg shadow-accent/20">
+                            <Brain className="w-6 h-6 md:w-8 md:h-8" />
                           </div>
                           <div>
-                            <h3 className="text-2xl font-black uppercase tracking-tighter text-black">AI Result Card</h3>
-                            <p className="uppercase-soft text-neutral-400">Project Code: {Math.random().toString(36).substr(2, 6).toUpperCase()}</p>
+                            <h3 className="text-lg md:text-2xl font-black uppercase tracking-tighter text-black">AI Result Card</h3>
+                            <p className="uppercase-soft text-neutral-400 text-[9px] md:text-[10px]">Project Code: {Math.random().toString(36).substr(2, 6).toUpperCase()}</p>
                           </div>
                         </div>
-                        <div className="flex gap-3">
+                        <div className="flex gap-2 md:gap-3 w-full sm:w-auto">
                           <Button 
                             variant="outline" 
                             size="icon" 
-                            className="h-12 w-12 rounded-xl border-2 border-black hover:border-green-500 hover:text-green-500 transition-all shadow-md active:translate-y-1"
+                            className="flex-1 sm:flex-none h-10 md:h-12 rounded-xl border-2 border-black hover:border-green-500 hover:text-green-500 transition-all shadow-md"
                             onClick={() => {
-                              const message = `*ESTIMASI RAB - TUKANG BANGUNAN JAKARTA*%0AProyek: ${projectData.name || projectData.type}%0ATotal Biaya: Rp ${totalEstimate.toLocaleString('id-ID')}%0A%0AInformasi lebih lanjut hubungi: 081213496672%0A_Dibuat via TBJ Constech OS_`;
+                              const message = `*ESTIMASI RAB - TUKANG BANGUNAN JAKARTA*%0AProyek: ${projectData.name || projectData.type}%0ATotal Biaya: Rp ${totalEstimate.toLocaleString('id-ID')}%0A%0AInformasi lebih lanjut hubungi: 62821942016509%0A_Dibuat via TBJ Constech OS_`;
                               window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
                             }}
                           >
-                            <Phone className="w-5 h-5 text-green-500" />
+                            <Phone className="w-4 h-4 md:w-5 md:h-5 text-green-500" />
                           </Button>
                           <Button 
                             variant="outline" 
                             size="icon" 
-                            className="h-12 w-12 rounded-xl border-2 border-black hover:border-accent hover:text-accent transition-all shadow-md active:translate-y-1"
+                            className="flex-1 sm:flex-none h-10 md:h-12 rounded-xl border-2 border-black hover:border-accent hover:text-accent transition-all shadow-md"
                             onClick={() => {
                               navigator.share?.({
                                 title: 'Estimasi Proyek TBJ Constech',
-                            text: `Estimasi budget proyek saya: Rp ${(totalEstimate || 0).toLocaleString('id-ID')}`,
+                                text: `Estimasi budget proyek saya: Rp ${(totalEstimate || 0).toLocaleString('id-ID')}`,
                                 url: window.location.href
                               }).catch(() => {
                                 navigator.clipboard.writeText(window.location.href);
@@ -2875,46 +3120,46 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                               });
                             }}
                           >
-                            <Share2 className="w-5 h-5" />
+                            <Share2 className="w-4 h-4 md:w-5 md:h-5" />
                           </Button>
                           <Button 
                             variant="outline" 
                             size="icon" 
-                            className="h-12 w-12 rounded-xl border-2 border-black hover:bg-black hover:text-white transition-all shadow-md active:translate-y-1"
+                            className="flex-1 sm:flex-none h-10 md:h-12 rounded-xl border-2 border-black hover:bg-black hover:text-white transition-all shadow-md"
                             onClick={() => {
                               toast.info("Generating HQ Document...", { description: "Harap tunggu sebentar." });
                               setTimeout(() => window.print(), 1000);
                             }}
                           >
-                            <Download className="w-5 h-5" />
+                            <Download className="w-4 h-4 md:w-5 md:h-5" />
                           </Button>
                         </div>
                       </div>
 
-                      <div className="bg-neutral-50 p-8 border-l-8 border-accent rounded-r-3xl relative">
-                        <Quote className="absolute -top-4 -left-4 w-12 h-12 text-accent/5 rotate-12" />
-                        <h4 className="text-xs font-black uppercase tracking-widest text-accent mb-4 flex items-center gap-2">
-                          <Sparkles className="w-4 h-4" /> Strategic AI Summary
+                      <div className="bg-neutral-50 p-6 md:p-8 border-l-4 md:border-l-8 border-accent rounded-r-3xl relative">
+                        <Quote className="absolute -top-4 -left-4 w-10 h-10 md:w-12 md:h-12 text-accent/5 rotate-12" />
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-accent mb-3 flex items-center gap-2">
+                          <Sparkles className="w-3 h-3 md:w-4 md:h-4" /> Strategic AI Summary
                         </h4>
-                        <p className="text-sm md:text-base text-neutral-700 leading-relaxed font-medium italic">"{aiEstimation.analysis}"</p>
+                        <p className="text-xs md:text-base text-neutral-700 leading-relaxed font-medium italic">"{aiEstimation.analysis}"</p>
                       </div>
 
                       <div className="space-y-6">
                         <div className="flex items-center gap-3">
-                          <Calculator className="w-5 h-5 text-neutral-400" />
-                          <h4 className="text-sm font-black uppercase tracking-widest text-black">Item breakdown & Cost Estimates:</h4>
+                          <Calculator className="w-4 h-4 md:w-5 md:h-5 text-neutral-400" />
+                          <h4 className="text-[10px] md:text-sm font-black uppercase tracking-widest text-black">Item breakdown & Cost Estimates:</h4>
                         </div>
                         <div className="grid gap-6">
                           {aiEstimation.items.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-start border-b-2 border-neutral-100 pb-6 last:border-0 group/item">
-                              <div className="space-y-2">
+                            <div key={idx} className="flex flex-col sm:flex-row justify-between items-start border-b-2 border-neutral-100 pb-6 last:border-0 group/item gap-4">
+                              <div className="space-y-2 flex-1">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-2 h-2 rounded-full bg-accent opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                                  <div className="w-2 h-2 rounded-full bg-accent hidden sm:block opacity-0 group-hover/item:opacity-100 transition-opacity" />
                                   <div className="flex items-center gap-2">
-                                    <p className="font-black text-sm uppercase tracking-widest leading-none group-hover/item:text-accent transition-colors text-black">{item.name}</p>
+                                    <p className="font-black text-xs md:text-sm uppercase tracking-widest leading-none group-hover/item:text-accent transition-colors text-black">{item.name}</p>
                                     {item.priority && (
                                       <Badge variant="outline" className={cn(
-                                        "text-[7px] uppercase border-black/10 py-0 h-4",
+                                        "text-[6px] md:text-[7px] uppercase border-black/10 py-0 h-4",
                                         item.priority === "Urgent" ? "bg-red-50 text-red-600" :
                                         item.priority === "High" ? "bg-orange-50 text-orange-600" :
                                         item.priority === "Low" ? "bg-blue-50 text-blue-600" : "bg-neutral-50"
@@ -2924,12 +3169,12 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                                     )}
                                   </div>
                                 </div>
-                                <p className="text-[11px] text-neutral-500 leading-relaxed max-w-lg font-medium">{item.reasoning}</p>
+                                <p className="text-[10px] md:text-[11px] text-neutral-500 leading-relaxed max-w-lg font-medium">{item.reasoning}</p>
                               </div>
-                              <div className="text-right">
-                                <p className="font-mono text-xs font-black bg-neutral-100 px-3 py-1 rounded-md mb-2">{item.quantity} {item.unit}</p>
+                              <div className="text-left sm:text-right w-full sm:w-auto">
+                                <p className="inline-block sm:block font-mono text-[10px] md:text-xs font-black bg-neutral-100 px-3 py-1 rounded-md mb-2">{item.quantity} {item.unit}</p>
                                 {(user?.role === 'admin' || user?.role === 'pm' || (user?.tier === 'deal' && user?.waVerified)) && (
-                                  <p className="text-[10px] font-black text-neutral-400">Validated Item Breakdown</p>
+                                  <p className="text-[9px] md:text-[10px] font-black text-neutral-400">Validated Item Breakdown</p>
                                 )}
                               </div>
                             </div>
@@ -2937,22 +3182,22 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                         </div>
                       </div>
 
-                      <div className="bg-black text-white p-8 md:p-10 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-center gap-8 border-[1.75px] border-black shadow-2xl relative overflow-hidden">
-                        <div className="space-y-2 text-center md:text-left relative z-10">
-                          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-amber-500">Gross Estimation Total</p>
-                          <h3 className="text-4xl md:text-5xl font-black tracking-tighter tabular-nums">Rp {(totalEstimate || 0).toLocaleString('id-ID')}</h3>
-                          <p className="text-[10px] text-neutral-400 font-medium uppercase tracking-widest">Calculated by TBJ Neural Engine v4.0</p>
+                      <div className="bg-black text-white p-6 md:p-10 rounded-[1.5rem] md:rounded-[2.5rem] flex flex-col md:flex-row justify-between items-center gap-6 md:gap-8 border-[1.75px] border-black shadow-2xl relative overflow-hidden">
+                        <div className="space-y-2 text-center md:text-left relative z-10 w-full md:w-auto">
+                          <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.4em] text-amber-500">Gross Estimation Total</p>
+                          <h3 className="text-3xl md:text-5xl font-black tracking-tighter tabular-nums text-white">Rp {(totalEstimate || 0).toLocaleString('id-ID')}</h3>
+                          <p className="text-[9px] md:text-[10px] text-neutral-400 font-medium uppercase tracking-widest">TBJ Neural Engine v4.0</p>
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-4 relative z-10 w-full md:w-auto">
+                        <div className="flex flex-col sm:flex-row gap-3 md:gap-4 relative z-10 w-full md:w-auto">
                           <Button 
-                            className="btn-orange h-14 px-8 text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-accent/20 active:translate-y-1 transition-all flex-1 md:flex-none"
+                            className="btn-orange h-12 md:h-14 px-6 md:px-8 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-accent/20 active:translate-y-1 transition-all flex-1"
                             onClick={() => generateAIPDF(projectData.name || "Estimation", aiEstimation)}
                           >
-                            <Download className="w-5 h-5 mr-3" /> Download RAB
+                            <Download className="w-4 h-4 md:w-5 md:h-5 mr-2 md:mr-3" /> Download RAB
                           </Button>
                           <Button 
                             variant="outline"
-                            className="h-14 px-8 bg-white/10 hover:bg-white/20 border-white/20 text-white text-[10px] font-black uppercase tracking-[0.2em] active:translate-y-1 transition-all flex-1 md:flex-none"
+                            className="h-12 md:h-14 px-6 md:px-8 bg-white/10 hover:bg-white/20 border-white/20 text-white text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] active:translate-y-1 transition-all flex-1"
                             onClick={() => {
                               const invoiceData = {
                                 number: `INV-${new Date().getFullYear()}${Math.floor(Math.random() * 10000)}`,
@@ -2978,63 +3223,63 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                               generateInvoicePDF(invoiceData);
                             }}
                           >
-                            <FileText className="w-5 h-5 mr-3" /> View Invoice
+                            <FileText className="w-4 h-4 md:w-5 md:h-5 mr-2 md:mr-3" /> View Invoice
                           </Button>
                         </div>
                       </div>
 
                       {/* Official Footer */}
-                      <div className="pt-10 border-t-4 border-black flex flex-col md:flex-row justify-between items-center gap-6">
+                      <div className="pt-8 md:pt-10 border-t-2 md:border-t-4 border-black flex flex-col md:flex-row justify-between items-center gap-4 md:gap-6">
                         <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-black flex items-center justify-center rounded-xl">
-                            <ShieldCheck className="w-6 h-6 text-accent" />
+                          <div className="w-10 h-10 md:w-12 md:h-12 bg-black flex items-center justify-center rounded-xl">
+                            <ShieldCheck className="w-5 h-5 md:w-6 md:h-6 text-accent" />
                           </div>
                           <div>
-                            <p className="text-[10px] font-black uppercase leading-none text-black">AI Verified Security</p>
-                            <p className="text-[8px] uppercase-soft mt-1">Encrypted & Immutable Report</p>
+                            <p className="text-[9px] md:text-[10px] font-black uppercase leading-none text-black">AI Verified Security</p>
+                            <p className="text-[7px] md:text-[8px] uppercase-soft mt-1">Encrypted & Immutable Report</p>
                           </div>
                         </div>
                         <div className="text-center md:text-right">
-                          <p className="uppercase-soft text-neutral-400 text-[10px] mb-1">Final AI Assessment</p>
-                          <p className="text-4xl font-black tracking-tighter text-black">Rp {(totalEstimate || 0).toLocaleString('id-ID')}</p>
+                          <p className="uppercase-soft text-neutral-400 text-[9px] md:text-[10px] mb-1">Final AI Assessment</p>
+                          <p className="text-2xl md:text-4xl font-black tracking-tighter text-black">Rp {(totalEstimate || 0).toLocaleString('id-ID')}</p>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="border-4 border-black border-dashed p-12 text-center rounded-3xl space-y-4 bg-white">
-                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto">
-                        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                    <div className="border-4 border-black border-dashed p-8 md:p-12 text-center rounded-3xl space-y-4 bg-white">
+                      <div className="w-12 h-12 md:w-16 md:h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto">
+                        <Loader2 className="w-6 h-6 md:w-8 md:h-8 animate-spin text-accent" />
                       </div>
-                      <h3 className="text-xl font-black uppercase tracking-tighter">Mempersiapkan Analisa AI...</h3>
-                      <p className="uppercase-soft text-neutral-400">Harap tunggu sebentar, Chief Estimator sedang menghitung volume dan harga teknis proyek Anda.</p>
+                      <h3 className="text-lg md:text-xl font-black uppercase tracking-tighter">Mempersiapkan Analisa AI...</h3>
+                      <p className="uppercase-soft text-neutral-400 text-[10px] md:text-sm">Chief Estimator sedang menghitung volume dan harga teknis proyek Anda.</p>
                     </div>
                   )}
 
                   {/* RAB Detail for Privileged Tiers */}
                   {(user?.tier === "deal" || user?.role === "admin") && aiEstimation && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8">
+                    <div className="space-y-6">
                        <div className="flex items-center gap-3 border-b-2 border-black pb-4">
                          <FileText className="w-6 h-6 text-accent" />
-                         <h3 className="text-xl font-black uppercase tracking-tighter text-black">Detailed RAB Preview (Tier 3)</h3>
+                         <h3 className="text-lg md:text-xl font-black uppercase tracking-tighter text-black">Detailed RAB Preview (Tier 3)</h3>
                        </div>
-                       <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-lg">
-                           <table className="w-full text-left border-collapse">
+                       <Card className="border-2 border-black rounded-3xl overflow-hidden shadow-lg overflow-x-auto">
+                           <table className="w-full text-left border-collapse min-w-[500px]">
                             <thead className="bg-neutral-50">
                               <tr className="border-b-2 border-black text-[10px] font-black uppercase tracking-widest text-neutral-400">
-                                <th className="p-6">Work Item</th>
-                                <th className="p-6 text-center">Volume</th>
-                                <th className="p-6 text-right text-black font-black">Sub-Total Status</th>
+                                <th className="p-4 md:p-6">Work Item</th>
+                                <th className="p-4 md:p-6 text-center">Volume</th>
+                                <th className="p-4 md:p-6 text-right text-black font-black">Sub-Total Status</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-neutral-100">
                               {aiEstimation.items.map((item, idx) => (
                                 <tr key={idx} className="hover:bg-neutral-50/50 transition-colors">
-                                  <td className="p-6">
+                                  <td className="p-4 md:p-6 text-black">
                                     <div className="flex items-center gap-2">
-                                      <p className="text-xs font-black uppercase tracking-widest text-black">{item.name}</p>
+                                      <p className="text-[10px] md:text-xs font-black uppercase tracking-widest">{item.name}</p>
                                       {item.priority && (
                                         <Badge variant="outline" className={cn(
-                                          "text-[7px] uppercase border-black/10 py-0 h-4",
+                                          "text-[6px] md:text-[7px] uppercase border-black/10 py-0 h-4",
                                           item.priority === "Urgent" ? "bg-red-50 text-red-600" :
                                           item.priority === "High" ? "bg-orange-50 text-orange-600" :
                                           item.priority === "Low" ? "bg-blue-50 text-blue-600" : "bg-neutral-50"
@@ -3043,17 +3288,17 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
                                         </Badge>
                                       )}
                                     </div>
-                                    <p className="text-[9px] text-neutral-400 mt-1 uppercase-soft">{item.reasoning}</p>
+                                    <p className="text-[8px] md:text-[9px] text-neutral-400 mt-1 uppercase-soft leading-tight">{item.reasoning}</p>
                                   </td>
-                                  <td className="p-6 text-center text-xs font-bold font-mono">{item.quantity} {item.unit}</td>
-                                  <td className="p-6 text-right text-[10px] font-black uppercase">Calculated</td>
+                                  <td className="p-4 md:p-6 text-center text-[10px] md:text-xs font-bold font-mono text-black">{item.quantity} {item.unit}</td>
+                                  <td className="p-4 md:p-6 text-right text-[9px] md:text-[10px] font-black uppercase text-black">Calculated</td>
                                 </tr>
                               ))}
                             </tbody>
                             <tfoot className="bg-black text-white">
                               <tr>
-                                <td colSpan={2} className="p-6 text-xs font-black uppercase tracking-[0.2em]">Validated Construction Total</td>
-                                <td className="p-6 text-right text-2xl font-black tracking-tighter text-white">Rp {(aiEstimation.totalEstimatedCost || 0).toLocaleString('id-ID')}</td>
+                                <td colSpan={2} className="p-4 md:p-6 text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-white">Validated Construction Total</td>
+                                <td className="p-4 md:p-6 text-right text-lg md:text-2xl font-black tracking-tighter text-white">Rp {(aiEstimation.totalEstimatedCost || 0).toLocaleString('id-ID')}</td>
                               </tr>
                             </tfoot>
                           </table>
@@ -3139,7 +3384,9 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
           )}
 
           {step === 6 && (
-            <div className="p-8 md:p-12 space-y-12 text-center animate-in fade-in slide-in-from-bottom-8">
+            <div 
+               className="p-8 md:p-12 space-y-12 text-center"
+            >
               <div className="space-y-4">
                 <h2 className="text-4xl font-black uppercase tracking-tighter">Konfirmasi Pembayaran Survey</h2>
                 <p className="uppercase-soft text-neutral-500">Silakan pilih metode pembayaran untuk Digital Assessment</p>
@@ -3200,8 +3447,61 @@ const VirtualAssistant = ({ user, updateProfile }: { user: any, updateProfile: (
             </div>
           )}
 
+          {step === 7 && (
+            <div 
+               className="p-12 text-center space-y-8"
+            >
+              <div className="w-24 h-24 bg-green-500 text-white rounded-3xl flex items-center justify-center mx-auto shadow-2xl shadow-green-500/20">
+                <CheckCircle2 className="w-12 h-12" />
+              </div>
+              <div className="space-y-4 max-w-lg mx-auto">
+                <h2 className="text-4xl font-black uppercase tracking-tighter text-black">Registrasi Berhasil!</h2>
+                <p className="text-neutral-500 uppercase-soft text-sm">
+                  Proyek Anda "{projectData.name}" telah masuk ke antrian <strong>Command Center</strong>. 
+                  Tim administrasi kami sedang menunjuk Project Manager (PM) terbaik untuk menangani proyek Anda.
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4 max-w-2xl mx-auto pt-8">
+                <div className="p-6 border-2 border-black rounded-3xl bg-neutral-50 text-left space-y-2">
+                  <p className="text-[10px] font-black uppercase text-neutral-400">Status Proyek</p>
+                  <div className="flex items-center gap-2 text-amber-600">
+                    <Clock className="w-4 h-4" />
+                    <p className="font-black uppercase tracking-tighter">Awaiting Assignment</p>
+                  </div>
+                </div>
+                <div className="p-6 border-2 border-black rounded-3xl bg-neutral-50 text-left space-y-2">
+                  <p className="text-[10px] font-black uppercase text-neutral-400">Next Action</p>
+                  <p className="font-black uppercase tracking-tighter">Admin/PM Assignment</p>
+                </div>
+              </div>
+
+              <div className="pt-8 space-y-4">
+                <Link to="/profile">
+                  <Button className="btn-orange h-16 px-12 text-base font-black shadow-xl shadow-accent/20">
+                    Buka Dashboard Saya
+                  </Button>
+                </Link>
+                <br />
+                <Button variant="ghost" className="uppercase-soft text-xs" onClick={() => navigate("/")}>
+                  Kembali ke Beranda
+                </Button>
+              </div>
+              
+              <div className="mt-12 p-6 border border-black/5 rounded-2xl bg-neutral-50/50 max-w-md mx-auto">
+                <div className="flex items-center gap-3 justify-center mb-2">
+                  <ShieldCheck className="w-5 h-5 text-green-600" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-black">Jaminan Transparansi TBJ</p>
+                </div>
+                <p className="text-[9px] text-neutral-400 italic">"Semua progres pengerjaan RAB dan penugasan tim dapat Anda pantau secara realtime di Dashboard Profil Anda."</p>
+              </div>
+            </div>
+          )}
+
           {step === 10 && (
-            <div className="p-4 md:p-8 space-y-8 md:space-y-12 animate-in fade-in duration-500">
+            <div 
+              className="p-4 md:p-8 space-y-8 md:space-y-12"
+            >
               <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-neutral-200 pb-8">
                 <div className="space-y-4">
                   <div className="flex items-center gap-4">
@@ -3386,7 +3686,7 @@ const ClientDashboard = ({ user }: { user: any }) => {
 
   if (!selectedProject && projects.length > 0) {
     return (
-      <div className="space-y-12 animate-in fade-in duration-500">
+      <div className="space-y-12">
         <div className="text-center space-y-3">
           <Badge variant="outline" className="border-black font-black uppercase text-[10px] tracking-[0.2em] px-6 py-1">Project Command Center</Badge>
           <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tighter text-black">Monitoring Real-Time</h1>
@@ -3494,7 +3794,7 @@ const ClientDashboard = ({ user }: { user: any }) => {
                             </div>
                           </div>
                           {expandedItem === item.id && (
-                            <div className="p-4 bg-neutral-50 border-t space-y-4 animate-in slide-in-from-top-2">
+                            <div className="p-4 bg-neutral-50 border-t space-y-4">
                               <div className="grid grid-cols-3 gap-4">
                                 <div className="space-y-2">
                                   <p className="text-[10px] font-bold uppercase text-neutral-400">Before</p>
@@ -3965,6 +4265,15 @@ function TermsPage() {
 export default function App() {
   const { user, loading, login, loginAsGuest, logout, updateProfile } = useAuth();
   const { config: cmsConfig } = useCMSConfig();
+  const [isCommandCenterOpen, setIsCommandCenterOpen] = useState(false);
+
+  useEffect(() => {
+    const handleToggleCommandCenter = () => {
+      setIsCommandCenterOpen(prev => !prev);
+    };
+    window.addEventListener('toggle-command-center', handleToggleCommandCenter);
+    return () => window.removeEventListener('toggle-command-center', handleToggleCommandCenter);
+  }, []);
 
   if (loading) return <div className="min-h-screen flex flex-col items-center justify-center gap-4">
     <Loader2 className="animate-spin w-12 h-12 text-accent" />
@@ -4022,6 +4331,57 @@ export default function App() {
           </Routes>
         </Layout>
         <Toaster />
+        <div>
+          {isCommandCenterOpen && (
+            <div
+              className="fixed inset-0 z-[100] bg-white overflow-hidden flex flex-col"
+            >
+              <div className="h-16 border-b border-black/10 flex items-center justify-between px-8 bg-neutral-50 shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
+                    <Terminal className="w-4 h-4 text-accent" />
+                  </div>
+                  <div>
+                    <h2 className="font-black uppercase tracking-tighter text-lg leading-none">Command center</h2>
+                    <p className="text-[8px] font-black uppercase text-accent tracking-[0.2em] mt-1">TBJ OS v4.0 PRO ENGINE</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="hidden md:flex flex-col items-end mr-4">
+                    <span className="text-[10px] font-black uppercase">{user?.displayName}</span>
+                    <span className="text-[8px] font-mono text-neutral-400 capitalize">{user?.role} ACCESS</span>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => setIsCommandCenterOpen(false)}
+                    className="hover:bg-red-50 hover:text-red-500 transition-colors rounded-xl h-10 w-10 border border-black/5"
+                  >
+                    <X className="w-6 h-6" />
+                  </Button>
+                </div>
+              </div>
+              <div className="flex-grow overflow-y-auto px-4 py-8 md:px-12 md:py-12 bg-white scrollbar-hide">
+                <div className="max-w-7xl mx-auto h-full">
+                  <PMDashboard isOverscreen />
+                </div>
+              </div>
+              <div className="h-10 bg-black text-white/40 flex items-center justify-between px-8 text-[8px] font-mono shrink-0">
+                <div className="flex items-center gap-6">
+                  <span className="animate-pulse flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" /> SYSTEM STATUS: OPTIMAL
+                  </span>
+                  <span className="hidden md:inline">ENCRYPTED END-TO-END</span>
+                  <span className="hidden md:inline">REGION: ASIA-SOUTH-1</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span>TERMINAL ID: {Math.random().toString(36).substring(7).toUpperCase()}</span>
+                  <span>&copy; TBJ CONSTECH OS v4.0</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </Router>
     </ErrorBoundary>
   );

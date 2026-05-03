@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useProjects, useAuth, useWorkforce, useUser, useSystemConfig } from "@/lib/hooks";
+import { useProjects, useAuth, useWorkforce, useUser, useSystemConfig, useProjectDetails } from "@/lib/hooks";
 import { formatRupiah, calculateAdminPrice, calculateClientPrice, getDriveImageUrl } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -151,372 +151,20 @@ export default function Profile() {
 
         <div className="grid gap-8">
           {projects.map((project) => (
-            <div 
+            <ProjectCard 
               key={project.id} 
-              className="space-y-6 cursor-pointer group/project"
-              onClick={() => navigate(`/projects/${project.id}`)}
-            >
-              <Card className="border-2 border-black rounded-3xl overflow-hidden hover:shadow-xl transition-all duration-500 group-hover/project:border-accent">
-                <div className="grid md:grid-cols-4">
-                  <div className="p-8 md:col-span-3 space-y-8">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <h3 className="text-3xl font-black uppercase tracking-tighter">{project.name}</h3>
-                        <Badge className={cn(
-                          "rounded-md uppercase-soft px-3 py-1",
-                          project.status === 'active' ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-                        )}>
-                          {project.status === 'active' ? 'Pengerjaan' : 'Survey/Draft'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-2 text-neutral-400">
-                        <Clock className="w-4 h-4" />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Update: 2 jam yang lalu</span>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                      <div className="space-y-1">
-                        <p className="text-[9px] font-black uppercase text-neutral-400">Lokasi</p>
-                        <div className="flex items-center gap-2 text-black">
-                          <MapPin className="w-3 h-3 text-accent" />
-                          <span className="text-xs font-bold truncate">{project.location || 'Lokasi belum diatur'}</span>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[9px] font-black uppercase text-neutral-400">Mulai Proyek</p>
-                        <div className="flex items-center gap-2 text-black">
-                          <Calendar className="w-3 h-3 text-accent" />
-                          <span className="text-xs font-bold">{new Date(project.createdAt).toLocaleDateString('id-ID')}</span>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[9px] font-black uppercase text-neutral-400">Progress Bobot</p>
-                        <div className="flex items-center gap-2 text-black">
-                          <TrendingUp className="w-3 h-3 text-accent" />
-                          <span className="text-xs font-bold">45.8%</span>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[9px] font-black uppercase text-neutral-400">Estimasi Selesai</p>
-                        <div className="flex items-center gap-2 text-black">
-                          <Clock className="w-3 h-3 text-accent" />
-                          <span className="text-xs font-bold">15 Jun 2026</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4 bg-neutral-50 p-6 rounded-2xl border border-black/5">
-                      <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                        <span className="flex items-center gap-2"><ShieldCheck className="w-3 h-3 text-green-500" /> Real-time Progress</span>
-                        <div className="flex gap-2">
-                          <Badge className="bg-blue-100 text-blue-700 border-none text-[8px] h-4 px-1">PM VERIFIED</Badge>
-                          <Badge className="bg-neutral-200 text-neutral-700 border-none text-[8px] h-4 px-1">SYSTEM LOGGED</Badge>
-                          <Badge className="bg-orange-100 text-orange-700 border-none text-[8px] h-4 px-1">CLIENT APPROVED</Badge>
-                        </div>
-                        <span className="text-accent">45.8%</span>
-                      </div>
-                      <Progress value={45.8} className="h-2.5 bg-neutral-200" />
-                    </div>
-
-                    {/* Daily Progress Thumbnails */}
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                          <Camera className="w-4 h-4 text-accent" /> Laporan Progress Harian
-                        </h4>
-                        <Button variant="link" className="text-[10px] uppercase font-black p-0 h-auto">Lihat Semua</Button>
-                      </div>
-                      <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-                        {[
-                          { id: 1, date: "10 Apr", desc: "Pemasangan Keramik Lantai", img: "progress1" },
-                          { id: 2, date: "09 Apr", desc: "Plester Dinding Area Belakang", img: "progress2" },
-                          { id: 3, date: "08 Apr", desc: "Instalasi Pipa Air Bersih", img: "progress3" },
-                          { id: 4, date: "07 Apr", desc: "Pekerjaan Rangka Plafon", img: "progress4" },
-                          { id: 5, date: "06 Apr", desc: "Pembongkaran Dinding Lama", img: "progress5" },
-                        ].map(report => (
-                          <div key={report.id} className="min-w-[140px] space-y-2">
-                            <Dialog>
-                              <DialogTrigger nativeButton={false} render={
-                                <div className="aspect-square rounded-xl border-2 border-black/5 overflow-hidden relative group cursor-pointer shadow-sm">
-                                  <img src={`https://picsum.photos/seed/${report.img}/200/200`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
-                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                    <span className="text-[8px] text-white font-black uppercase">{report.date}</span>
-                                  </div>
-                                </div>
-                              } />
-                              <DialogContent className="max-w-3xl border-2 border-black rounded-3xl p-0 overflow-hidden">
-                                <img src={`https://picsum.photos/seed/${report.img}/800/800`} className="w-full aspect-video object-cover" />
-                                <div className="p-6 bg-white">
-                                  <p className="uppercase-soft text-neutral-400 mb-1">{report.date}</p>
-                                  <h3 className="text-xl font-black uppercase tracking-tighter">{report.desc}</h3>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                            <p className="text-[9px] font-bold uppercase tracking-tight leading-tight text-neutral-600 px-1">{report.desc}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-neutral-900 p-8 text-white flex flex-col justify-center items-center text-center space-y-4">
-                    <div className="space-y-1">
-                      <p className="uppercase-soft text-white/40">Total Nilai Kontrak</p>
-                      <p className="text-2xl font-black tracking-tighter">
-                        {formatRupiah(calculateClientPrice(project.totalBudget, sysConfig?.globalMarkup))}
-                      </p>
-                    </div>
-                    <div className="w-full h-px bg-white/10" />
-                    <div className="space-y-1">
-                      <p className="uppercase-soft text-white/40">Dana Terbayar</p>
-                      <p className="text-xl font-black text-green-400">
-                        {formatRupiah(calculateClientPrice(project.totalBudget * 0.3, sysConfig?.globalMarkup))}
-                      </p>
-                    </div>
-                    <Button variant="outline" className="w-full rounded-xl uppercase-soft border-white/20 text-white hover:bg-white hover:text-black">Detail Keuangan</Button>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Payment & Milestone Tracking */}
-              <div className="grid md:grid-cols-2 gap-8">
-                <Card className="border-2 border-black rounded-3xl p-8 space-y-8">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
-                      <CreditCard className="w-5 h-5 text-accent" /> Status Pembayaran & Termin
-                    </h3>
-                    <Badge className="bg-accent/10 text-accent border-accent/20 rounded-md uppercase-soft">Escrow Active</Badge>
-                  </div>
-                  
-                  <div className="space-y-6 relative">
-                    <div className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-neutral-100" />
-                    {[
-                      { label: "DP (Down Payment) - 30%", amount: project.totalBudget * 0.3, status: "paid", date: "15 Mar 2026", progress: 0 },
-                      { label: "Termin 1 - Progress 40%", amount: project.totalBudget * 0.3, status: "pending", date: "12 Apr 2026", progress: 40 },
-                      { label: "Termin 2 - Progress 80%", amount: project.totalBudget * 0.3, status: "locked", date: "10 May 2026", progress: 80 },
-                      { label: "Pelunasan & Serah Terima", amount: project.totalBudget * 0.1, status: "locked", date: "15 Jun 2026", progress: 100 },
-                    ].map((t, i) => (
-                      <div key={i} className="flex gap-6 relative">
-                        <div className={cn(
-                          "w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 z-10",
-                          t.status === 'paid' ? "bg-green-500 border-green-500 text-white" : 
-                          t.status === 'pending' ? "bg-white border-accent text-accent animate-pulse" : 
-                          "bg-white border-neutral-200 text-neutral-300"
-                        )}>
-                          {t.status === 'paid' ? <Check className="w-4 h-4" /> : <span className="text-[10px] font-black">{i + 1}</span>}
-                        </div>
-                        <div className="flex-grow space-y-2">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className={cn("text-xs font-black uppercase tracking-widest", t.status === 'locked' ? "text-neutral-400" : "text-black")}>{t.label}</p>
-                              <p className="text-[10px] text-neutral-400 uppercase-soft">{t.date}</p>
-                            </div>
-                            <p className="text-xs font-black">Rp {t.amount.toLocaleString('id-ID')}</p>
-                          </div>
-                          
-                          {t.status === 'pending' && (
-                            <div className="pt-2">
-                              <Dialog>
-                                <DialogTrigger nativeButton={false} render={
-                                  <div className="w-full btn-orange h-10 text-[10px] gap-2 flex items-center justify-center cursor-pointer rounded-md">
-                                    <ShieldCheck className="w-4 h-4" /> Setujui Pencairan Dana
-                                  </div>
-                                } />
-                                <DialogContent className="border-2 border-black rounded-3xl">
-                                  <DialogHeader>
-                                    <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Konfirmasi Pencairan Dana (Fund Reduction)</DialogTitle>
-                                    <DialogDescription className="uppercase-soft">
-                                      Termin 1 senilai Rp {t.amount.toLocaleString('id-ID')} akan dicairkan dari Escrow ke Kontraktor.
-                                    </DialogDescription>
-                                  </DialogHeader>
-                                  <div className="py-6 space-y-4">
-                                    <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex items-center gap-3">
-                                      <CheckCircle2 className="w-5 h-5 text-green-500" />
-                                      <p className="text-[10px] font-bold uppercase text-green-700">Project Manager telah menyetujui progress (45.8%)</p>
-                                    </div>
-                                    <div className="p-4 border-2 border-black/5 rounded-xl space-y-2">
-                                      <p className="text-[10px] font-black uppercase text-neutral-400">Log Persetujuan</p>
-                                      <div className="flex justify-between text-[10px]">
-                                        <span className="font-bold">PM: Bpk. Hendra</span>
-                                        <span className="text-green-500 font-black">APPROVED</span>
-                                      </div>
-                                      <div className="flex justify-between text-[10px]">
-                                        <span className="font-bold">Client: {user?.displayName}</span>
-                                        <span className="text-neutral-400 font-black">WAITING</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <DialogFooter>
-                                    <Button variant="outline" className="rounded-xl uppercase-soft">Batal</Button>
-                                    <Button className="btn-orange rounded-xl uppercase-soft">Setujui & Cairkan</Button>
-                                  </DialogFooter>
-                                </DialogContent>
-                              </Dialog>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-
-                <Card className="border-2 border-black rounded-3xl p-8 space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
-                      <AlertCircle className="w-5 h-5 text-accent" /> Catatan & Request Tambahan
-                    </h3>
-                    <Dialog>
-                      <DialogTrigger nativeButton={false} render={
-                        <div className="rounded-xl uppercase-soft h-8 text-[9px] gap-2 border-2 border-black px-3 flex items-center justify-center cursor-pointer hover:bg-neutral-50 transition-colors">
-                          <Plus className="w-3 h-3" /> New Request
-                        </div>
-                      } />
-                      <DialogContent className="max-w-md border-2 border-black rounded-3xl">
-                        <DialogHeader>
-                          <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Tambah Request Baru</DialogTitle>
-                          <DialogDescription className="uppercase-soft">Tambahkan item pekerjaan tambahan atau perubahan spesifikasi.</DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="space-y-1">
-                            <label className="uppercase-soft text-neutral-400">Item Pekerjaan</label>
-                            <Input placeholder="Contoh: Tambah Stop Kontak" className="input-sleek" />
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                              <label className="uppercase-soft text-neutral-400">Volume</label>
-                              <Input type="number" placeholder="0" className="input-sleek" />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="uppercase-soft text-neutral-400">Satuan</label>
-                              <Input placeholder="m2 / titik / lot" className="input-sleek" />
-                            </div>
-                          </div>
-                          <div className="space-y-1">
-                            <label className="uppercase-soft text-neutral-400">Estimasi Harga Satuan</label>
-                            <Input type="number" placeholder="Rp" className="input-sleek" />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="uppercase-soft text-neutral-400">Upload Foto Pendukung</label>
-                            <div className="w-full h-24 border-2 border-dashed border-neutral-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-black transition-colors">
-                              <Camera className="w-6 h-6 text-neutral-400" />
-                              <span className="text-[8px] font-black uppercase mt-1">Upload Image</span>
-                            </div>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button className="w-full btn-orange rounded-xl uppercase-soft">Kirim Request</Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                  <div className="space-y-4">
-                    {[
-                      { id: 12, date: "08 Apr", item: "Cat Fasad Abu-abu", vol: 45, unit: "m2", price: 35000, tag: "client", status: "Approved", photo: "paint" },
-                      { id: 11, date: "05 Apr", item: "Titik Lampu Taman", vol: 4, unit: "titik", price: 150000, tag: "pm", status: "In Review", photo: "light" },
-                      { id: 10, date: "02 Apr", item: "Penambahan Stop Kontak", vol: 2, unit: "titik", price: 75000, tag: "system", status: "Completed", photo: "socket" },
-                    ].map((req) => (
-                      <div key={req.id} className="p-4 bg-neutral-50 rounded-xl border border-black/5 space-y-3 relative group">
-                        <div className="flex justify-between items-start">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <p className="text-[9px] font-black uppercase text-neutral-400">Request #{req.id} - {req.date}</p>
-                              <Badge className={cn(
-                                "text-[8px] uppercase font-black rounded-md px-1.5 py-0",
-                                req.tag === 'client' ? "bg-blue-100 text-blue-700" : req.tag === 'pm' ? "bg-orange-100 text-orange-700" : "bg-neutral-200 text-neutral-700"
-                              )}>
-                                {req.tag}
-                              </Badge>
-                            </div>
-                            <p className="text-xs font-black uppercase tracking-tight">{req.item}</p>
-                          </div>
-                          <Badge className={cn(
-                            "rounded-md text-[8px] uppercase font-black",
-                            req.status === 'Approved' ? "bg-green-100 text-green-700" : req.status === 'In Review' ? "bg-blue-100 text-blue-700" : "bg-neutral-100 text-neutral-500"
-                          )}>
-                            {req.status}
-                          </Badge>
-                        </div>
-                        
-                        <div className="grid grid-cols-3 gap-4 py-2 border-y border-black/5">
-                          <div className="space-y-0.5">
-                            <p className="text-[8px] uppercase-soft text-neutral-400">Volume</p>
-                            <p className="text-[10px] font-bold">{req.vol} {req.unit}</p>
-                          </div>
-                          <div className="space-y-0.5">
-                            <p className="text-[8px] uppercase-soft text-neutral-400">Harga Satuan</p>
-                            <p className="text-[10px] font-bold">Rp {req.price.toLocaleString('id-ID')}</p>
-                          </div>
-                          <div className="space-y-0.5 text-right">
-                            <p className="text-[8px] uppercase-soft text-neutral-400">Subtotal</p>
-                            <p className="text-[10px] font-black text-accent">Rp {(req.vol * req.price).toLocaleString('id-ID')}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-1">
-                          <Dialog>
-                            <DialogTrigger nativeButton={false} render={
-                              <div className="flex items-center gap-2 cursor-pointer hover:opacity-70 transition-opacity">
-                                <div className="w-8 h-8 rounded-md border border-black/10 overflow-hidden">
-                                  <img src={`https://picsum.photos/seed/${req.photo}/100/100`} className="w-full h-full object-cover" />
-                                </div>
-                                <span className="text-[9px] font-bold uppercase text-neutral-400">Lihat Foto</span>
-                              </div>
-                            } />
-                            <DialogContent className="max-w-2xl border-2 border-black rounded-3xl p-0 overflow-hidden">
-                              <img src={`https://picsum.photos/seed/${req.photo}/800/800`} className="w-full aspect-square object-cover" />
-                            </DialogContent>
-                          </Dialog>
-                          <Button variant="ghost" size="sm" className="h-6 text-[8px] uppercase font-black text-neutral-400 hover:text-black">Detail & Log</Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              </div>
-
-              {/* Project Team Section for Tier 3 */}
-              {user?.tier === 'deal' && (
-                <div className="space-y-6 pt-8">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-2xl font-black uppercase tracking-tighter">Tim Proyek Anda</h2>
-                    <Badge className="bg-black text-white px-3 py-1 rounded-md uppercase-soft">Tier 3 Exclusive</Badge>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                    {workforce.filter(w => w.projectId === project.id || project.workerIds?.includes(w.id)).map((worker) => (
-                      <Card key={worker.id} className="border-2 border-black rounded-2xl overflow-hidden group hover:border-accent transition-all">
-                        <div className="aspect-[3/4] bg-neutral-100 relative">
-                          {worker.photoUrl ? (
-                            <img src={worker.photoUrl} alt={worker.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-neutral-300">
-                              <User className="w-8 h-8" />
-                            </div>
-                          )}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-                            <p className="text-[8px] font-black text-white uppercase tracking-widest">{worker.role}</p>
-                            <p className="text-[10px] font-black text-white uppercase truncate">{worker.name}</p>
-                          </div>
-                        </div>
-                        <div className="p-3 text-center">
-                          <p className="text-[10px] font-black uppercase truncate">{worker.name}</p>
-                          <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest">{worker.role}</p>
-                        </div>
-                      </Card>
-                    ))}
-                    {workforce.filter(w => w.projectId === project.id || project.workerIds?.includes(w.id)).length === 0 && (
-                      <div className="col-span-full py-8 text-center border-2 border-dashed border-neutral-200 rounded-2xl">
-                        <p className="uppercase-soft text-neutral-400">Tim lapangan sedang dijadwalkan.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-          {projects.length === 0 && (
-            <div className="py-20 text-center border-2 border-dashed border-neutral-200 rounded-2xl">
-              <p className="uppercase-soft text-neutral-400">Anda belum memiliki proyek. Mulai dengan Estimasi Mandiri.</p>
-              <Button onClick={() => navigate("/assistant")} className="mt-6 btn-orange">Mulai Sekarang</Button>
+              project={project} 
+              navigate={navigate} 
+              sysConfig={sysConfig}
+              currentUser={currentUser}
+            />
+          ))}          {projects.length === 0 && (
+            <div className="py-20 text-center border-2 border-dashed border-black/5 rounded-3xl">
+              <h3 className="text-xl font-black uppercase tracking-tighter text-neutral-400">Belum Ada Proyek Aktif</h3>
+              <p className="uppercase-soft text-neutral-400 mt-2 font-bold">Daftarkan proyek Anda untuk mulai membangun bersama TBJ.</p>
+              <Button onClick={() => navigate("/assistant")} className="btn-accent mt-8 h-12 px-8 uppercase-soft text-xs">
+                Daftar Proyek Sekarang
+              </Button>
             </div>
           )}
         </div>
@@ -555,6 +203,335 @@ export default function Profile() {
                 {m.status === 'completed' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
               </div>
             ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function ProjectCard({ project: initialProject, navigate, sysConfig, currentUser }: { project: any, navigate: any, sysConfig: any, currentUser: any }) {
+  const { items, project: liveProject } = useProjectDetails(initialProject.id);
+  const project = liveProject || initialProject;
+
+  return (
+    <div 
+      className="space-y-6 cursor-pointer group/project"
+      onClick={() => navigate(`/projects/${project.id}`)}
+    >
+      <Card className="border-2 border-black rounded-3xl overflow-hidden hover:shadow-xl transition-all duration-500 group-hover/project:border-accent">
+        <div className="grid md:grid-cols-4">
+          <div className="p-8 md:col-span-3 space-y-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <h3 className="text-3xl font-black uppercase tracking-tighter">{project.name}</h3>
+                <Badge className={cn(
+                  "rounded-md uppercase-soft px-3 py-1",
+                  project.status === 'active' ? "bg-green-100 text-green-700" : 
+                  project.status === 'awaiting' ? "bg-amber-100 text-amber-700" :
+                  project.status === 'draft' ? "bg-blue-100 text-blue-700" :
+                  "bg-neutral-100 text-neutral-700"
+                )}>
+                  {project.status === 'active' ? 'Pengerjaan' : 
+                   project.status === 'awaiting' ? 'Menunggu Penugasan PM' :
+                   project.status === 'draft' ? 'Penyusunan RAB' :
+                   project.status.toUpperCase()}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2 text-neutral-400">
+                <Clock className="w-4 h-4" />
+                <span className="text-[10px] font-black uppercase tracking-widest">
+                  Update: {new Date(project.updatedAt || project.createdAt).toLocaleDateString('id-ID')}
+                </span>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div className="space-y-1">
+                <p className="text-[9px] font-black uppercase text-neutral-400">Lokasi</p>
+                <div className="flex items-center gap-2 text-black">
+                  <MapPin className="w-3 h-3 text-accent" />
+                  <span className="text-xs font-bold truncate">{project.location || 'Lokasi belum diatur'}</span>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[9px] font-black uppercase text-neutral-400">Mulai Proyek</p>
+                <div className="flex items-center gap-2 text-black">
+                  <Calendar className="w-3 h-3 text-accent" />
+                  <span className="text-xs font-bold">{new Date(project.createdAt).toLocaleDateString('id-ID')}</span>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[9px] font-black uppercase text-neutral-400">Progress Bobot</p>
+                <div className="flex items-center gap-2 text-black">
+                  <TrendingUp className="w-3 h-3 text-accent" />
+                  <span className="text-xs font-bold">{project.progress || 0}%</span>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[9px] font-black uppercase text-neutral-400">Estimasi Selesai</p>
+                <div className="flex items-center gap-2 text-black">
+                  <Clock className="w-3 h-3 text-accent" />
+                  <span className="text-xs font-bold">{project.estimatedCompletion ? new Date(project.estimatedCompletion).toLocaleDateString('id-ID') : 'TBA'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 bg-neutral-50 p-6 rounded-2xl border border-black/5">
+              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                <span className="flex items-center gap-2"><ShieldCheck className="w-3 h-3 text-green-500" /> Real-time Progress</span>
+                <div className="flex gap-2">
+                  <Badge className="bg-blue-100 text-blue-700 border-none text-[8px] h-4 px-1">PM VERIFIED</Badge>
+                  <Badge className="bg-neutral-200 text-neutral-700 border-none text-[8px] h-4 px-1">SYSTEM LOGGED</Badge>
+                  <Badge className="bg-orange-100 text-orange-700 border-none text-[8px] h-4 px-1">CLIENT APPROVED</Badge>
+                </div>
+                <span className="text-accent">{project.progress || 0}%</span>
+              </div>
+              <Progress value={project.progress || 0} className="h-2.5 bg-neutral-200" />
+            </div>
+
+            {/* RAB Preview (Real-time) */}
+            {(project.status === 'draft' || project.status === 'active') && (
+              <div className="space-y-4 border-t border-black/5 pt-6">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-accent" /> Rincian RAB Real-time
+                  </h4>
+                  <span className="text-[10px] uppercase font-bold text-neutral-400 italic">Disusun oleh: {project.pmName || 'PM Team'}</span>
+                </div>
+                <div className="grid gap-2">
+                  {items.length > 0 ? (
+                    items.slice(0, 5).map((item, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-[10px] border-b border-neutral-100 pb-2">
+                        <span className="font-bold uppercase tracking-tight leading-none">{item.name}</span>
+                        <div className="flex items-center gap-4">
+                          <span className="text-neutral-400">{item.quantity} {item.unit}</span>
+                          <span className="font-black">Rp {calculateClientPrice(item.pricePerUnit * item.quantity, sysConfig?.globalMarkup).toLocaleString('id-ID')}</span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 bg-neutral-50 rounded-xl border border-dashed border-neutral-200 text-center">
+                      <p className="text-[10px] font-bold uppercase text-neutral-400">PM sedang menyusun rincian pekerjaan...</p>
+                    </div>
+                  )}
+                  {items.length > 5 && (
+                    <p className="text-[9px] text-neutral-400 text-center font-bold uppercase tracking-widest mt-2">
+                      + {items.length - 5} Item lainnya
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Daily Progress Thumbnails */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-accent" /> Laporan Progress Harian
+                </h4>
+                <Button variant="link" className="text-[10px] uppercase font-black p-0 h-auto">Lihat Semua</Button>
+              </div>
+              <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+                {[
+                  { id: 1, date: "10 Apr", desc: "Pemasangan Keramik Lantai", img: "progress1" },
+                  { id: 2, date: "09 Apr", desc: "Plester Dinding Area Belakang", img: "progress2" },
+                  { id: 3, date: "08 Apr", desc: "Instalasi Pipa Air Bersih", img: "progress3" },
+                  { id: 4, date: "07 Apr", desc: "Pekerjaan Rangka Plafon", img: "progress4" },
+                  { id: 5, date: "06 Apr", desc: "Pembongkaran Dinding Lama", img: "progress5" },
+                ].map(report => (
+                  <div key={report.id} className="min-w-[140px] space-y-2">
+                    <Dialog>
+                      <DialogTrigger nativeButton={false} render={
+                        <div className="aspect-square rounded-xl border-2 border-black/5 overflow-hidden relative group cursor-pointer shadow-sm">
+                          <img src={`https://picsum.photos/seed/${report.img}/200/200`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <span className="text-[8px] text-white font-black uppercase">{report.date}</span>
+                          </div>
+                        </div>
+                      } />
+                      <DialogContent className="max-w-3xl border-2 border-black rounded-3xl p-0 overflow-hidden">
+                        <img src={`https://picsum.photos/seed/${report.img}/800/800`} className="w-full aspect-video object-cover" />
+                        <div className="p-6 bg-white">
+                          <p className="uppercase-soft text-neutral-400 mb-1">{report.date}</p>
+                          <h3 className="text-xl font-black uppercase tracking-tighter">{report.desc}</h3>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                    <p className="text-[9px] font-bold uppercase tracking-tight leading-tight text-neutral-600 px-1">{report.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="bg-neutral-900 p-8 text-white flex flex-col justify-center items-center text-center space-y-4">
+            <div className="space-y-1">
+              <p className="uppercase-soft text-white/40">Total Nilai Kontrak</p>
+              <p className="text-2xl font-black tracking-tighter">
+                {formatRupiah(calculateClientPrice(project.totalBudget || 0, sysConfig?.globalMarkup))}
+              </p>
+            </div>
+            <div className="w-full h-px bg-white/10" />
+            <div className="space-y-1">
+              <p className="uppercase-soft text-white/40">Dana Terbayar</p>
+              <p className="text-xl font-black text-green-400">
+                {formatRupiah(calculateClientPrice((project.totalBudget || 0) * 0.3, sysConfig?.globalMarkup))}
+              </p>
+            </div>
+            <Button variant="outline" className="w-full rounded-xl uppercase-soft border-white/20 text-white hover:bg-white hover:text-black">Detail Keuangan</Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Payment & Milestone Tracking */}
+      <div className="grid md:grid-cols-2 gap-8">
+        <Card className="border-2 border-black rounded-3xl p-8 space-y-8">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-accent" /> Status Pembayaran & Termin
+            </h3>
+            <Badge className="bg-accent/10 text-accent border-accent/20 rounded-md uppercase-soft">Escrow Active</Badge>
+          </div>
+          
+          <div className="space-y-6 relative">
+            <div className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-neutral-100" />
+            {[
+              { label: "DP (Down Payment) - 30%", amount: (project.totalBudget || 0) * 0.3, status: "paid", date: "15 Mar 2026", progress: 0 },
+              { label: "Termin 1 - Progress 40%", amount: (project.totalBudget || 0) * 0.3, status: "pending", date: "12 Apr 2026", progress: 40 },
+              { label: "Termin 2 - Progress 80%", amount: (project.totalBudget || 0) * 0.3, status: "locked", date: "10 May 2026", progress: 80 },
+              { label: "Pelunasan & Serah Terima", amount: (project.totalBudget || 0) * 0.1, status: "locked", date: "15 Jun 2026", progress: 100 },
+            ].map((t, i) => (
+              <div key={i} className="flex gap-6 relative">
+                <div className={cn(
+                  "w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 z-10",
+                  t.status === 'paid' ? "bg-green-500 border-green-500 text-white" : 
+                  t.status === 'pending' ? "bg-white border-accent text-accent animate-pulse" : 
+                  "bg-white border-neutral-200 text-neutral-300"
+                )}>
+                  {t.status === 'paid' ? <Check className="w-4 h-4" /> : <span className="text-[10px] font-black">{i + 1}</span>}
+                </div>
+                <div className="flex-grow space-y-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className={cn("text-xs font-black uppercase tracking-widest", t.status === 'locked' ? "text-neutral-400" : "text-black")}>{t.label}</p>
+                      <p className="text-[10px] text-neutral-400 uppercase-soft">{t.date}</p>
+                    </div>
+                    <p className="text-xs font-black">Rp {t.amount.toLocaleString('id-ID')}</p>
+                  </div>
+                  
+                  {t.status === 'pending' && (
+                    <div className="pt-2">
+                      <Dialog>
+                        <DialogTrigger nativeButton={false} render={
+                          <div className="w-full btn-orange h-10 text-[10px] gap-2 flex items-center justify-center cursor-pointer rounded-md">
+                            <ShieldCheck className="w-4 h-4" /> Setujui Pencairan Dana
+                          </div>
+                        } />
+                        <DialogContent className="border-2 border-black rounded-3xl">
+                          <DialogHeader>
+                            <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Konfirmasi Pencairan Dana (Fund Reduction)</DialogTitle>
+                            <DialogDescription className="uppercase-soft">
+                              Termin 1 senilai Rp {t.amount.toLocaleString('id-ID')} akan dicairkan dari Escrow ke Kontraktor.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="py-6 space-y-4">
+                            <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex items-center gap-3">
+                              <CheckCircle2 className="w-5 h-5 text-green-500" />
+                              <p className="text-[10px] font-bold uppercase text-green-700">Project Manager telah menyetujui progress ({project.progress || 0}%)</p>
+                            </div>
+                            <div className="p-4 border-2 border-black/5 rounded-xl space-y-2">
+                              <p className="text-[10px] font-black uppercase text-neutral-400">Log Persetujuan</p>
+                              <div className="flex justify-between text-[10px]">
+                                <span className="font-bold">PM: {project.pmName || 'PM Team'}</span>
+                                <span className="text-green-500 font-black">APPROVED</span>
+                              </div>
+                              <div className="flex justify-between text-[10px]">
+                                <span className="font-bold">Client: {currentUser?.displayName}</span>
+                                <span className="text-neutral-400 font-black">WAITING</span>
+                              </div>
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button variant="outline" className="rounded-xl uppercase-soft">Batal</Button>
+                            <Button className="btn-orange rounded-xl uppercase-soft">Setujui & Cairkan</Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="border-2 border-black rounded-3xl p-8 space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-accent" /> Catatan & Request Tambahan
+            </h3>
+            <Dialog>
+              <DialogTrigger nativeButton={false} render={
+                <div className="rounded-xl uppercase-soft h-8 text-[9px] gap-2 border-2 border-black px-3 flex items-center justify-center cursor-pointer hover:bg-neutral-50 transition-colors">
+                  <Plus className="w-3 h-3" /> New Request
+                </div>
+              } />
+              <DialogContent className="max-w-md border-2 border-black rounded-3xl">
+                <DialogHeader>
+                  <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Tambah Request Baru</DialogTitle>
+                  <DialogDescription className="uppercase-soft">Tambahkan item pekerjaan tambahan atau perubahan spesifikasi.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-1">
+                    <label className="uppercase-soft text-neutral-400">Item Pekerjaan</label>
+                    <Input placeholder="Contoh: Tambah Stop Kontak" className="input-sleek" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="uppercase-soft text-neutral-400">Volume</label>
+                      <Input type="number" placeholder="0" className="input-sleek" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="uppercase-soft text-neutral-400">Satuan</label>
+                      <Input placeholder="m2 / titik / lot" className="input-sleek" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="uppercase-soft text-neutral-400">Estimasi Harga Satuan</label>
+                    <Input type="number" placeholder="Rp" className="input-sleek" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="uppercase-soft text-neutral-400">Upload Foto Pendukung</label>
+                    <div className="w-full h-24 border-2 border-dashed border-neutral-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-black transition-colors">
+                      <Camera className="w-6 h-6 text-neutral-400" />
+                      <span className="text-[8px] font-black uppercase mt-1">Upload Image</span>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button className="w-full btn-orange rounded-xl uppercase-soft">Kirim Request</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+          
+          <div className="space-y-4">
+            {project.requests && project.requests.length > 0 ? (
+              project.requests.map((req: any, idx: number) => (
+                <div key={idx} className="p-4 bg-neutral-50 rounded-2xl border border-black/5 flex justify-between items-center group">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest">{req.item}</p>
+                    <p className="text-[9px] text-neutral-400 uppercase font-bold">{req.volume} {req.unit} @ {formatRupiah(req.price)}</p>
+                  </div>
+                  <Badge className="bg-amber-100 text-amber-700 border-none uppercase-soft text-[8px] h-5">Reviewing</Badge>
+                </div>
+              ))
+            ) : (
+              <div className="py-12 border-2 border-dashed border-black/5 rounded-2xl text-center">
+                <MessageSquare className="w-6 h-6 text-neutral-200 mx-auto mb-2" />
+                <p className="text-[9px] font-bold uppercase text-neutral-400 tracking-widest">Belum ada request tambahan.</p>
+              </div>
+            )}
           </div>
         </Card>
       </div>

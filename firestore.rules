@@ -116,7 +116,7 @@ service cloud.firestore {
              data.ownerId is string && isValidId(data.ownerId) &&
              isValidDateString(data.createdAt) &&
              data.totalBudget is number && data.totalBudget >= 0 &&
-             data.status in ['draft', 'assessment', 'active', 'completed'];
+             data.status in ['draft', 'awaiting', 'assessment', 'survey', 'active', 'completed', 'deal', 'pending', 'rejected'];
     }
 
     // ===============================================================

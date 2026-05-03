@@ -17,7 +17,7 @@ import { ImageUpload } from "@/components/ImageUpload";
 const MediaWarehouse = () => {
   const { user } = useAuth();
   const { assets, loading, addAsset, deleteAsset } = useMediaAssets();
-  const { projects } = useProjects();
+  const { projects } = useProjects(user?.uid, user?.role);
   
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<MediaCategory | 'all'>('all');

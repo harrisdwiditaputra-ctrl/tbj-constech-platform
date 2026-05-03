@@ -14,7 +14,7 @@ export interface Project {
   escrowBalance: number; // Total money paid by client but not yet released
   releasedAmount: number; // Total money released to company
   paymentMilestones: PaymentMilestone[];
-  status: "draft" | "survey" | "active" | "completed";
+  status: "draft" | "survey" | "active" | "completed" | "awaiting";
   contractUrl?: string;
   timeline?: TimelineEvent[];
   location?: string;
@@ -28,9 +28,14 @@ export interface Project {
   imageUrl?: string;
   clientId?: string;
   clientName?: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  clientAddress?: string;
   progress?: number;
   thumbnail?: string;
   updatedAt?: string;
+  pmName?: string;
+  items?: BudgetItem[];
 }
 
 export interface PaymentMilestone {
@@ -95,6 +100,7 @@ export interface BudgetItem {
     after?: string[];
   };
   progress?: number; // 0 to 100
+  icon?: string; // Item thumbnail/icon
   startDate?: string;
   endDate?: string;
   priority?: "Low" | "Medium" | "High" | "Urgent";
